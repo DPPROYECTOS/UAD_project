@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Proyectos y Mejora</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'brand-primary': '#D44C00',
+              'brand-secondary': '#B34000',
+              'brand-accent': '#E76F33',
+              'brand-active-tab': '#0086D4',
+              'status-completed': '#10B981',
+              'status-in-progress': '#3B82F6',
+              'status-on-hold': '#F59E0B',
+              'status-not-started': '#6B7280',
+              'light-bg': '#F3F4F6',
+              'dark-bg': '#111827',
+              'light-card': '#FFFFFF',
+              'dark-card': '#1F2937',
+              'light-text': '#1F2937',
+              'dark-text': '#F9FAFB',
+              'light-text-secondary': '#6B7280',
+              'dark-text-secondary': '#9CA3AF',
+              'light-border': '#E5E7EB',
+              'dark-border': '#374151',
+            },
+            height: {
+              '16': '4rem',
+            },
+            width: {
+                '64': '16rem',
+            },
+            animation: {
+              'fade-in': 'fadeIn 0.5s ease-in-out',
+            },
+            keyframes: {
+              fadeIn: {
+                '0%': { opacity: '0' },
+                '100%': { opacity: '1' },
+              },
+            },
+          }
+        }
+      }
+    </script>
+<style>
+  /* Simple scrollbar styling for a better UX */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #9CA3AF; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
+  .dark ::-webkit-scrollbar-thumb { background: #4B5563; }
+  ::-webkit-scrollbar-thumb:hover { background: #6B7280; }
+  .dark ::-webkit-scrollbar-thumb:hover { background: #374151; }
+
+  /* Custom dark scrollbar for Gantt chart */
+  .gantt-scrollbar::-webkit-scrollbar { height: 14px; }
+  .gantt-scrollbar::-webkit-scrollbar-track { background: #e0e0e0; border-radius: 10px; }
+  .gantt-scrollbar::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 10px; border: 2px solid #e0e0e0; }
+  .gantt-scrollbar::-webkit-scrollbar-thumb:hover { background: #1a202c; }
+  .dark .gantt-scrollbar::-webkit-scrollbar-track { background: #2d3748; }
+  .dark .gantt-scrollbar::-webkit-scrollbar-thumb { background: #4a5568; border-color: #2d3748;}
+  .dark .gantt-scrollbar::-webkit-scrollbar-thumb:hover { background: #718096; }
+
+  /* Style for weekend cells in Gantt chart - VISIBLE HATCHING */
+  .weekend-cell {
+    background-image: repeating-linear-gradient(
+      45deg,
+      #E5E7EB, /* using light-border color for light mode */
+      #E5E7EB 1px,
+      transparent 1px,
+      transparent 5px
+    );
+  }
+  .dark .weekend-cell {
+    background-image: repeating-linear-gradient(
+      45deg,
+      #374151, /* using dark-border color for dark mode */
+      #374151 1px,
+      transparent 1px,
+      transparent 5px
+    );
+  }
+
+  /* Style for holiday cells - transparent red background */
+  .holiday-cell {
+    background-color: rgba(239, 68, 68, 0.15); /* bg-red-500/15 */
+  }
+  .dark .holiday-cell {
+    background-color: rgba(239, 68, 68, 0.25); /* bg-red-500/25 for better contrast */
+  }
+</style>
+
+<link rel="stylesheet" href="/index.css">
+<script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.22.0",
+    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+    "jspdf": "https://aistudiocdn.com/jspdf@^2.5.1"
+  }
+}
+</script>
+  <script type="module" crossorigin src="/UAD_project/assets/index-9uAcUBgW.js"></script>
+</head>
+<body class="bg-light-bg dark:bg-dark-bg">
+    <div id="root"></div>
+</body>
+</html>
