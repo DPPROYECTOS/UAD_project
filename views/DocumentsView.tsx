@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, Document, Folder } from '../types';
-import { FolderIcon, DocumentTextIcon, UploadIcon, TrashIcon, CollectionIcon, InformationCircleIcon, PlusIcon, EyeIcon, DocumentDownloadIcon } from '../components/Icons';
+import { FolderIcon, DocumentTextIcon, UploadIcon, TrashIcon, CollectionIcon, InformationCircleIcon, PlusIcon, EyeIcon, DocumentDownloadIcon, SearchIcon } from '../components/Icons';
 import Spinner from '../components/Spinner';
 import ConfirmationModal from '../components/projects/ConfirmationModal';
 import { getSignedUrlForDocument } from '../services/supabaseService';
@@ -22,22 +22,60 @@ const ChevronRightIcon: React.FC<{ className?: string }> = ({ className }) => (
 
 // --- Helper to build folder tree ---
 const buildFolderTree = (folders: Folder[]): Folder[] => {
-    const folderMap = new Map<string, Folder>();
-    const tree: Folder[] = [];
+    // Return early if there are no folders to process.
+    if (!folders || folders.length === 0) {
+        return [];
+    }
 
+    // A map to hold our tree nodes. We use this for efficient lookup of parents.
+    // Each node is a copy of the original folder object with an added 'children' array.
+    const folderMap = new Map<string, Folder & { children: Folder[] }>();
+
+    // First pass: Create a node for each folder. This ensures that we can find any parent
+    // by its ID, regardless of its position in the original `folders` array.
     folders.forEach(folder => {
-        folderMap.set(folder.id, { ...folder, children: [] });
+        folderMap.set(folder.id, {
+            ...folder,
+            children: [],
+        });
     });
 
-    folders.forEach(folder => {
-        if (folder.parentId && folderMap.has(folder.parentId)) {
-            const parent = folderMap.get(folder.parentId);
-            parent?.children?.push(folderMap.get(folder.id)!);
+    const rootNodes: (Folder & { children: Folder[] })[] = [];
+
+    // Second pass: Link children to their parents. Iterate over the nodes we've created.
+    folderMap.forEach(node => {
+        // Check if the node has a parent and if that parent exists in our map.
+        if (node.parentId && folderMap.has(node.parentId)) {
+            // It's a child node. Find its parent and add this node to the parent's children.
+            const parent = folderMap.get(node.parentId)!;
+            parent.children.push(node);
         } else {
-            tree.push(folderMap.get(folder.id)!);
+            // It's a root node (no parentId or an orphaned parentId). Add it to our list of roots.
+            rootNodes.push(node);
         }
     });
-    return tree;
+
+    // Helper function to sort children recursively by name.
+    const sortChildrenRecursively = (node: Folder & { children: Folder[] }) => {
+        if (node.children && node.children.length > 0) {
+            // Sort the children of the current node alphabetically.
+            node.children.sort((a, b) => a.name.localeCompare(b.name));
+            // Recursively sort the children of each child.
+            node.children.forEach(sortChildrenRecursively);
+        }
+    };
+    
+    // Sort the root nodes. We want "General" to always be first, then sort alphabetically.
+    rootNodes.sort((a, b) => {
+        if (a.name === 'General') return -1; // 'a' comes first
+        if (b.name === 'General') return 1;  // 'b' comes first
+        return a.name.localeCompare(b.name); // otherwise, sort alphabetically
+    });
+
+    // Start the recursive sorting process for all nodes in the tree.
+    rootNodes.forEach(sortChildrenRecursively);
+
+    return rootNodes;
 };
 
 
@@ -56,6 +94,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
 
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
 
   const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
   
@@ -73,6 +112,21 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
     return documents.filter(doc => doc.folderId === selectedFolderId);
   }, [documents, selectedFolderId]);
   
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) {
+      return [];
+    }
+    return documents.filter(doc =>
+      doc.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [documents, searchQuery]);
+  
+  const folderNameMap = useMemo(() => {
+    const map = new Map<string, string>();
+    folders.forEach(f => map.set(f.id, f.name));
+    return map;
+  }, [folders]);
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -206,6 +260,14 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
     });
   };
 
+  const handleFolderSelect = (folderId: string, hasChildren: boolean) => {
+      setSelectedFolderId(folderId);
+      setSearchQuery(''); // Clear search when selecting a folder
+      if (hasChildren) {
+          toggleFolder(folderId);
+      }
+  };
+
   const FolderTreeItem: React.FC<{ folder: Folder, level: number }> = ({ folder, level }) => {
     const isExpanded = expandedFolders.has(folder.id);
     const hasChildren = folder.children && folder.children.length > 0;
@@ -214,11 +276,11 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
       <div>
         <div className="group flex items-center justify-between rounded-md" style={{ paddingLeft: `${level * 1.5}rem` }}>
            <button
-             onClick={() => setSelectedFolderId(folder.id)}
-             className={`w-full text-left flex items-center p-2 rounded-md text-sm font-medium transition-colors ${selectedFolderId === folder.id ? 'bg-brand-accent/20 text-brand-primary' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}
+             onClick={() => handleFolderSelect(folder.id, hasChildren)}
+             className={`w-full text-left flex items-center p-2 rounded-md text-sm font-medium transition-colors ${selectedFolderId === folder.id && !searchQuery ? 'bg-brand-accent/20 text-brand-primary' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}
            >
             {hasChildren && (
-              <ChevronRightIcon onClick={(e) => { e.stopPropagation(); toggleFolder(folder.id); }} className={`h-4 w-4 mr-1 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+              <ChevronRightIcon className={`h-4 w-4 mr-1 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
             )}
              <FolderIcon className={`h-5 w-5 mr-2 flex-shrink-0 ${hasChildren ? '' : 'ml-[20px]'}`} />
              <span className="truncate flex-1">{folder.name}</span>
@@ -257,17 +319,31 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
   };
 
   const currentFolderName = folders.find(f => f.id === selectedFolderId)?.name || 'Carpeta';
+  const isSearching = searchQuery.trim() !== '';
+  const documentsToShow = isSearching ? searchResults : filteredDocuments;
 
   return (
     <>
-      <div>
-        <h1 className="text-3xl font-bold">Documentos</h1>
-        <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1">
-          Organiza y gestiona todos tus archivos importantes.
-        </p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+        <div>
+            <h1 className="text-3xl font-bold">Documentos</h1>
+            <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1">
+            Organiza y gestiona todos tus archivos importantes.
+            </p>
+        </div>
+        <div className="relative w-full sm:w-72">
+            <input
+                type="search"
+                placeholder="Buscar documentos..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="w-full p-2 pl-10 border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card rounded-lg focus:ring-2 focus:ring-brand-primary focus:outline-none"
+            />
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+        </div>
       </div>
 
-      <div className="mt-6 flex flex-col md:flex-row gap-6">
+      <div className="flex flex-col md:flex-row gap-6">
         {/* Folder Sidebar */}
         <aside className="w-full md:w-64 flex-shrink-0">
           <div className="p-4 bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border h-full flex flex-col">
@@ -346,16 +422,21 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
                 </div>
             </form>
             
-            <h2 className="text-xl font-bold mb-3">Archivos en "{currentFolderName}"</h2>
-            {filteredDocuments.length > 0 ? (
+            <h2 className="text-xl font-bold mb-3">
+              {isSearching ? `Resultados para "${searchQuery}"` : `Archivos en "${currentFolderName}"`}
+            </h2>
+            {documentsToShow.length > 0 ? (
               <ul className="divide-y divide-light-border dark:divide-dark-border">
-                {filteredDocuments.map(doc => (
+                {documentsToShow.map(doc => (
                   <li key={doc.id} className="py-3 flex items-center justify-between">
                     <div className="flex items-center min-w-0">
                       <DocumentTextIcon className="h-6 w-6 text-light-text-secondary dark:text-dark-text-secondary flex-shrink-0" />
                       <div className="ml-3 min-w-0">
                         <p className="text-sm font-medium truncate">{doc.name}</p>
-                        <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">{formatBytes(doc.size)} - {new Date(doc.createdAt).toLocaleDateString()}</p>
+                        <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">
+                          {formatBytes(doc.size)} - {new Date(doc.createdAt).toLocaleDateString()}
+                          {isSearching && ` - en: ${folderNameMap.get(doc.folderId) || '?'}`}
+                        </p>
                       </div>
                     </div>
                      <div className="flex items-center space-x-1 flex-shrink-0">
@@ -375,8 +456,10 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
             ) : (
               <div className="text-center py-10 border-2 border-dashed border-light-border dark:border-dark-border rounded-lg">
                 <CollectionIcon className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium">Carpeta Vacía</h3>
-                <p className="mt-1 text-sm text-light-text-secondary dark:text-dark-text-secondary">Sube un archivo para verlo aquí.</p>
+                <h3 className="mt-2 text-sm font-medium">{isSearching ? 'No se encontraron resultados' : 'Carpeta Vacía'}</h3>
+                <p className="mt-1 text-sm text-light-text-secondary dark:text-dark-text-secondary">
+                  {isSearching ? 'Intenta con otra búsqueda.' : 'Sube un archivo para verlo aquí.'}
+                </p>
               </div>
             )}
           </div>
