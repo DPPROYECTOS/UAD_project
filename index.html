@@ -11,24 +11,24 @@
         theme: {
           extend: {
             colors: {
-              'brand-primary': '#D44C00',
-              'brand-secondary': '#B34000',
-              'brand-accent': '#E76F33',
-              'brand-active-tab': '#0086D4',
-              'status-completed': '#10B981',
-              'status-in-progress': '#3B82F6',
-              'status-on-hold': '#F59E0B',
-              'status-not-started': '#6B7280',
-              'light-bg': '#F3F4F6',
-              'dark-bg': '#111827',
-              'light-card': '#FFFFFF',
-              'dark-card': '#1F2937',
-              'light-text': '#1F2937',
-              'dark-text': '#F9FAFB',
-              'light-text-secondary': '#6B7280',
-              'dark-text-secondary': '#9CA3AF',
-              'light-border': '#E5E7EB',
-              'dark-border': '#374151',
+              'brand-primary': 'var(--color-brand-primary)',
+              'brand-secondary': 'var(--color-brand-secondary)',
+              'brand-accent': 'var(--color-brand-accent)',
+              'brand-active-tab': 'var(--color-brand-active-tab)',
+              'status-completed': 'var(--color-status-completed)',
+              'status-in-progress': 'var(--color-status-in-progress)',
+              'status-on-hold': 'var(--color-status-on-hold)',
+              'status-not-started': 'var(--color-status-not-started)',
+              'light-bg': 'var(--color-light-bg)',
+              'dark-bg': 'var(--color-dark-bg)',
+              'light-card': 'var(--color-light-card)',
+              'dark-card': 'var(--color-dark-card)',
+              'light-text': 'var(--color-light-text)',
+              'dark-text': 'var(--color-dark-text)',
+              'light-text-secondary': 'var(--color-light-text-secondary)',
+              'dark-text-secondary': 'var(--color-dark-text-secondary)',
+              'light-border': 'var(--color-light-border)',
+              'dark-border': 'var(--color-dark-border)',
             },
             height: {
               '16': '4rem',
@@ -50,38 +50,91 @@
       }
     </script>
 <style>
+  /* Base CSS variables for themes */
+  :root, html.theme-light {
+    --color-brand-primary: #007BFF; /* A more standard blue for light theme */
+    --color-brand-secondary: #0056b3;
+    --color-brand-accent: #3395ff;
+    --color-brand-active-tab: #0056b3;
+    
+    --color-status-completed: #28a745;
+    --color-status-in-progress: #17a2b8;
+    --color-status-on-hold: #ffc107;
+    --color-status-not-started: #6c757d;
+
+    --color-light-bg: #F8F9FA;
+    --color-dark-bg: #343A40; /* Not used in light theme, but defined */
+    --color-light-card: #FFFFFF;
+    --color-dark-card: #495057; /* Not used in light theme */
+    
+    --color-light-text: #212529;
+    --color-dark-text: #F8F9FA; /* Not used in light theme */
+    --color-light-text-secondary: #6c757d;
+    --color-dark-text-secondary: #CED4DA; /* Not used in light theme */
+    
+    --color-light-border: #DEE2E6;
+    --color-dark-border: #495057; /* Not used in light theme */
+  }
+
+  html.theme-dark {
+    --color-brand-primary: #D44C00;
+    --color-brand-secondary: #B34000;
+    --color-brand-accent: #E76F33;
+    --color-brand-active-tab: #0086D4;
+
+    --color-status-completed: #10B981;
+    --color-status-in-progress: #3B82F6;
+    --color-status-on-hold: #F59E0B;
+    --color-status-not-started: #6B7280;
+
+    --color-light-bg: #F3F4F6; /* Mapped to dark theme body */
+    --color-dark-bg: #111827; /* Mapped to dark theme body */
+
+    --color-light-card: #FFFFFF; /* Mapped to dark theme cards */
+    --color-dark-card: #1F2937; /* Mapped to dark theme cards */
+
+    --color-light-text: #1F2937; /* Mapped to dark theme text */
+    --color-dark-text: #F9FAFB; /* Mapped to dark theme text */
+
+    --color-light-text-secondary: #6B7280;
+    --color-dark-text-secondary: #9CA3AF;
+    
+    --color-light-border: #E5E7EB;
+    --color-dark-border: #374151;
+  }
+
   /* Simple scrollbar styling for a better UX */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: #9CA3AF; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
-  .dark ::-webkit-scrollbar-thumb { background: #4B5563; }
+  html.theme-dark ::-webkit-scrollbar-thumb { background: #4B5563; }
   ::-webkit-scrollbar-thumb:hover { background: #6B7280; }
-  .dark ::-webkit-scrollbar-thumb:hover { background: #374151; }
+  html.theme-dark ::-webkit-scrollbar-thumb:hover { background: #374151; }
 
   /* Custom dark scrollbar for Gantt chart */
   .gantt-scrollbar::-webkit-scrollbar { height: 14px; }
   .gantt-scrollbar::-webkit-scrollbar-track { background: #e0e0e0; border-radius: 10px; }
   .gantt-scrollbar::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 10px; border: 2px solid #e0e0e0; }
   .gantt-scrollbar::-webkit-scrollbar-thumb:hover { background: #1a202c; }
-  .dark .gantt-scrollbar::-webkit-scrollbar-track { background: #2d3748; }
-  .dark .gantt-scrollbar::-webkit-scrollbar-thumb { background: #4a5568; border-color: #2d3748;}
-  .dark .gantt-scrollbar::-webkit-scrollbar-thumb:hover { background: #718096; }
+  html.theme-dark .gantt-scrollbar::-webkit-scrollbar-track { background: #2d3748; }
+  html.theme-dark .gantt-scrollbar::-webkit-scrollbar-thumb { background: #4a5568; border-color: #2d3748;}
+  html.theme-dark .gantt-scrollbar::-webkit-scrollbar-thumb:hover { background: #718096; }
 
   /* Style for weekend cells in Gantt chart - VISIBLE HATCHING */
   .weekend-cell {
     background-image: repeating-linear-gradient(
       45deg,
-      #E5E7EB, /* using light-border color for light mode */
-      #E5E7EB 1px,
+      var(--color-light-border),
+      var(--color-light-border) 1px,
       transparent 1px,
       transparent 5px
     );
   }
-  .dark .weekend-cell {
+  html.theme-dark .weekend-cell {
     background-image: repeating-linear-gradient(
       45deg,
-      #374151, /* using dark-border color for dark mode */
-      #374151 1px,
+      var(--color-dark-border),
+      var(--color-dark-border) 1px,
       transparent 1px,
       transparent 5px
     );
@@ -91,8 +144,16 @@
   .holiday-cell {
     background-color: rgba(239, 68, 68, 0.15); /* bg-red-500/15 */
   }
-  .dark .holiday-cell {
+  html.theme-dark .holiday-cell {
     background-color: rgba(239, 68, 68, 0.25); /* bg-red-500/25 for better contrast */
+  }
+
+  /* Body background color is now controlled by CSS variables */
+  body {
+    background-color: var(--color-light-bg);
+  }
+  html.theme-dark body {
+    background-color: var(--color-dark-bg);
   }
 </style>
 
@@ -110,9 +171,9 @@
   }
 }
 </script>
-  <script type="module" crossorigin src="/UAD_project/assets/index-Cxt3A1Rv.js"></script>
+  <script type="module" crossorigin src="/UAD_project/assets/index-CK_FZSNP.js"></script>
 </head>
-<body class="bg-light-bg dark:bg-dark-bg">
+<body>
     <div id="root"></div>
 </body>
 </html>
