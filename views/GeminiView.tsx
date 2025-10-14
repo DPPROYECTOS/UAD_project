@@ -116,7 +116,6 @@ const GeminiView: React.FC = () => {
     }
   };
   
-  // ... All tool-specific handlers ...
   const handleGenerateImage = async () => {
     if (!imagePrompt.trim() || isImageLoading) return;
     setIsImageLoading(true);
@@ -446,7 +445,7 @@ const GeminiView: React.FC = () => {
 
   return (
     <div>
-      <h1 className="text-3xl font-bold cursor-pointer" onClick={handleSecretClick}>Asistente Gemini 2.5</h1>
+      <h1 className="text-3xl font-bold cursor-pointer text-light-text dark:text-dark-text" onClick={handleSecretClick}>Asistente Gemini 2.5</h1>
       <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1">
         {isFullMode ? 'Selecciona una herramienta para empezar.' : 'Haz una pregunta, pide un resumen o genera ideas para tus proyectos.'}
       </p>
