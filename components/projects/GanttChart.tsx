@@ -45,6 +45,61 @@ const getMexicanHolidays = (year: number): Set<string> => {
     return holidays;
 };
 
+// --- New Business Day Calculation ---
+const getBusinessDayEndDate = (startDate: Date, duration: number, holidays: Set<string>): Date => {
+    let currentDate = new Date(startDate.getTime());
+    let remainingDuration = duration;
+
+    // The loop should continue as long as there's duration left to account for.
+    // We start by checking the first day.
+    while (remainingDuration > 0) {
+        const dayOfWeek = currentDate.getUTCDay();
+        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+        const isHoliday = holidays.has(currentDate.toISOString().split('T')[0]);
+
+        if (!isWeekend && !isHoliday) {
+            remainingDuration--;
+        }
+
+        // Only advance the day if there's more duration to account for.
+        // This ensures the final day is the correct end date.
+        if (remainingDuration > 0) {
+            currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+        }
+    }
+    return currentDate;
+};
+
+// --- Task Hierarchy Helper ---
+type HierarchicalTask = ProjectTask & { level: number };
+
+const getHierarchicalTasks = (tasks: ProjectTask[]): HierarchicalTask[] => {
+    const taskMap = new Map(tasks.map(task => [task.id, { ...task, children: [] as ProjectTask[] }]));
+    const rootTasks: (ProjectTask & { children: ProjectTask[] })[] = [];
+
+    tasks.forEach(task => {
+        if (task.parentId && taskMap.has(task.parentId)) {
+            taskMap.get(task.parentId)?.children.push(taskMap.get(task.id)!);
+        } else {
+            rootTasks.push(taskMap.get(task.id)!);
+        }
+    });
+    
+    // Sort children by start date at each level
+    taskMap.forEach(task => task.children.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime()));
+    rootTasks.sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime());
+
+    const flattened: HierarchicalTask[] = [];
+    const traverse = (task: ProjectTask, level: number) => {
+        flattened.push({ ...task, level });
+        taskMap.get(task.id)?.children.forEach(child => traverse(child, level + 1));
+    };
+
+    rootTasks.forEach(task => traverse(task, 0));
+    return flattened;
+};
+
+
 // --- Styling and Color Constants ---
 const DAY_CELL_WIDTH = 48;
 const TASK_NAME_WIDTH = 250;
@@ -65,20 +120,41 @@ interface GanttChartProps {
 
 const GanttChart: React.FC<GanttChartProps> = ({ project, tasks }) => {
     const projectStartDate = parseDate(project.startDate);
+    
+    const hierarchicalTasks = React.useMemo(() => getHierarchicalTasks(tasks), [tasks]);
+
+    const holidays = React.useMemo(() => {
+        if (!projectStartDate) return new Set<string>();
+        const startYear = projectStartDate.getUTCFullYear();
+        const tempEndDate = parseDate(project.endDate);
+        const endYear = tempEndDate ? tempEndDate.getUTCFullYear() : startYear + 1; // Look one year ahead if no end date
+        const allHolidays = new Set<string>();
+        for (let year = startYear; year <= endYear; year++) {
+            getMexicanHolidays(year).forEach(holiday => allHolidays.add(holiday));
+        }
+        return allHolidays;
+    }, [project.startDate, project.endDate]);
 
     if (!projectStartDate) {
         return <div className="flex items-center justify-center h-full text-light-text-secondary dark:text-dark-text-secondary">La fecha de inicio del proyecto es inválida.</div>;
     }
 
     let chartEndDate = parseDate(project.endDate);
-    if (!chartEndDate) {
-        const latestTaskEnd = tasks.reduce((latest, task) => {
+    if (!chartEndDate || hierarchicalTasks.length > 0) {
+        const latestTaskEnd = hierarchicalTasks.reduce((latest, task) => {
             const taskStart = parseDate(task.startDate);
             if (!taskStart) return latest;
-            const taskEnd = addDays(taskStart, task.duration > 0 ? task.duration - 1 : 0);
+            const businessDuration = task.duration > 0 ? task.duration : 1;
+            const taskEnd = getBusinessDayEndDate(taskStart, businessDuration, holidays);
             return taskEnd > latest ? taskEnd : latest;
         }, new Date(0));
-        chartEndDate = latestTaskEnd.getTime() > 0 ? latestTaskEnd : addDays(projectStartDate, 29);
+        
+        const defaultEndDate = addDays(projectStartDate, 29);
+        const calculatedEndDate = latestTaskEnd.getTime() > 0 ? latestTaskEnd : defaultEndDate;
+
+        if (!chartEndDate || calculatedEndDate > chartEndDate) {
+            chartEndDate = calculatedEndDate;
+        }
     }
     
     if (!chartEndDate || chartEndDate < projectStartDate) {
@@ -92,14 +168,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ project, tasks }) => {
     today.setUTCHours(0, 0, 0, 0);
     const todayIndex = dateHeaders.findIndex(d => d.getTime() === today.getTime());
 
-    const holidays = new Set<string>();
-    const startYear = projectStartDate.getUTCFullYear();
-    const endYear = chartEndDate.getUTCFullYear();
-    for (let year = startYear; year <= endYear; year++) {
-        getMexicanHolidays(year).forEach(holiday => holidays.add(holiday));
-    }
-
-    if (tasks.length === 0) {
+    if (hierarchicalTasks.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center h-full text-center text-light-text-secondary dark:text-dark-text-secondary p-8">
                 <ClipboardListIcon className="h-12 w-12 text-gray-400" />
@@ -135,24 +204,54 @@ const GanttChart: React.FC<GanttChartProps> = ({ project, tasks }) => {
                 })}
 
                 {/* --- TASK ROWS & BARS --- */}
-                {tasks.map((task, rowIndex) => {
+                {hierarchicalTasks.map((task, rowIndex) => {
                     const taskStartDate = parseDate(task.startDate);
                     if (!taskStartDate) return null;
 
-                    const offsetDays = getDaysDiff(projectStartDate, taskStartDate);
-                    const durationDays = task.duration > 0 ? task.duration : 1;
+                    const businessDuration = task.duration > 0 ? task.duration : 1;
+                    const taskEndDate = getBusinessDayEndDate(taskStartDate, businessDuration, holidays);
                     
-                    if (offsetDays < -durationDays || offsetDays > totalDays) return null; // Skip tasks outside view
-                    
-                    const barStartColumn = offsetDays + 2;
                     const { bar, dot } = taskColors[rowIndex % taskColors.length];
                     const rowBgClass = rowIndex % 2 === 0 ? 'bg-light-card dark:bg-dark-card' : 'bg-light-bg dark:bg-dark-bg/80';
+
+                    // --- NEW: Calculate bar segments to skip non-working days ---
+                    const segments: { startDate: Date; calendarDuration: number }[] = [];
+                    let segmentStartDate: Date | null = null;
+                    const totalCalendarDays = getDaysDiff(taskStartDate, taskEndDate);
+
+                    for (let i = 0; i <= totalCalendarDays; i++) {
+                        const currentDate = addDays(taskStartDate, i);
+                        const dayOfWeek = currentDate.getUTCDay();
+                        const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                        const isHoliday = holidays.has(currentDate.toISOString().split('T')[0]);
+                        const isWorkDay = !isWeekend && !isHoliday;
+
+                        if (isWorkDay) {
+                            if (!segmentStartDate) {
+                                segmentStartDate = currentDate; // Start of a new segment
+                            }
+                        } else { // It's a non-work day
+                            if (segmentStartDate) {
+                                // End of the previous segment. The end date is the day before the current non-work day.
+                                const segmentEndDate = addDays(currentDate, -1);
+                                const calendarDuration = getDaysDiff(segmentStartDate, segmentEndDate) + 1;
+                                segments.push({ startDate: segmentStartDate, calendarDuration });
+                                segmentStartDate = null;
+                            }
+                        }
+                    }
+
+                    // Check if a segment was still open at the end of the loop
+                    if (segmentStartDate) {
+                        const calendarDuration = getDaysDiff(segmentStartDate, taskEndDate) + 1;
+                        segments.push({ startDate: segmentStartDate, calendarDuration });
+                    }
 
                     return (
                         <React.Fragment key={task.id}>
                             {/* Sticky Task Name Cell */}
-                            <div className={`sticky left-0 z-20 p-2 truncate border-t border-l border-light-border dark:border-dark-border flex items-center ${rowBgClass}`}
-                                 style={{ gridRow: rowIndex + 2, height: `${ROW_HEIGHT}px` }}>
+                            <div className={`sticky left-0 z-20 p-2 truncate border-t border-l border-light-border dark:border-dark-border flex items-center ${rowBgClass} ${task.completed ? 'line-through text-light-text-secondary dark:text-dark-text-secondary' : ''}`}
+                                 style={{ gridRow: rowIndex + 2, height: `${ROW_HEIGHT}px`, paddingLeft: `${10 + task.level * 20}px` }}>
                                 <span className={`h-3 w-3 rounded-full ${dot} mr-3 flex-shrink-0`}></span>
                                 {task.title}
                             </div>
@@ -165,17 +264,28 @@ const GanttChart: React.FC<GanttChartProps> = ({ project, tasks }) => {
                                          style={{ gridRow: rowIndex + 2, gridColumn: dayIndex + 2, height: `${ROW_HEIGHT}px` }}/>
                                 );
                             })}
-                             {/* Task Bar */}
-                            <div className={`flex items-center h-8 my-auto rounded text-white px-2 overflow-hidden z-10 ${bar}`}
-                                 title={`${task.title} - Inicio: ${task.startDate}, Duración: ${task.duration} días`}
-                                 style={{ 
-                                     gridRow: rowIndex + 2, 
-                                     gridColumn: `${barStartColumn} / span ${durationDays}`,
-                                     marginLeft: '4px',
-                                     marginRight: '4px',
-                                  }}>
-                                <span className="truncate text-xs font-medium">{task.title}</span>
-                            </div>
+                             {/* Segmented Task Bars */}
+                            {segments.map((segment, segIndex) => {
+                                const offsetDays = getDaysDiff(projectStartDate, segment.startDate);
+                                
+                                if (offsetDays < -segment.calendarDuration || offsetDays > totalDays) return null; // Skip segments outside view
+                                
+                                const barStartColumn = offsetDays + 2;
+
+                                return (
+                                    <div key={segIndex} className={`flex items-center h-8 my-auto rounded text-white px-2 overflow-hidden z-10 ${bar} ${task.completed ? 'opacity-60' : ''}`}
+                                         title={`${task.title} - Duración: ${task.duration} día(s) hábil(es)`}
+                                         style={{ 
+                                             gridRow: rowIndex + 2, 
+                                             gridColumn: `${barStartColumn} / span ${segment.calendarDuration}`,
+                                             marginLeft: '4px',
+                                             marginRight: '4px',
+                                          }}>
+                                        {/* Only show text in the first segment to avoid repetition */}
+                                        {segIndex === 0 && <span className="truncate text-xs font-medium">{task.completed ? 'Completado' : task.title}</span>}
+                                    </div>
+                                );
+                            })}
                         </React.Fragment>
                     );
                 })}

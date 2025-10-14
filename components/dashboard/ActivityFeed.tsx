@@ -8,13 +8,21 @@ interface ActivityFeedProps {
 const timeAgo = (isoDate: string): string => {
     const date = new Date(isoDate);
     const now = new Date();
-    const seconds = Math.round((now.getTime() - date.getTime()) / 1000);
-    const minutes = Math.round(seconds / 60);
-    const hours = Math.round(minutes / 60);
+    const totalSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-    if (seconds < 60) return `hace instantes`;
-    if (minutes < 60) return `hace ${minutes} min`;
-    if (hours < 24) return `hace ${hours} h`;
+    if (totalSeconds < 0) return 'hace instantes';
+    if (totalSeconds < 5) return 'hace instantes';
+    if (totalSeconds < 60) return `hace ${totalSeconds} segundos`;
+
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    if (totalMinutes < 60) return `hace ${totalMinutes} minuto${totalMinutes > 1 ? 's' : ''}`;
+
+    const totalHours = Math.floor(totalMinutes / 60);
+    if (totalHours < 24) return `hace ${totalHours} hora${totalHours > 1 ? 's' : ''}`;
+    
+    const totalDays = Math.floor(totalHours / 24);
+    if (totalDays > 0) return `hace ${totalDays} día${totalDays > 1 ? 's' : ''}`;
+
     return date.toLocaleDateString('es-ES');
 }
 
@@ -26,9 +34,13 @@ const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities }) => {
         {activities.length > 0 ? (
             activities.map(activity => (
             <div key={activity.id} className="flex items-start">
-                <div className="h-8 w-8 rounded-full bg-brand-primary/20 flex items-center justify-center text-brand-primary font-bold text-sm flex-shrink-0">
-                {activity.user.name.charAt(0).toUpperCase()}
-                </div>
+                {activity.user.avatarUrl ? (
+                    <img src={activity.user.avatarUrl} alt={activity.user.name} className="h-8 w-8 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                    <div className="h-8 w-8 rounded-full bg-brand-primary/20 flex items-center justify-center text-brand-primary font-bold text-sm flex-shrink-0">
+                        {activity.user.name.charAt(0).toUpperCase()}
+                    </div>
+                )}
                 <div className="ml-3">
                 <p className="text-sm">
                     <span className="font-bold">{activity.user.name}</span> {activity.action} <span className="font-medium text-brand-primary">{activity.target}</span>

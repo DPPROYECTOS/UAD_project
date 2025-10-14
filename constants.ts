@@ -53,47 +53,48 @@ export const MOCK_PROJECTS: Project[] = [
 
 export const MOCK_TASKS: ProjectTask[] = [
   // Tasks for Project 1
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-01', projectId: 'proj-001', title: 'Definir la arquitectura del frontend', completed: true, startDate: '2024-06-05', duration: 5 },
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-02', projectId: 'proj-001', title: 'Diseñar mockups de la nueva interfaz de usuario', completed: true, startDate: '2024-06-10', duration: 10 },
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-03', projectId: 'proj-001', title: 'Desarrollar el módulo de carrito de compras', completed: false, startDate: '2024-06-20', duration: 15 },
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-04', projectId: 'proj-001', title: 'Integrar pasarela de pago', completed: false, startDate: '2024-07-05', duration: 10 },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-01', projectId: 'proj-001', title: 'Definir la arquitectura del frontend', completed: true, startDate: '2024-06-05', duration: 5, parentId: null },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-02', projectId: 'proj-001', title: 'Diseñar mockups de la nueva interfaz de usuario', completed: true, startDate: '2024-06-10', duration: 10, parentId: null },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-03', projectId: 'proj-001', title: 'Desarrollar el módulo de carrito de compras', completed: false, startDate: '2024-06-20', duration: 15, parentId: null },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-04', projectId: 'proj-001', title: 'Integrar pasarela de pago', completed: false, startDate: '2024-07-05', duration: 10, parentId: null },
   // Tasks for Project 2
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-05', projectId: 'proj-002', title: 'Analizar requerimientos con el equipo de logística', completed: true, startDate: '2024-08-02', duration: 7 },
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-06', projectId: 'proj-002', title: 'Seleccionar proveedor de software SGA', completed: false, startDate: '2024-08-10', duration: 10 },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-05', projectId: 'proj-002', title: 'Analizar requerimientos con el equipo de logística', completed: true, startDate: '2024-08-02', duration: 7, parentId: null },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-06', projectId: 'proj-002', title: 'Seleccionar proveedor de software SGA', completed: false, startDate: '2024-08-10', duration: 10, parentId: null },
   // Tasks for Project 3 (All completed)
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-07', projectId: 'proj-003', title: 'Crear contenido para redes sociales', completed: true, startDate: '2024-07-01', duration: 10 },
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-08', projectId: 'proj-003', title: 'Configurar campañas de Google Ads', completed: true, startDate: '2024-07-05', duration: 5 },
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-09', projectId: 'proj-003', title: 'Enviar newsletter de lanzamiento', completed: true, startDate: '2024-07-15', duration: 2 },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-07', projectId: 'proj-003', title: 'Crear contenido para redes sociales', completed: true, startDate: '2024-07-01', duration: 10, parentId: null },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-08', projectId: 'proj-003', title: 'Configurar campañas de Google Ads', completed: true, startDate: '2024-07-05', duration: 5, parentId: null },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-09', projectId: 'proj-003', title: 'Enviar newsletter de lanzamiento', completed: true, startDate: '2024-07-15', duration: 2, parentId: null },
   // Tasks for Project 4
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-10', projectId: 'proj-004', title: 'Realizar escaneo de vulnerabilidades de red', completed: true, startDate: '2024-05-20', duration: 7 },
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-11', projectId: 'proj-004', title: 'Revisar políticas de control de acceso', completed: true, startDate: '2024-05-28', duration: 14 },
-  // FIX: Added missing startDate and duration properties to conform to ProjectTask type.
-  { id: 'task-12', projectId: 'proj-004', title: 'Redactar informe preliminar de hallazgos', completed: false, startDate: '2024-06-15', duration: 10 },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-10', projectId: 'proj-004', title: 'Realizar escaneo de vulnerabilidades de red', completed: true, startDate: '2024-05-20', duration: 7, parentId: null },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-11', projectId: 'proj-004', title: 'Revisar políticas de control de acceso', completed: true, startDate: '2024-05-28', duration: 14, parentId: null },
+  // FIX: Added missing parentId property to conform to ProjectTask type.
+  { id: 'task-12', projectId: 'proj-004', title: 'Redactar informe preliminar de hallazgos', completed: false, startDate: '2024-06-15', duration: 10, parentId: null },
 ];
 
 
 // --- OLD MOCK DATA ---
 export const MOCK_USER: DisplayUser = {
+  id: 'user-maria',
   name: 'Maria Garcia',
   avatarUrl: 'https://picsum.photos/seed/user1/100/100',
 };
 
 export const MOCK_USERS: DisplayUser[] = [
-  { name: 'John Doe', avatarUrl: 'https://picsum.photos/seed/user2/100/100' },
-  { name: 'Jane Smith', avatarUrl: 'https://picsum.photos/seed/user3/100/100' },
-  { name: 'Carlos Ray', avatarUrl: 'https://picsum.photos/seed/user4/100/100' },
-  { name: 'Aisha Khan', avatarUrl: 'https://picsum.photos/seed/user5/100/100' },
+  { id: 'user-john', name: 'John Doe', avatarUrl: 'https://picsum.photos/seed/user2/100/100' },
+  { id: 'user-jane', name: 'Jane Smith', avatarUrl: 'https://picsum.photos/seed/user3/100/100' },
+  { id: 'user-carlos', name: 'Carlos Ray', avatarUrl: 'https://picsum.photos/seed/user4/100/100' },
+  { id: 'user-aisha', name: 'Aisha Khan', avatarUrl: 'https://picsum.photos/seed/user5/100/100' },
 ];
 
 export const MOCK_ACTIVITIES: Activity[] = [
@@ -105,6 +106,8 @@ export const MOCK_ACTIVITIES: Activity[] = [
         timestamp: '2 hours ago',
         // FIX: Added missing 'importance' property to conform to Activity type.
         importance: 'low',
+        // FIX: Added missing 'isRead' property to conform to Activity type.
+        isRead: false,
     },
     {
         id: 'act2',
@@ -114,6 +117,8 @@ export const MOCK_ACTIVITIES: Activity[] = [
         timestamp: '8 hours ago',
         // FIX: Added missing 'importance' property to conform to Activity type.
         importance: 'medium',
+        // FIX: Added missing 'isRead' property to conform to Activity type.
+        isRead: false,
     },
     {
         id: 'act3',
@@ -123,6 +128,8 @@ export const MOCK_ACTIVITIES: Activity[] = [
         timestamp: '1 day ago',
         // FIX: Added missing 'importance' property to conform to Activity type.
         importance: 'low',
+        // FIX: Added missing 'isRead' property to conform to Activity type.
+        isRead: false,
     },
     {
         id: 'act4',
@@ -132,5 +139,7 @@ export const MOCK_ACTIVITIES: Activity[] = [
         timestamp: '2 days ago',
         // FIX: Added missing 'importance' property to conform to Activity type.
         importance: 'low',
+        // FIX: Added missing 'isRead' property to conform to Activity type.
+        isRead: false,
     },
 ];

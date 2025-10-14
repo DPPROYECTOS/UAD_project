@@ -14,7 +14,7 @@ interface ProjectDetailViewProps {
   onBackToList: () => void;
   onDeleteProject: (id: string) => void;
   onSaveProject: (project: Project) => void;
-  onAddTask: (projectId: string, details: { title: string; startDate: string; duration: number }) => void;
+  onAddTask: (projectId: string, details: { title: string; startDate: string; duration: number }, parentId?: string | null) => void;
   onToggleTask: (id: string) => void;
   onUpdateTask: (task: ProjectTask) => void;
   onDeleteTask: (id: string) => void;
@@ -76,7 +76,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
         return <ProjectTasksTab 
                   project={project}
                   tasks={tasks} 
-                  onAddTask={(details) => onAddTask(project.id, details)}
+                  onAddTask={(details, parentId) => onAddTask(project.id, details, parentId)}
                   onToggleTask={onToggleTask}
                   onUpdateTask={onUpdateTask}
                   onDeleteTask={onDeleteTask}
@@ -108,9 +108,23 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
                         <div>
                             <label className="text-sm font-medium">Estado</label>
-                            <select name="status" value={editableProject.status} onChange={handleEditChange} className="w-full mt-1 p-2 border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg rounded-md focus:ring-brand-accent">
-                                {Object.values(ProjectStatus).map(s => <option key={s} value={s}>{s}</option>)}
+                            <select 
+                                name="status" 
+                                value={editableProject.status} 
+                                onChange={handleEditChange} 
+                                className="w-full mt-1 p-2 border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg rounded-md focus:ring-brand-accent disabled:opacity-75 disabled:cursor-not-allowed"
+                                disabled={editableProject.status !== ProjectStatus.EN_REVISION}
+                            >
+                                {editableProject.status === ProjectStatus.EN_REVISION ? (
+                                    <>
+                                        <option value={ProjectStatus.EN_REVISION}>En Revisión</option>
+                                        <option value={ProjectStatus.COMPLETO}>Completo</option>
+                                    </>
+                                ) : (
+                                    <option value={editableProject.status}>{editableProject.status}</option>
+                                )}
                             </select>
+                            {editableProject.status !== ProjectStatus.EN_REVISION && <p className="text-xs mt-1 text-light-text-secondary dark:text-dark-text-secondary">El estado se actualiza automáticamente.</p>}
                         </div>
                         <div>
                             <label className="text-sm font-medium">Líder del Proyecto</label>

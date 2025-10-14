@@ -4,12 +4,23 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 export interface User {
   id: string;
   username: string;
+  avatarUrl?: string;
+  avatarPath?: string;
 }
 
 export interface DisplayUser {
+  id: string;
   name: string;
   avatarUrl: string;
 }
+
+export interface ThemePreferences {
+  id: string;
+  user_id: string;
+  theme_name: 'light' | 'dark' | 'custom';
+  custom_theme_colors?: Record<string, string> | null;
+}
+
 
 // --- Projects ---
 export enum ProjectStatus {
@@ -38,6 +49,7 @@ export interface ProjectTask {
   completed: boolean;
   startDate: string; // YYYY-MM-DD
   duration: number; // in days
+  parentId: string | null;
 }
 
 // --- Documents & Folders ---
@@ -104,6 +116,7 @@ export interface Activity {
   importance: 'high' | 'medium' | 'low';
   projectId?: string;
   projectName?: string;
+  isRead: boolean;
 }
 
 // --- Content (Generic, from AI) ---
@@ -160,6 +173,7 @@ export interface TextStyle {
   fontWeight: 'normal' | 'bold';
   fontStyle: 'normal' | 'italic';
   color: string; // hex color for text
+  listStyle?: 'none' | 'bullet' | 'number';
 }
 
 export interface WhiteboardItemBase {
@@ -171,6 +185,10 @@ export interface WhiteboardItemBase {
   text: string;
   style: TextStyle;
   rotation?: number; // in degrees
+}
+
+export interface TextItem extends WhiteboardItemBase {
+  type: 'text';
 }
 
 export interface Note extends WhiteboardItemBase {
@@ -194,7 +212,7 @@ export interface FlowchartShape extends WhiteboardItemBase {
   fillColor: string; // hex color for shape fill
 }
 
-export type WhiteboardItem = Note | FlowchartShape;
+export type WhiteboardItem = Note | FlowchartShape | TextItem;
 
 export interface Connector {
   id: string;
@@ -204,6 +222,7 @@ export interface Connector {
   toAnchor: AnchorPosition;
   fromOffset?: number;
   toOffset?: number;
+  midpointRatio?: number;
   text: string;
   style: TextStyle;
 }

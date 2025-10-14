@@ -128,12 +128,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSave, pr
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium">Estado</label>
-                <select name="status" value={formData.status} onChange={handleChange} className="w-full mt-1 p-2 border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg rounded-md focus:ring-brand-accent">
-                  {Object.values(ProjectStatus).map(s => <option key={s} value={s}>{s}</option>)}
-                </select>
-              </div>
                <div>
                 <label className="text-sm font-medium">Líder del Proyecto</label>
                 <input type="text" name="leader" value={formData.leader} onChange={handleChange} className="w-full mt-1 p-2 border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg rounded-md focus:ring-brand-accent"/>

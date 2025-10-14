@@ -37,7 +37,7 @@ const FlowchartShapeComponent: React.FC<FlowchartShapeComponentProps> = ({
   }, [isEditing]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (isEditing) return;
+    if (isEditing || e.button !== 0) return;
     e.stopPropagation();
     onInteractionStart(shape.id);
 
@@ -246,6 +246,22 @@ const FlowchartShapeComponent: React.FC<FlowchartShapeComponentProps> = ({
   const handleTextareaMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
   };
+  
+  const renderTextContent = () => {
+    if (!shape.text) return null;
+    const { listStyle } = shape.style;
+    if (listStyle && listStyle !== 'none') {
+        const lines = shape.text.split('\n');
+        const ListTag = listStyle === 'bullet' ? 'ul' : 'ol';
+        const listClassName = listStyle === 'bullet' ? 'list-disc' : 'list-decimal';
+        return (
+            <ListTag className={`${listClassName} list-inside text-left w-full`}>
+                {lines.map((line, i) => <li key={i}>{line || ' '}</li>)}
+            </ListTag>
+        );
+    }
+    return shape.text;
+  };
 
   const renderShape = () => {
     const commonProps = {
@@ -334,9 +350,9 @@ const FlowchartShapeComponent: React.FC<FlowchartShapeComponentProps> = ({
             ) : (
             <div
                 style={shape.style}
-                className="text-center break-words pointer-events-none"
+                className={`break-words pointer-events-none ${shape.style.listStyle && shape.style.listStyle !== 'none' ? '' : 'text-center'}`}
             >
-                {shape.text}
+                {renderTextContent()}
             </div>
             )}
         </div>

@@ -1,7 +1,6 @@
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-// FIX: Import `WhiteboardItemOld` to correctly type legacy whiteboard functions.
-import { WhiteboardItem, Project, ProjectStatus, ProjectTask, ContentType, Folder, Document, LinkItem, AuditItem, WhiteboardItemOld, WhiteboardState, SavedWhiteboard, Connector, TextStyle } from '../types';
+import { WhiteboardItem, Project, ProjectStatus, ProjectTask, ContentType, Folder, Document, LinkItem, AuditItem, WhiteboardItemOld, WhiteboardState, SavedWhiteboard, Connector, TextStyle, Activity, ThemePreferences } from '../types';
 
 // These credentials are intentionally public for this project.
 // In a production environment, they should be stored securely in environment variables.
@@ -9,6 +8,31 @@ const supabaseUrl = 'https://hourctostlvdsshmgorf.supabase.co';
 const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhvdXJjdG9zdGx2ZHNzaG1nb3JmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk0MTQ3MTUsImV4cCI6MjA3NDk5MDcxNX0.8ORfYwoEWxgBmdkCgCKLwDAffpo4Fzzp2Cdk9qDO2_U';
 
 export const supabase: SupabaseClient = createClient(supabaseUrl, supabaseAnonKey);
+
+// Helper function to create a URL-safe file name for storage paths.
+// This prevents issues with spaces or special characters in filenames and ensures the path is not too long.
+const sanitizeFileName = (fileName: string): string => {
+  const extension = fileName.lastIndexOf('.') > 0 ? fileName.slice(fileName.lastIndexOf('.')) : '';
+  let nameWithoutExt = extension ? fileName.slice(0, fileName.lastIndexOf('.')) : fileName;
+
+  // Truncate the base name to a safe length to avoid potential path length issues in storage.
+  if (nameWithoutExt.length > 50) {
+    nameWithoutExt = nameWithoutExt.substring(0, 50);
+  }
+
+  const sanitized = nameWithoutExt
+    .toLowerCase()
+    .replace(/\s+/g, '-') // Replace spaces with hyphens
+    .replace(/[^\w-]+/g, '') // Remove all non-word chars except hyphens
+    .replace(/--+/g, '-') // Replace multiple hyphens with a single one
+    .replace(/^-+|-+$/g, ''); // Trim hyphens from start and end
+
+  // Ensure the final name isn't empty after sanitization
+  const finalName = sanitized || 'file';
+
+  return finalName + extension;
+};
+
 
 // --- Auth Functions ---
 export const signIn = async (email: string, password: string) => {
@@ -21,6 +45,274 @@ export const signOut = async () => {
   const { error } = await supabase.auth.signOut();
   if (error) throw error;
 };
+
+// --- User Preferences ---
+export const getUserThemePreferences = async (): Promise<ThemePreferences | null> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+
+    const { data, error } = await supabase
+        .from('user_preferences')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+    
+    if (error && error.code !== 'PGRST116') { // 'PGRST116' means no rows found, which is fine
+        throw error;
+    }
+    
+    return data;
+};
+
+export const upsertUserThemePreferences = async (userId: string, themeName: string, customColors?: Record<string, string> | null) => {
+    const payload: {
+        user_id: string;
+        theme_name: string;
+        custom_theme_colors?: Record<string, string> | null;
+    } = {
+        user_id: userId,
+        theme_name: themeName,
+    };
+
+    // Only include custom_theme_colors in the payload if we are actually setting them.
+    // This prevents overwriting stored custom colors with null/undefined when switching to a standard theme.
+    if (customColors !== undefined) {
+        payload.custom_theme_colors = customColors;
+    }
+
+    const { data, error } = await supabase
+        .from('user_preferences')
+        .upsert(payload, { onConflict: 'user_id' });
+
+    if (error) throw error;
+    return data;
+};
+
+export const getAvatarBlobUrl = async (path: string): Promise<string | null> => {
+  if (!path) return null;
+  try {
+    const { data, error } = await supabase.storage.from('user_files').download(path);
+    if (error) {
+        console.error('Supabase download error:', error);
+        // Don't throw, just return null so the app doesn't crash if an avatar is missing
+        return null;
+    }
+    return URL.createObjectURL(data);
+  } catch (error) {
+    console.error('Error downloading avatar blob:', error);
+    return null;
+  }
+};
+
+
+export const updateAvatar = async (file: File): Promise<string> => { // Returns blob URL
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Usuario no autenticado.');
+  
+    const fileExt = file.name.split('.').pop();
+    const fileName = `avatar.${fileExt}`;
+    const filePath = `public_avatars/${user.id}/${fileName}`;
+  
+    // 1. Upload file
+    const { error: uploadError } = await supabase.storage
+      .from('user_files')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true,
+      });
+  
+    if (uploadError) {
+      console.error('Supabase Storage upload error:', uploadError);
+      throw new Error(`Error al subir el archivo: ${uploadError.message}`);
+    }
+  
+    // 2. Update user metadata with the FILE PATH
+    const { data: updatedUser, error: userUpdateError } = await supabase.auth.updateUser({
+      data: { avatar_path: filePath }, 
+    });
+  
+    if (userUpdateError) {
+      console.error('Supabase Auth user update error:', userUpdateError);
+      throw new Error(`Error al actualizar los metadatos del perfil: ${userUpdateError.message}`);
+    }
+  
+    // 3. Download the blob of the newly uploaded file and create a URL for immediate display
+    const blobUrl = await getAvatarBlobUrl(updatedUser.user.user_metadata.avatar_path);
+    if (!blobUrl) {
+      throw new Error("Se subió el archivo pero no se pudo crear una URL para mostrarlo.");
+    }
+    
+    return blobUrl;
+};
+
+// --- Notification Functions ---
+export const getNotifications = async (): Promise<Activity[]> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  // 1. Fetch all recent notifications
+  const { data: notificationsData, error: notificationsError } = await supabase
+    .from('notification_history')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(500);
+
+  if (notificationsError) throw notificationsError;
+  if (!notificationsData) return [];
+  
+  // 2. Fetch all read statuses for the current user
+  const { data: readStatuses, error: readStatusError } = await supabase
+    .from('notification_read_status')
+    .select('notification_id')
+    .eq('user_id', user.id);
+
+  if (readStatusError) throw readStatusError;
+
+  const readIds = new Set(readStatuses.map(s => s.notification_id));
+
+  // 3. Map to Activity[] with correct isRead status
+  return notificationsData.map(n => ({
+    id: n.id,
+    timestamp: n.created_at,
+    user: {
+      id: n.user_id,
+      name: n.user_display_name,
+      avatarUrl: n.user_avatar_path || '', // Path for blob conversion in App.tsx
+    },
+    action: n.action,
+    target: n.target,
+    importance: n.importance,
+    projectId: n.project_id,
+    projectName: n.project_name,
+    isRead: readIds.has(n.id),
+  }));
+};
+
+
+export const addNotification = async (
+  action: string, 
+  target: string, 
+  importance: 'high' | 'medium' | 'low',
+  projectId?: string,
+  projectName?: string
+): Promise<Activity> => {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error('User not authenticated');
+
+  const getDisplayName = (username: string): string => {
+    const email = (username || '').toLowerCase();
+    if (email === 'darienperez695@gmail.com') return 'PHOBOS';
+    if (email === 'mejoraproyectos0@gmail.com') return 'Zerk Lucio';
+    return email.split('@')[0];
+  };
+
+  const notificationToInsert = {
+    user_id: user.id,
+    user_display_name: getDisplayName(user.email || 'Usuario'),
+    user_avatar_path: user.user_metadata?.avatar_path || null,
+    action,
+    target,
+    importance,
+    project_id: projectId || null,
+    project_name: projectName || null,
+  };
+
+  const { data, error } = await supabase
+    .from('notification_history')
+    .insert(notificationToInsert)
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  return {
+    id: data.id,
+    timestamp: data.created_at,
+    user: {
+      id: data.user_id,
+      name: data.user_display_name,
+      avatarUrl: data.user_avatar_path, // Pass path back
+    },
+    action: data.action,
+    target: data.target,
+    importance: data.importance,
+    projectId: data.project_id,
+    projectName: data.project_name,
+    isRead: false, // A new notification is always unread for the creator
+  };
+};
+
+export const markNotificationReadStatus = async (notificationId: string, read: boolean): Promise<void> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    if (read) {
+        // Upsert to mark as read. Avoids errors if already marked.
+        const { error } = await supabase
+            .from('notification_read_status')
+            .upsert({ notification_id: notificationId, user_id: user.id });
+        if (error) throw error;
+    } else {
+        // Delete to mark as unread.
+        const { error } = await supabase
+            .from('notification_read_status')
+            .delete()
+            .match({ notification_id: notificationId, user_id: user.id });
+        if (error) throw error;
+    }
+};
+
+export const markAllNotificationsAsRead = async (notificationIds: string[]): Promise<void> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    if (notificationIds.length === 0) return;
+
+    const recordsToInsert = notificationIds.map(id => ({
+        notification_id: id,
+        user_id: user.id,
+    }));
+
+    const { error } = await supabase
+        .from('notification_read_status')
+        .upsert(recordsToInsert, { onConflict: 'notification_id,user_id' }); // Ignore if already read
+    
+    if (error) throw error;
+};
+
+export const subscribeToNotifications = (
+  onNewNotification: (notification: Activity) => void
+): RealtimeChannel => {
+  const channel = supabase.channel('public:notification_history');
+  channel
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'notification_history' },
+      (payload) => {
+        const newRecord = payload.new;
+        const notification: Activity = {
+          id: newRecord.id,
+          timestamp: newRecord.created_at,
+          user: {
+            id: newRecord.user_id,
+            name: newRecord.user_display_name,
+            avatarUrl: newRecord.user_avatar_path || '', // This is a path, not a blob URL
+          },
+          action: newRecord.action,
+          target: newRecord.target,
+          importance: newRecord.importance,
+          projectId: newRecord.project_id,
+          projectName: newRecord.project_name,
+          isRead: false, // A new notification is always unread initially for the current user.
+        };
+        onNewNotification(notification);
+      }
+    )
+    .subscribe();
+
+  return channel;
+};
+
 
 // --- Project Functions ---
 // All project data is now stored in the dedicated 'projects' table.
@@ -88,7 +380,7 @@ export const addProject = async (project: Omit<Project, 'id'>): Promise<Project>
     };
 };
 
-export const updateProject = async (project: Project): Promise<Project> => {
+export const updateProject = async (project: Project): Promise<Project | null> => {
     const { id, ...projectData } = project;
 
     const projectToUpdate = {
@@ -97,7 +389,7 @@ export const updateProject = async (project: Project): Promise<Project> => {
         objective: projectData.objective,
         status: projectData.status,
         start_date: projectData.startDate,
-        end_date: projectData.endDate || null, // FIX: Send null for empty date
+        end_date: projectData.endDate || null,
         team: projectData.team,
         leader: projectData.leader,
     };
@@ -109,7 +401,15 @@ export const updateProject = async (project: Project): Promise<Project> => {
         .select()
         .single();
 
-    if (error) throw error;
+    if (error) {
+        if (error.code === 'PGRST116') {
+            console.warn(`Update on project ${project.id} was ignored, likely due to RLS permissions.`);
+            return null;
+        }
+        throw error;
+    }
+    
+    if (!data) return null;
 
     return {
         id: data.id,
@@ -118,7 +418,7 @@ export const updateProject = async (project: Project): Promise<Project> => {
         objective: data.objective,
         status: data.status,
         startDate: data.start_date,
-        endDate: data.end_date || '', // Convert null back to empty string for app state
+        endDate: data.end_date || '',
         team: data.team,
         leader: data.leader,
     };
@@ -183,6 +483,7 @@ export const getTasks = async (): Promise<ProjectTask[]> => {
                     completed: taskData.completed,
                     startDate: taskData.startDate || new Date().toISOString().split('T')[0],
                     duration: typeof taskData.duration === 'number' ? taskData.duration : 1,
+                    parentId: taskData.parentId || null,
                 });
             } else {
                 console.warn(`Skipping task with id ${item.id} due to malformed data:`, item.data);
@@ -208,6 +509,7 @@ export const addTask = async (task: Omit<ProjectTask, 'id'>): Promise<ProjectTas
             completed: task.completed,
             startDate: task.startDate,
             duration: task.duration,
+            parentId: task.parentId,
         }),
     };
 
@@ -227,6 +529,7 @@ export const addTask = async (task: Omit<ProjectTask, 'id'>): Promise<ProjectTas
         completed: taskData.completed,
         startDate: taskData.startDate,
         duration: taskData.duration,
+        parentId: taskData.parentId,
     };
 };
 
@@ -238,6 +541,7 @@ export const updateTask = async (task: ProjectTask): Promise<ProjectTask> => {
             completed: task.completed,
             startDate: task.startDate,
             duration: task.duration,
+            parentId: task.parentId,
         }),
     };
 
@@ -271,27 +575,55 @@ export const updateTask = async (task: ProjectTask): Promise<ProjectTask> => {
         completed: taskData.completed,
         startDate: taskData.startDate,
         duration: taskData.duration,
+        parentId: taskData.parentId,
     };
 };
 
 export const deleteTask = async (taskId: string) => {
+    // Find all children recursively
+    const findAllDescendants = async (parentId: string): Promise<string[]> => {
+        const { data: children, error } = await supabase
+            .from('content')
+            .select('id, data')
+            .eq('type', ContentType.TASK);
+    
+        if (error) throw error;
+    
+        const directChildrenIds = children
+            .filter(item => {
+                try {
+                    const taskData = typeof item.data === 'string' ? JSON.parse(item.data) : item.data;
+                    return taskData.parentId === parentId;
+                } catch {
+                    return false;
+                }
+            })
+            .map(item => item.id);
+    
+        let allDescendants: string[] = [...directChildrenIds];
+        for (const childId of directChildrenIds) {
+            const grandchildrenIds = await findAllDescendants(childId);
+            allDescendants = allDescendants.concat(grandchildrenIds);
+        }
+        return allDescendants;
+    };
+    
+    const descendantIds = await findAllDescendants(taskId);
+    const idsToDelete = [taskId, ...descendantIds];
+
     const { data, error } = await supabase
         .from('content')
         .delete()
-        .eq('id', taskId)
+        .in('id', idsToDelete)
         .select();
 
     if (error) {
-        // Re-throw any database-level errors
         throw error;
     }
 
     if (!data || data.length === 0) {
-        // This condition catches "silent failures" where the query executes without error
-        // but affects 0 rows, which is almost always due to an RLS policy preventing access.
         throw new Error(
-            "La eliminación falló: La tarea no se encontró o no tienes permiso para eliminarla. " +
-            "Aunque la política de RLS parezca correcta, este error indica que no se está cumpliendo para esta acción."
+            "La eliminación falló: La tarea no se encontró o no tienes permiso para eliminarla."
         );
     }
 };
@@ -368,7 +700,8 @@ export const uploadDocument = async (file: File, folderId: string, projectId: st
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
 
-    const filePath = `${user.id}/${uuidv4()}-${file.name}`;
+    const sanitizedName = sanitizeFileName(file.name);
+    const filePath = `${user.id}/${uuidv4()}-${sanitizedName}`;
 
     // 1. Upload to Storage
     const { error: uploadError } = await supabase.storage
@@ -377,17 +710,17 @@ export const uploadDocument = async (file: File, folderId: string, projectId: st
 
     if (uploadError) throw uploadError;
 
-    // 2. Insert metadata into database
+    // 2. Insert metadata into database, storing the original filename for display.
     const { data, error: insertError } = await supabase
         .from('documents')
         .insert({
             user_id: user.id,
-            name: file.name,
+            name: file.name, // Store the original, user-facing name
             folder_id: folderId,
             project_id: projectId || null,
             mime_type: file.type,
             size: file.size,
-            storage_path: filePath,
+            storage_path: filePath, // Store the sanitized path for storage operations
         })
         .select()
         .single();
@@ -422,10 +755,10 @@ export const deleteDocument = async (doc: Document): Promise<void> => {
 };
 
 
-export const getSignedUrlForDocument = async (storagePath: string): Promise<string> => {
+export const getSignedUrlForDocument = async (storagePath: string, options?: { download?: string | boolean }): Promise<string> => {
     const { data, error } = await supabase.storage
         .from('user_files')
-        .createSignedUrl(storagePath, 3600); // URL valid for 1 hour
+        .createSignedUrl(storagePath, 3600, options); // URL valid for 1 hour
 
     if (error) throw error;
     return data.signedUrl;

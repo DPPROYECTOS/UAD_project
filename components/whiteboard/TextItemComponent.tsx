@@ -1,11 +1,11 @@
 import React, { useRef, useEffect } from 'react';
-import { Note, WhiteboardItem, AnchorPosition } from '../../types';
+import { TextItem, WhiteboardItem, AnchorPosition } from '../../types';
 import { ResizeIcon, RotateIcon } from '../Icons';
 
-interface StickyNoteComponentProps {
-  note: Note;
+interface TextItemComponentProps {
+  textItem: TextItem;
   allItems: WhiteboardItem[];
-  onUpdateState: (update: Partial<Note> & { id: string }) => void;
+  onUpdateState: (update: Partial<TextItem> & { id: string }) => void;
   onPersist: (id: string) => void;
   onDelete: (id: string) => void;
   onInteractionStart: (id: string) => void;
@@ -22,8 +22,8 @@ interface StickyNoteComponentProps {
 
 const ANCHORS: AnchorPosition[] = ['top', 'right', 'bottom', 'left'];
 
-const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
-  note, allItems, onUpdateState, onPersist, onInteractionStart, isSelected, isEditing, onSetEditing,
+const TextItemComponent: React.FC<TextItemComponentProps> = ({
+  textItem, allItems, onUpdateState, onPersist, onInteractionStart, isSelected, isEditing, onSetEditing,
   isConnecting, connectionStartId, onAnchorMouseDown, onAnchorMouseUp, scale, setGuideLines
 }) => {
   const itemRef = useRef<HTMLDivElement>(null);
@@ -39,13 +39,13 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
   const handleMouseDown = (e: React.MouseEvent) => {
     if (isEditing || e.button !== 0) return;
     e.stopPropagation();
-    onInteractionStart(note.id);
-
+    onInteractionStart(textItem.id);
+    
     const startX = e.clientX;
     const startY = e.clientY;
-    const startPosition = note.position;
+    const startPosition = textItem.position;
 
-    const otherItems = allItems.filter(i => i.id !== note.id);
+    const otherItems = allItems.filter(i => i.id !== textItem.id);
     const snapThreshold = 6 / scale;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
@@ -60,27 +60,25 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
       let closestSnapY = { dist: snapThreshold, pos: currentY };
 
       const draggedBounds = {
-        left: currentX, right: currentX + note.width, top: currentY, bottom: currentY + note.height,
-        hCenter: currentX + note.width / 2, vCenter: currentY + note.height / 2,
+        left: currentX, right: currentX + textItem.width, top: currentY, bottom: currentY + textItem.height,
+        hCenter: currentX + textItem.width / 2, vCenter: currentY + textItem.height / 2,
       };
 
-      // Orthogonal snapping (treat start position as a snap target)
       const startDistX = Math.abs(currentX - startPosition.x);
       if (startDistX < snapThreshold) {
-          activeGuides.push({ type: 'v', x: startPosition.x, y1: startPosition.y, y2: currentY + note.height });
+          activeGuides.push({ type: 'v', x: startPosition.x, y1: startPosition.y, y2: currentY + textItem.height });
           if (startDistX < closestSnapX.dist) {
             closestSnapX = { dist: startDistX, pos: startPosition.x };
           }
       }
       const startDistY = Math.abs(currentY - startPosition.y);
       if (startDistY < snapThreshold) {
-          activeGuides.push({ type: 'h', y: startPosition.y, x1: startPosition.x, x2: currentX + note.width });
+          activeGuides.push({ type: 'h', y: startPosition.y, x1: startPosition.x, x2: currentX + textItem.width });
           if (startDistY < closestSnapY.dist) {
             closestSnapY = { dist: startDistY, pos: startPosition.y };
           }
       }
 
-      // Snapping to other items
       for (const other of otherItems) {
         const otherBounds = {
           left: other.position.x, right: other.position.x + other.width, top: other.position.y, bottom: other.position.y + other.height,
@@ -96,7 +94,7 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
                 if (dist < snapThreshold) {
                     activeGuides.push({ type: 'v', x: oVal, y1: Math.min(draggedBounds.top, otherBounds.top), y2: Math.max(draggedBounds.bottom, otherBounds.bottom) });
                     if (dist < closestSnapX.dist) {
-                        const offset = dKey === 'hCenter' ? note.width / 2 : (dKey === 'right' ? note.width : 0);
+                        const offset = dKey === 'hCenter' ? textItem.width / 2 : (dKey === 'right' ? textItem.width : 0);
                         closestSnapX = { dist, pos: oVal - offset };
                     }
                 }
@@ -112,7 +110,7 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
                 if (dist < snapThreshold) {
                     activeGuides.push({ type: 'h', y: oVal, x1: Math.min(draggedBounds.left, otherBounds.left), x2: Math.max(draggedBounds.right, otherBounds.right) });
                     if (dist < closestSnapY.dist) {
-                        const offset = dKey === 'vCenter' ? note.height / 2 : (dKey === 'bottom' ? note.height : 0);
+                        const offset = dKey === 'vCenter' ? textItem.height / 2 : (dKey === 'bottom' ? textItem.height : 0);
                         closestSnapY = { dist, pos: oVal - offset };
                     }
                 }
@@ -120,7 +118,6 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
         }
       }
 
-      // Snapping to the midpoint between two other items
       if (otherItems.length >= 2) {
         for (let i = 0; i < otherItems.length; i++) {
           for (let j = i + 1; j < otherItems.length; j++) {
@@ -137,7 +134,7 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
                 const y2 = Math.max(draggedBounds.bottom, boundsA.bottom, boundsB.bottom);
                 activeGuides.push({ type: 'v', x: midX, y1, y2 });
                 if (distX < closestSnapX.dist) {
-                    closestSnapX = { dist: distX, pos: midX - note.width / 2 };
+                    closestSnapX = { dist: distX, pos: midX - textItem.width / 2 };
                 }
             }
             
@@ -148,7 +145,7 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
                 const x2 = Math.max(draggedBounds.right, boundsA.right, boundsB.right);
                 activeGuides.push({ type: 'h', y: midY, x1, x2 });
                 if (distY < closestSnapY.dist) {
-                    closestSnapY = { dist: distY, pos: midY - note.height / 2 };
+                    closestSnapY = { dist: distY, pos: midY - textItem.height / 2 };
                 }
             }
           }
@@ -159,19 +156,16 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
       const finalY = closestSnapY.pos;
 
       const uniqueGuides = activeGuides.filter((guide, index, self) =>
-          index === self.findIndex(g =>
-              g.type === guide.type &&
-              (g.type === 'v' ? g.x === guide.x : g.y === guide.y)
-          )
+          index === self.findIndex(g => g.type === guide.type && (g.type === 'v' ? g.x === guide.x : g.y === guide.y))
       );
       
       setGuideLines(uniqueGuides);
-      onUpdateState({ id: note.id, position: { x: finalX, y: finalY } });
+      onUpdateState({ id: textItem.id, position: { x: finalX, y: finalY } });
     };
 
     const handleMouseUp = () => {
       setGuideLines([]);
-      onPersist(note.id);
+      onPersist(textItem.id);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
@@ -182,21 +176,21 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
   
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onInteractionStart(note.id);
+    onInteractionStart(textItem.id);
 
     const startX = e.clientX;
     const startY = e.clientY;
-    const startWidth = note.width;
-    const startHeight = note.height;
+    const startWidth = textItem.width;
+    const startHeight = textItem.height;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
-      onUpdateState({ id: note.id, width: Math.max(100, startWidth + dx / scale), height: Math.max(50, startHeight + dy / scale) });
+      onUpdateState({ id: textItem.id, width: Math.max(50, startWidth + dx / scale), height: Math.max(30, startHeight + dy / scale) });
     };
 
     const handleMouseUp = () => {
-      onPersist(note.id);
+      onPersist(textItem.id);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
@@ -207,7 +201,7 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
 
   const handleRotateMouseDown = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onInteractionStart(note.id);
+    onInteractionStart(textItem.id);
 
     const itemNode = itemRef.current;
     if (!itemNode) return;
@@ -217,20 +211,20 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
     const centerY = rect.top + rect.height / 2;
 
     const startAngle = Math.atan2(e.clientY - centerY, e.clientX - centerX);
-    const startRotation = note.rotation || 0;
+    const startRotation = textItem.rotation || 0;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       const currentAngle = Math.atan2(moveEvent.clientY - centerY, moveEvent.clientX - centerX);
       const angleDiff = currentAngle - startAngle;
       
       const newRotationDegrees = startRotation + (angleDiff * 180 / Math.PI);
-      const snappedRotation = Math.round(newRotationDegrees / 45) * 45;
+      const snappedRotation = Math.round(newRotationDegrees / 15) * 15;
       
-      onUpdateState({ id: note.id, rotation: snappedRotation });
+      onUpdateState({ id: textItem.id, rotation: snappedRotation });
     };
 
     const handleMouseUp = () => {
-      onPersist(note.id);
+      onPersist(textItem.id);
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
@@ -240,7 +234,7 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
   };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    onUpdateState({ id: note.id, text: e.target.value });
+    onUpdateState({ id: textItem.id, text: e.target.value });
   };
   
   const handleTextareaMouseDown = (e: React.MouseEvent) => {
@@ -248,10 +242,10 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
   };
 
   const renderTextContent = () => {
-    if (!note.text) return null;
-    const { listStyle } = note.style;
+    if (!textItem.text) return 'Añadir texto...';
+    const { listStyle } = textItem.style;
     if (listStyle && listStyle !== 'none') {
-        const lines = note.text.split('\n');
+        const lines = textItem.text.split('\n');
         const ListTag = listStyle === 'bullet' ? 'ul' : 'ol';
         const listClassName = listStyle === 'bullet' ? 'list-disc' : 'list-decimal';
         return (
@@ -260,42 +254,42 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
             </ListTag>
         );
     }
-    return note.text;
+    return textItem.text;
   };
 
   return (
     <div
       ref={itemRef}
       style={{
-        transform: `translate(${note.position.x}px, ${note.position.y}px) rotate(${note.rotation || 0}deg)`,
-        width: `${note.width}px`,
-        height: `${note.height}px`,
-        zIndex: note.zIndex,
+        transform: `translate(${textItem.position.x}px, ${textItem.position.y}px) rotate(${textItem.rotation || 0}deg)`,
+        width: `${textItem.width}px`,
+        height: `${textItem.height}px`,
+        zIndex: textItem.zIndex,
       }}
-      className={`absolute select-none group flex flex-col p-2 shadow-lg ${note.color} ${!isEditing ? 'cursor-move' : ''} ${isSelected ? 'outline-2 outline-dashed outline-brand-primary' : ''}`}
+      className={`absolute select-none group flex flex-col p-2 ${!isEditing ? 'cursor-move' : ''} ${isSelected ? 'outline-2 outline-dashed outline-brand-primary' : ''}`}
       onMouseDown={handleMouseDown}
-      onDoubleClick={() => onSetEditing(note.id)}
+      onDoubleClick={() => onSetEditing(textItem.id)}
     >
       {isEditing ? (
         <textarea
             ref={textareaRef}
-            value={note.text}
+            value={textItem.text}
             onChange={handleTextChange}
             onBlur={() => onSetEditing(null)}
             onMouseDown={handleTextareaMouseDown}
-            style={{ ...note.style, background: 'transparent' }}
-            className="w-full h-full bg-transparent border-none outline-none resize-none cursor-text"
+            style={{ ...textItem.style, background: 'rgba(100, 116, 139, 0.1)' }}
+            className="w-full h-full border-none outline-none resize-none cursor-text"
         />
       ) : (
         <div
-            style={note.style}
-            className={`w-full h-full break-words pointer-events-none ${note.style.listStyle && note.style.listStyle !== 'none' ? 'text-left' : ''}`}
+            style={textItem.style}
+            className={`w-full h-full break-words pointer-events-none flex items-center justify-center ${textItem.style.listStyle && textItem.style.listStyle !== 'none' ? 'text-left' : 'text-center'}`}
         >
             {renderTextContent()}
         </div>
       )}
 
-      {isConnecting && connectionStartId !== note.id && ANCHORS.map(anchor => (
+      {isConnecting && connectionStartId !== textItem.id && ANCHORS.map(anchor => (
         <div
           key={anchor}
           className="absolute w-3 h-3 bg-blue-500 rounded-full border-2 border-white cursor-pointer hover:scale-125 transition-transform"
@@ -303,8 +297,8 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
             top: anchor === 'top' ? '-6px' : anchor === 'bottom' ? 'calc(100% - 6px)' : 'calc(50% - 6px)',
             left: anchor === 'left' ? '-6px' : anchor === 'right' ? 'calc(100% - 6px)' : 'calc(50% - 6px)',
           }}
-          onMouseDown={(e) => onAnchorMouseDown(note.id, anchor, e)}
-          onMouseUp={(e) => onAnchorMouseUp(note.id, anchor, e)}
+          onMouseDown={(e) => onAnchorMouseDown(textItem.id, anchor, e)}
+          onMouseUp={(e) => onAnchorMouseUp(textItem.id, anchor, e)}
         />
       ))}
 
@@ -328,4 +322,4 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
   );
 };
 
-export default StickyNoteComponent;
+export default TextItemComponent;

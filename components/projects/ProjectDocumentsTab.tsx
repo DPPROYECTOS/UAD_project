@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Project, Document, Folder } from '../../types';
 import { getSignedUrlForDocument } from '../../services/supabaseService';
-import { UploadIcon, TrashIcon, CollectionIcon, InformationCircleIcon, EyeIcon, DocumentDownloadIcon, DocumentTextIcon, XIcon } from '../Icons';
+import { UploadIcon, TrashIcon, CollectionIcon, InformationCircleIcon, EyeIcon, DocumentDownloadIcon, DocumentTextIcon } from '../Icons';
 import Spinner from '../Spinner';
 import ConfirmationModal from './ConfirmationModal';
+import FileViewerModal from '../FileViewerModal';
 
 interface ProjectDocumentsTabProps {
   project: Project;
@@ -20,11 +21,9 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
     const [error, setError] = useState<string | null>(null);
     const [docToDelete, setDocToDelete] = useState<Document | null>(null);
     
-    // State for the embedded previewer
-    const [previewingDoc, setPreviewingDoc] = useState<Document | null>(null);
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [isPreviewLoading, setIsPreviewLoading] = useState(false);
-    const [previewError, setPreviewError] = useState<string | null>(null);
+    // State for the new modal viewer
+    const [viewerFile, setViewerFile] = useState<{ url: string; name: string; mimeType: string; } | null>(null);
+    const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
     
     useEffect(() => {
         const generalFolder = folders.find(f => f.name === 'General');
@@ -32,15 +31,6 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
             setSelectedFolderId(generalFolder.id);
         }
     }, [folders, selectedFolderId]);
-
-    // Clean up blob URL to prevent memory leaks
-    useEffect(() => {
-        return () => {
-            if (previewUrl && previewUrl.startsWith('blob:')) {
-                URL.revokeObjectURL(previewUrl);
-            }
-        };
-    }, [previewUrl]);
 
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -81,10 +71,6 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
         if (!docToDelete) return;
         try {
             await onDeleteDocument(docToDelete);
-            if (previewingDoc?.id === docToDelete.id) {
-                setPreviewingDoc(null);
-                setPreviewUrl(null);
-            }
         } catch (err) {
             setError(err instanceof Error ? err.message : 'No se pudo eliminar el documento.');
         } finally {
@@ -93,53 +79,26 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
     };
     
     const handlePreview = async (doc: Document) => {
-        if (previewingDoc?.id === doc.id) {
-            setPreviewingDoc(null);
-            setPreviewUrl(null);
-            return;
-        }
-
-        setPreviewingDoc(doc);
-        setIsPreviewLoading(true);
-        setPreviewError(null);
-        if (previewUrl && previewUrl.startsWith('blob:')) {
-            URL.revokeObjectURL(previewUrl);
-        }
-        setPreviewUrl(null);
-
+        setActionLoadingId(doc.id);
+        setError(null);
         try {
-            const officeMimeTypes = [
-                'application/msword',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                'application/vnd.ms-excel',
-                'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            ];
-            const isOfficeDoc = officeMimeTypes.includes(doc.mimeType);
-            const isBrowserViewable = doc.mimeType.startsWith('image/') || doc.mimeType === 'application/pdf';
-
             const signedUrl = await getSignedUrlForDocument(doc.storagePath);
-
-            if (isBrowserViewable) {
-                const response = await fetch(signedUrl);
-                if (!response.ok) throw new Error('No se pudo descargar el archivo para la previsualización.');
-                const blob = await response.blob();
-                const objectUrl = URL.createObjectURL(blob);
-                setPreviewUrl(objectUrl);
-            } else if (isOfficeDoc) {
-                setPreviewUrl(`https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(signedUrl)}`);
-            } else {
-                setPreviewError(`La previsualización no está disponible para este tipo de archivo (${doc.mimeType}).`);
-            }
+            setViewerFile({
+                url: signedUrl,
+                name: doc.name,
+                mimeType: doc.mimeType,
+            });
         } catch (err) {
-            setPreviewError(err instanceof Error ? err.message : 'No se pudo cargar la previsualización.');
+            setError(err instanceof Error ? err.message : 'No se pudo cargar la previsualización.');
         } finally {
-            setIsPreviewLoading(false);
+            setActionLoadingId(null);
         }
     };
 
     const handleDownload = async (doc: Document) => {
+        setActionLoadingId(doc.id + '-download');
         try {
-            const signedUrl = await getSignedUrlForDocument(doc.storagePath);
+            const signedUrl = await getSignedUrlForDocument(doc.storagePath, { download: doc.name });
             const link = document.createElement('a');
             link.href = signedUrl;
             link.setAttribute('download', doc.name);
@@ -148,6 +107,8 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
             link.parentNode?.removeChild(link);
         } catch(err) {
              setError(err instanceof Error ? err.message : `Failed to download file.`);
+        } finally {
+            setActionLoadingId(null);
         }
     }
 
@@ -159,50 +120,6 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
         const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
         return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
-    };
-
-    const renderPreviewPane = () => {
-        if (!previewingDoc) return null;
-
-        return (
-            <div className="mt-4 border-t-2 border-light-border dark:border-dark-border pt-4">
-                <div className="flex justify-between items-center mb-2">
-                    <h3 className="font-bold text-light-text dark:text-dark-text truncate">Previsualización: {previewingDoc.name}</h3>
-                    <button onClick={() => setPreviewingDoc(null)} className="p-1 rounded-full hover:bg-light-bg dark:hover:bg-dark-bg">
-                        <XIcon className="h-5 w-5" />
-                    </button>
-                </div>
-                <div className="relative w-full h-[600px] bg-gray-200 dark:bg-dark-bg rounded-lg border border-light-border dark:border-dark-border">
-                    {isPreviewLoading && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                            <Spinner />
-                            <span className="ml-2">Cargando...</span>
-                        </div>
-                    )}
-                    {!isPreviewLoading && (previewUrl || previewError) && (
-                        (previewError || !previewUrl) ? (
-                             <div className="flex flex-col items-center justify-center h-full text-center p-4">
-                                <InformationCircleIcon className="h-12 w-12 text-gray-400" />
-                                <h4 className="mt-4 font-semibold text-light-text dark:text-dark-text">Previsualización no disponible</h4>
-                                <p className="mt-1 text-sm text-light-text-secondary dark:text-dark-text-secondary">{previewError}</p>
-                                <p className="mt-1 text-xs text-light-text-secondary dark:text-dark-text-secondary">Es posible que tu navegador esté bloqueando la previsualización de este archivo por seguridad.</p>
-                                <button onClick={() => handleDownload(previewingDoc)} className="mt-4 flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary">
-                                    <DocumentDownloadIcon className="h-5 w-5 mr-2" />
-                                    Descargar Archivo
-                                </button>
-                            </div>
-                        ) : (
-                            <iframe
-                                src={previewUrl}
-                                title={previewingDoc.name}
-                                className="w-full h-full rounded-lg"
-                                frameBorder="0"
-                            />
-                        )
-                    )}
-                </div>
-            </div>
-        );
     };
 
     return (
@@ -260,13 +177,13 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-1 flex-shrink-0">
-                                    <button onClick={() => handlePreview(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-500" title="Previsualizar">
-                                        <EyeIcon className="h-5 w-5" />
+                                    <button disabled={!!actionLoadingId} onClick={() => handlePreview(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-500" title="Previsualizar">
+                                        {actionLoadingId === doc.id ? <Spinner/> : <EyeIcon className="h-5 w-5" />}
                                     </button>
-                                    <button onClick={() => handleDownload(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-green-100 dark:hover:bg-green-900/50 hover:text-green-500" title="Descargar">
-                                        <DocumentDownloadIcon className="h-5 w-5" />
+                                    <button disabled={!!actionLoadingId} onClick={() => handleDownload(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-green-100 dark:hover:bg-green-900/50 hover:text-green-500" title="Descargar">
+                                        {actionLoadingId === (doc.id + '-download') ? <Spinner/> : <DocumentDownloadIcon className="h-5 w-5" />}
                                     </button>
-                                    <button onClick={() => setDocToDelete(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}>
+                                    <button disabled={!!actionLoadingId} onClick={() => setDocToDelete(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}>
                                         <TrashIcon className="h-5 w-5" />
                                     </button>
                                 </div>
@@ -280,7 +197,6 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
                         <p className="mt-1 text-sm text-light-text-secondary dark:text-dark-text-secondary">Sube un archivo para asociarlo a este proyecto.</p>
                     </div>
                 )}
-                {renderPreviewPane()}
             </div>
             
             <ConfirmationModal
@@ -290,6 +206,13 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
                 title="Eliminar Documento"
                 message={`¿Estás seguro de que quieres eliminar "${docToDelete?.name}"? Esta acción es permanente.`}
             />
+
+            {viewerFile && (
+                <FileViewerModal
+                    file={viewerFile}
+                    onClose={() => setViewerFile(null)}
+                />
+            )}
         </div>
     );
 };

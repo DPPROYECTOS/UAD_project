@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Activity } from '../types';
 import { BellIcon } from './Icons';
@@ -15,7 +14,13 @@ const ActivityFeed: React.FC<{ activities: Activity[] }> = ({ activities }) => {
                                 <div className="absolute left-4 top-5 h-full w-0.5 bg-gray-200 dark:bg-gray-700" aria-hidden="true"></div>
                             )}
                             <div className="relative flex-shrink-0">
-                                <img className="h-8 w-8 rounded-full object-cover" src={activity.user.avatarUrl} alt={activity.user.name} />
+                                {activity.user.avatarUrl ? (
+                                    <img className="h-8 w-8 rounded-full object-cover" src={activity.user.avatarUrl} alt={activity.user.name} />
+                                ) : (
+                                    <div className="h-8 w-8 rounded-full bg-brand-primary/20 flex items-center justify-center text-brand-primary font-bold text-sm">
+                                        {activity.user.name.charAt(0).toUpperCase()}
+                                    </div>
+                                )}
                             </div>
                             <div className="ml-4">
                                 <p className="text-sm">

@@ -94,6 +94,12 @@ export const SunIcon: React.FC<{ className?: string }> = ({ className }) => (
     </Icon>
 );
 
+export const ColorSwatchIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M7 21a4 4 0 01-4-4V5a2 2 0 012-2h4a2 2 0 012 2v12a4 4 0 01-4 4zm0 0h12a2 2 0 002-2v-4a2 2 0 00-2-2h-2.343M11 7.343l1.657-1.657a2 2 0 012.828 0l2.829 2.829a2 2 0 010 2.828l-8.486 8.485M7 17h.01" />
+    </Icon>
+);
+
 export const XIcon: React.FC<{ className?: string }> = ({ className }) => (
     <Icon className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -121,13 +127,6 @@ export const XCircleIcon: React.FC<{ className?: string }> = ({ className }) => 
 export const DocumentTextIcon: React.FC<{ className?: string }> = ({ className }) => (
     <Icon className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-    </Icon>
-);
-
-export const DrillIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <Icon className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3 L8 21 H16 L12 3 Z" />
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 3 C 14.5 9, 9.5 15, 12 21" />
     </Icon>
 );
 
@@ -361,5 +360,87 @@ export const RotateIcon: React.FC<{ className?: string }> = ({ className }) => (
 export const RefreshIcon: React.FC<{ className?: string }> = ({ className }) => (
     <Icon className={className} fill="none">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0011.664 0l3.18-3.182m-3.181-4.991l-3.182-3.182a8.25 8.25 0 00-11.664 0l-3.18 3.182" />
+    </Icon>
+);
+
+export const TextIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "h-6 w-6"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+       <polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line>
+   </svg>
+);
+
+export const UndoIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 15L3 9m0 0l6-6M3 9h12a6 6 0 010 12h-3" />
+    </Icon>
+);
+
+export const RedoIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 15l6-6m0 0l-6-6m6 6H9a6 6 0 000 12h3" />
+    </Icon>
+);
+
+export const ListBulletIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "h-6 w-6"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="8" x2="21" y1="6" y2="6" />
+        <line x1="8" x2="21" y1="12" y2="12" />
+        <line x1="8" x2="21" y1="18" y2="18" />
+        <line x1="3" x2="3.01" y1="6" y2="6" />
+        <line x1="3" x2="3.01" y1="12" y2="12" />
+        <line x1="3" x2="3.01" y1="18" y2="18" />
+    </svg>
+);
+
+export const ListNumberIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className || "h-6 w-6"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="10" x2="21" y1="6" y2="6" />
+        <line x1="10" x2="21" y1="12" y2="12" />
+        <line x1="10" x2="21" y1="18" y2="18" />
+        <path d="M4 6h1v4" />
+        <path d="M4 10h2" />
+        <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1" />
+    </svg>
+);
+
+export const CustomLogoIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg
+        version="1.0"
+        xmlns="http://www.w3.org/2000/svg"
+        viewBox="0 0 400.000000 400.000000"
+        preserveAspectRatio="xMidYMid meet"
+        className={className || "h-6 w-6"}
+        fill="currentColor"
+        stroke="none"
+    >
+        <g transform="translate(0.000000,400.000000) scale(0.100000,-0.100000)">
+            <path d="M2050 3754 c-73 -165 -92 -345 -54 -501 12 -47 68 -163 122 -252 55 -89 68 -130 59 -190 -8 -63 -29 -94 -77 -118 -84 -43 -165 -21 -201 55 -19 39 -21 55 -16 145 3 56 11 138 17 182 14 101 6 164 -30 240 -24 50 -91 135 -105 135 -2 0 3 -17 12 -37 23 -56 21 -165 -6 -241 -12 -34 -46 -106 -76 -160 -69 -124 -85 -170 -85 -247 0 -105 37 -178 164 -330 116 -138 149 -229 127 -350 -14 -75 -49 -125 -109 -156 -40 -20 -61 -24 -142 -24 -86 0 -102 3 -155 30 -108 54 -168 172 -169 335 0 96 12 141 80 288 56 121 100 257 113 355 14 100 14 276 0 353 -13 70 -29 94 -29 43 0 -55 -35 -180 -70 -250 -64 -126 -171 -243 -346 -377 -217 -167 -298 -319 -297 -557 1 -117 24 -214 77 -331 20 -42 36 -78 36 -80 0 -4 -123 53 -247 114 -56 27 -99 45 -96 39 3 -7 51 -52 107 -102 296 -261 386 -348 386 -374 0 -38 -23 -65 -91 -112 -67 -45 -83 -74 -73 -133 9 -55 73 -175 133 -249 63 -77 174 -177 196 -177 10 0 39 16 65 35 95 70 157 75 199 17 45 -64 35 -116 -29 -159 -23 -16 -53 -37 -68 -49 l-26 -21 48 -68 c32 -45 68 -80 107 -105 60 -38 146 -67 159 -53 4 4 17 38 29 74 26 78 49 104 86 95 36 -9 38 -63 5 -152 -18 -49 -18 -53 -2 -67 54 -47 149 -71 254 -64 95 6 145 19 181 47 l25 20 -20 77 c-25 98 -17 146 24 151 33 4 50 -19 78 -108 29 -95 27 -93 92 -71 30 10 75 31 98 46 47 30 150 132 150 150 0 5 -29 37 -64 70 -93 86 -100 142 -26 191 54 36 100 29 179 -26 73 -51 65 -54 197 77 116 116 165 203 172 310 5 72 4 73 -30 105 -19 18 -53 48 -76 66 -36 28 -42 39 -42 71 0 35 7 43 138 158 181 159 364 323 359 323 -2 0 -82 -36 -178 -79 -96 -44 -175 -79 -176 -78 -1 1 16 37 37 80 68 140 75 256 24 401 -29 83 -56 132 -190 343 -161 253 -182 303 -220 536 -16 100 -19 107 -30 84 -24 -45 -64 -197 -75 -289 -15 -113 -1 -218 48 -372 20 -63 35 -129 35 -160 1 -62 -31 -142 -73 -182 -27 -26 -38 -29 -94 -29 -54 0 -69 4 -106 30 -57 40 -95 113 -92 177 1 49 23 96 89 188 41 59 79 134 94 190 15 54 15 216 1 254 -21 54 -82 135 -207 271 -150 165 -231 271 -264 346 -27 62 -37 154 -22 198 16 47 6 37 -18 -15z m-1155 -2089 c65 -31 179 -86 254 -122 75 -37 298 -144 495 -239 l359 -172 91 43 c50 23 251 118 446 210 335 158 524 246 650 302 47 21 52 22 35 5 -36 -34 -228 -206 -295 -263 -89 -76 -464 -402 -470 -409 -43 -46 -183 -161 -193 -157 -7 3 -54 34 -104 69 -131 93 -143 97 -206 66 -29 -14 -77 -47 -107 -74 -30 -26 -64 -56 -76 -66 -20 -18 -22 -17 -115 64 -107 92 -295 260 -514 458 -82 74 -201 180 -262 234 -104 91 -120 106 -109 106 2 0 56 -25 121 -55z m1165 -811 c14 -10 31 -24 38 -32 7 -22 15 -67 -4 -87 -15 -14 -19 -13 -50 15 -19 16 -37 30 -39 30 -2 0 -20 -14 -40 -31 -34 -31 -36 -31 -55 -14 -11 10 -20 25 -20 34 0 41 72 101 120 101 14 0 37 -7 50 -16z"/>
+        </g>
+    </svg>
+);
+
+export const ChatBubbleLeftRightIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M20.25 8.511c.884.284 1.5 1.128 1.5 2.097v4.286c0 1.136-.847 2.1-1.98 2.193l-3.722.534a1.125 1.125 0 01-1.097-.988l-.255-2.295.42-1.89a.49.49 0 00-.228-.517l-3.233-2.307a.5.5 0 00-.676.124l-1.33-1.663a.5.5 0 00-.573-.242l-2.118.53a.5.5 0 00-.422.518l.223 2.229a1.125 1.125 0 01-1.125 1.096l-3.722-.534c-1.133-.162-2.008-1.057-2.008-2.193V8.511c0-.969.616-1.813 1.5-2.097L6.75 5.922a.5.5 0 00.042-.036l1.33-1.664A.5.5 0 008 4h6a.5.5 0 00.276.078l1.33 1.664a.5.5 0 00.042.036l4.498.98z" />
+    </Icon>
+);
+
+export const GlobeAltIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c.24 0 .468-.02.69-.059M12 3c.24 0 .468.02.69.059m-1.38 0A9.004 9.004 0 003.29 6.251m8.026 11.498A9.004 9.004 0 0120.71 6.251M12 3a9 9 0 100 18 9 9 0 000-18z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 12.75a2.25 2.25 0 100-4.5 2.25 2.25 0 000 4.5z" />
+    </Icon>
+);
+
+export const PresentationChartBarIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h12A2.25 2.25 0 0020.25 14.25V3M3.75 21h16.5M16.5 3.75h.008v.008h-.008V3.75zM12 3.75h.008v.008h-.008V3.75zM9.75 12h4.5m-4.5 0a.75.75 0 01.75-.75h3a.75.75 0 010 1.5h-3a.75.75 0 01-.75-.75z" />
+    </Icon>
+);
+
+export const BrainIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9.5 2.75a2.75 2.75 0 015.5 0 2.75 2.75 0 002.75 2.75c1.519 0 2.75 1.231 2.75 2.75s-1.231 2.75-2.75 2.75h-.5a2.25 2.25 0 00-2.25 2.25v.5a2.75 2.75 0 002.75 2.75 2.75 2.75 0 010 5.5 2.75 2.75 0 00-2.75 2.75V22m-5.5-19.25a2.75 2.75 0 00-5.5 0 2.75 2.75 0 01-2.75 2.75C2.231 5.5 1 6.731 1 8.25s1.231 2.75 2.75 2.75h.5a2.25 2.25 0 012.25 2.25v.5a2.75 2.75 0 01-2.75 2.75 2.75 2.75 0 000 5.5 2.75 2.75 0 012.75 2.75V22" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v20" />
     </Icon>
 );

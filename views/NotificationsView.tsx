@@ -1,38 +1,52 @@
 import React, { useState, useMemo } from 'react';
 import { Activity } from '../types';
-import { BellIcon } from '../components/Icons';
+import { BellIcon, CheckCircleIcon } from '../components/Icons';
 
 interface NotificationsViewProps {
   notifications: Activity[];
   onNavigate: (view: string) => void;
+  onMarkAsRead: (activityId: string, read: boolean) => void;
 }
 
 const timeAgo = (isoDate: string): string => {
     const date = new Date(isoDate);
     const now = new Date();
-    const seconds = Math.round((now.getTime() - date.getTime()) / 1000);
-    const minutes = Math.round(seconds / 60);
-    const hours = Math.round(minutes / 60);
-    const days = Math.round(hours / 24);
+    const totalSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
 
-    if (seconds < 60) return `hace ${seconds}s`;
-    if (minutes < 60) return `hace ${minutes}m`;
-    if (hours < 24) return `hace ${hours}h`;
-    if (days < 7) return `hace ${days}d`;
+    if (totalSeconds < 0) return 'hace instantes';
+    if (totalSeconds < 5) return 'hace instantes';
+    if (totalSeconds < 60) return `hace ${totalSeconds} segundos`;
+
+    const totalMinutes = Math.floor(totalSeconds / 60);
+    if (totalMinutes < 60) return `hace ${totalMinutes} minuto${totalMinutes > 1 ? 's' : ''}`;
+
+    const totalHours = Math.floor(totalMinutes / 60);
+    if (totalHours < 24) return `hace ${totalHours} hora${totalHours > 1 ? 's' : ''}`;
+
+    const totalDays = Math.floor(totalHours / 24);
+    if (totalDays < 7) return `hace ${totalDays} día${totalDays > 1 ? 's' : ''}`;
     
     return date.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' });
 };
 
-const importanceClasses = {
-  high: 'bg-red-500 border-red-600',
-  medium: 'bg-yellow-500 border-yellow-600',
-  low: 'bg-blue-500 border-blue-600',
+const importanceBorderClasses = {
+  high: 'border-red-500',
+  medium: 'border-yellow-500',
+  low: 'border-blue-500',
 };
 
+const importanceBgClasses = {
+    high: 'bg-red-500',
+    medium: 'bg-yellow-500',
+    low: 'bg-blue-500',
+}
 
-const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, onNavigate }) => {
+
+const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, onNavigate, onMarkAsRead }) => {
   const [dateFilter, setDateFilter] = useState('all');
   const [importanceFilter, setImportanceFilter] = useState('all');
+  const [readFilter, setReadFilter] = useState('all');
+
 
   const filteredNotifications = useMemo(() => {
     const now = new Date();
@@ -52,9 +66,14 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, on
       // Importance filter
       const importanceMatch = importanceFilter === 'all' || activity.importance === importanceFilter;
 
-      return dateMatch && importanceMatch;
+      // Read status filter
+      const readMatch = readFilter === 'all' 
+        || (readFilter === 'read' && activity.isRead)
+        || (readFilter === 'unread' && !activity.isRead);
+
+      return dateMatch && importanceMatch && readMatch;
     });
-  }, [notifications, dateFilter, importanceFilter]);
+  }, [notifications, dateFilter, importanceFilter, readFilter]);
 
   return (
     <div>
@@ -94,15 +113,38 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, on
             <option value="low">Baja</option>
           </select>
         </div>
+        <div className="flex-grow">
+          <label htmlFor="read-filter" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Filtrar por Estado</label>
+          <select 
+            id="read-filter" 
+            value={readFilter} 
+            onChange={e => setReadFilter(e.target.value)}
+            className="w-full px-4 py-2 rounded-lg border border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg focus:outline-none focus:ring-2 focus:ring-brand-accent"
+          >
+            <option value="all">Todas</option>
+            <option value="read">Leídas</option>
+            <option value="unread">No Leídas</option>
+          </select>
+        </div>
       </div>
 
       <div className="bg-light-card dark:bg-dark-card p-4 rounded-lg border border-light-border dark:border-dark-border">
         {filteredNotifications.length > 0 ? (
           <ul className="divide-y divide-light-border dark:divide-dark-border">
             {filteredNotifications.map(activity => (
-              <li key={activity.id} className="py-4 flex items-start">
-                <div className="flex-shrink-0 mt-1 mr-4">
-                  <span className={`h-3 w-3 rounded-full inline-block border-2 ${importanceClasses[activity.importance || 'low'] || 'bg-gray-400 border-gray-500'}`} title={`Importancia: ${activity.importance || 'baja'}`}></span>
+              <li key={activity.id} className={`py-4 flex items-center group transition-opacity ${activity.isRead ? 'opacity-60' : ''}`}>
+                <div className="flex-shrink-0 mr-4">
+                    {activity.user.avatarUrl ? (
+                        <img
+                            src={activity.user.avatarUrl}
+                            alt={activity.user.name}
+                            className={`h-10 w-10 rounded-full object-cover border-2 ${importanceBorderClasses[activity.importance] || 'border-gray-400'}`}
+                        />
+                    ) : (
+                        <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white font-bold ${importanceBgClasses[activity.importance] || 'bg-gray-400'}`}>
+                            {activity.user.name.charAt(0).toUpperCase()}
+                        </div>
+                    )}
                 </div>
                 <div className="flex-grow">
                   <p className="text-sm">
@@ -114,6 +156,13 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, on
                     {activity.projectName && <span className="font-semibold">{activity.projectName}</span>}
                   </div>
                 </div>
+                 <button 
+                    onClick={() => onMarkAsRead(activity.id, !activity.isRead)} 
+                    title={activity.isRead ? "Marcar como no leído" : "Marcar como leído"}
+                    className={`ml-4 flex-shrink-0 p-2 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all ${activity.isRead ? 'text-gray-500 hover:text-brand-primary' : 'text-brand-primary hover:text-gray-500'}`}
+                >
+                    <CheckCircleIcon className="h-6 w-6"/>
+                </button>
               </li>
             ))}
           </ul>

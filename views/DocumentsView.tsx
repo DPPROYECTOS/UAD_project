@@ -4,6 +4,7 @@ import { FolderIcon, DocumentTextIcon, UploadIcon, TrashIcon, CollectionIcon, In
 import Spinner from '../components/Spinner';
 import ConfirmationModal from '../components/projects/ConfirmationModal';
 import { getSignedUrlForDocument } from '../services/supabaseService';
+import FileViewerModal from '../components/FileViewerModal';
 
 interface DocumentsViewProps {
   projects: Project[];
@@ -95,6 +96,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  const [viewerFile, setViewerFile] = useState<{ url: string; name: string; mimeType: string; } | null>(null);
 
   const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
   
@@ -221,12 +223,17 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
       setLoadingAction(`${doc.id}-${action}`);
       setError(null);
       try {
-          const url = await getSignedUrlForDocument(doc.storagePath);
           if (action === 'preview') {
-              window.open(url, '_blank', 'noopener,noreferrer');
-          } else {
+              const signedUrl = await getSignedUrlForDocument(doc.storagePath);
+              setViewerFile({
+                  url: signedUrl,
+                  name: doc.name,
+                  mimeType: doc.mimeType,
+              });
+          } else { // download
+              const signedUrl = await getSignedUrlForDocument(doc.storagePath, { download: doc.name });
               const link = document.createElement('a');
-              link.href = url;
+              link.href = signedUrl;
               link.setAttribute('download', doc.name);
               document.body.appendChild(link);
               link.click();
@@ -480,6 +487,12 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
         title="Eliminar Carpeta y su Contenido"
         message={`¿Estás seguro de que quieres eliminar la carpeta "${folderToDelete?.name}"? Todos los documentos y sub-carpetas que contiene serán eliminados de forma permanente. Esta acción no se puede deshacer.`}
       />
+      {viewerFile && (
+          <FileViewerModal
+              file={viewerFile}
+              onClose={() => setViewerFile(null)}
+          />
+      )}
     </>
   );
 };

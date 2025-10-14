@@ -81,7 +81,11 @@ const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, is
                             <div className="text-sm text-light-text-secondary dark:text-dark-text-secondary">{project.leader}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                            <StatusSelector currentStatus={project.status} onUpdate={(newStatus) => onUpdateProjectStatus(project.id, newStatus)} />
+                            <StatusSelector 
+                                currentStatus={project.status} 
+                                onUpdate={(newStatus) => onUpdateProjectStatus(project.id, newStatus)} 
+                                isInteractive={project.status === ProjectStatus.EN_REVISION}
+                            />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
@@ -103,7 +107,11 @@ const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, is
                     <div className="flex justify-between items-start">
                          <div className="font-bold">{project.name}</div>
                          <div onClick={e => e.stopPropagation()}>
-                             <StatusSelector currentStatus={project.status} onUpdate={(newStatus) => onUpdateProjectStatus(project.id, newStatus)} />
+                             <StatusSelector 
+                                currentStatus={project.status} 
+                                onUpdate={(newStatus) => onUpdateProjectStatus(project.id, newStatus)}
+                                isInteractive={project.status === ProjectStatus.EN_REVISION}
+                            />
                         </div>
                     </div>
                     <div className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">{project.leader}</div>
