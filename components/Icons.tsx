@@ -444,3 +444,27 @@ export const BrainIcon: React.FC<{ className?: string }> = ({ className }) => (
         <path strokeLinecap="round" strokeLinejoin="round" d="M12 2v20" />
     </Icon>
 );
+
+export const RecordIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className} fill="currentColor">
+        <circle cx="12" cy="12" r="8" />
+    </Icon>
+ );
+ 
+ export const PlayIcon: React.FC<{ className?: string }> = ({ className }) => (
+     <Icon className={className} fill="currentColor">
+         <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+     </Icon>
+ );
+ 
+ export const PauseIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className} fill="currentColor">
+         <path d="M5.25 3.75A1.5 1.5 0 003.75 5.25v9.5A1.5 1.5 0 005.25 16.25h1.5A1.5 1.5 0 008.25 14.75v-9.5A1.5 1.5 0 006.75 3.75h-1.5zm6 0A1.5 1.5 0 0010.75 5.25v9.5A1.5 1.5 0 0012.25 16.25h1.5A1.5 1.5 0 0015.25 14.75v-9.5A1.5 1.5 0 0013.75 3.75h-1.5z" />
+    </Icon>
+ );
+ 
+ export const StopIcon: React.FC<{ className?: string }> = ({ className }) => (
+     <Icon className={className} fill="currentColor">
+         <path d="M5.25 5.25A2.25 2.25 0 003 7.5v9A2.25 2.25 0 005.25 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0014.25 5.25h-9z" />
+     </Icon>
+ );

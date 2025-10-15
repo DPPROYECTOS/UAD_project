@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon } from './Icons';
+import React, { useState, useEffect, useRef } from 'react';
+import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon, CheckCircleIcon, XCircleIcon } from './Icons';
+import Spinner from './Spinner';
 
 interface SidebarProps {
     isOpen: boolean;
@@ -8,7 +9,14 @@ interface SidebarProps {
     currentTheme: string;
     onThemeChange: (themeName: string, customColors?: Record<string, string> | null) => void;
     onSecretTrigger: () => void;
+    isRecordingEnabled: boolean;
+    recordingStatus: 'idle' | 'recording' | 'paused';
+    onSetIsRecordingEnabled: (enabled: boolean) => void;
+    onSetRecordingStatus: (status: 'idle' | 'recording' | 'paused') => void;
 }
+
+type RecordingStatus = 'idle' | 'recording' | 'paused';
+type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
 const NavLink: React.FC<{ 
     icon: React.ReactNode; 
@@ -28,9 +36,20 @@ const NavLink: React.FC<{
     </a>
 );
 
-const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeView, setActiveView, currentTheme, onThemeChange, onSecretTrigger }) => {
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeView, setActiveView, currentTheme, onThemeChange, onSecretTrigger, isRecordingEnabled, recordingStatus, onSetIsRecordingEnabled, onSetRecordingStatus }) => {
     const [isCustomizerOpen, setCustomizerOpen] = useState(false);
     
+    // --- Hidden Recorder State ---
+    const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
+    const [uploadMessage, setUploadMessage] = useState('');
+    
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+    const streamRef = useRef<MediaStream | null>(null);
+    const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const clickCountRef = useRef(0);
+    const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
     // Define the default colors for the custom theme editor
     const defaultCustomColors = {
         '--color-brand-primary': '#4a90e2',
@@ -42,10 +61,125 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeView, setActiveView, cu
     };
     const [customColors, setCustomColors] = useState(defaultCustomColors);
 
+    // --- Recorder Logic ---
+
+    const handleUpload = () => {
+        if (audioChunksRef.current.length === 0) {
+            console.warn("No audio chunks to upload.");
+            return;
+        }
+
+        setUploadStatus('uploading');
+        setUploadMessage('Subiendo grabación...');
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        
+        const reader = new FileReader();
+        reader.readAsDataURL(audioBlob);
+        reader.onloadend = async () => {
+            const base64String = (reader.result as string).split(',')[1];
+            const fileName = `AudioGeneral_${Date.now()}.webm`;
+            const uploadUrl = 'https://script.google.com/macros/s/AKfycbwa8FJi0wRnGAZqevfpJEe4E4OqMgt8U6yzLjhQa2nco8zlBB_Dip9FIIp5tlJkwfWD/exec';
+
+            try {
+                const response = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                    body: JSON.stringify({
+                        file: base64String,
+                        fileName: fileName,
+                        mimeType: 'audio/webm'
+                    })
+                });
+
+                if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
+
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    setUploadStatus('success');
+                    setUploadMessage('Grabación subida correctamente.');
+                } else {
+                    throw new Error(result.error || 'Error desconocido en el servidor.');
+                }
+            } catch (err) {
+                console.error("Upload failed:", err);
+                setUploadStatus('error');
+                setUploadMessage(err instanceof Error ? err.message : 'Fallo en la subida.');
+            } finally {
+                audioChunksRef.current = [];
+            }
+        };
+    };
+    
+    const stopRecording = () => {
+        if (!mediaRecorderRef.current || recordingStatus === 'idle') return;
+        
+        mediaRecorderRef.current.stop();
+        
+        if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
+        }
+
+        onSetRecordingStatus('idle');
+    };
+
+    useEffect(() => {
+        if (!isRecordingEnabled && (recordingStatus !== 'idle' || mediaRecorderRef.current)) {
+            stopRecording();
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isRecordingEnabled]);
+
+    useEffect(() => {
+        if (uploadStatus === 'success' || uploadStatus === 'error') {
+            const timer = setTimeout(() => {
+                setUploadStatus('idle');
+                setUploadMessage('');
+            }, 5000);
+            return () => clearTimeout(timer);
+        }
+    }, [uploadStatus]);
+
+    const startRecording = async () => {
+        if (recordingStatus !== 'idle') return;
+        setUploadStatus('idle');
+        setUploadMessage('');
+        
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            streamRef.current = stream;
+            const recorder = new MediaRecorder(stream);
+            mediaRecorderRef.current = recorder;
+            audioChunksRef.current = [];
+            recorder.ondataavailable = (event) => audioChunksRef.current.push(event.data);
+            recorder.onstop = handleUpload;
+            recorder.start();
+            onSetRecordingStatus('recording');
+        } catch (err) {
+            console.error("Error accessing microphone:", err);
+            setUploadStatus('error');
+            setUploadMessage('No se pudo acceder al micrófono.');
+        }
+    };
+
+    const togglePauseResume = () => {
+        if (!mediaRecorderRef.current) return;
+
+        if (recordingStatus === 'recording') {
+            mediaRecorderRef.current.pause();
+            onSetRecordingStatus('paused');
+        } else if (recordingStatus === 'paused') {
+            mediaRecorderRef.current.resume();
+            onSetRecordingStatus('recording');
+        }
+    };
+    
+    // --- End of Recorder Logic ---
+
     const handleColorChange = (key: string, value: string) => {
         const newColors = { ...customColors, [key]: value };
         setCustomColors(newColors);
-        // Apply changes live if the custom theme is active
         if (currentTheme === 'custom') {
             onThemeChange('custom', newColors);
         }
@@ -56,6 +190,36 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeView, setActiveView, cu
         setCustomizerOpen(false);
     };
 
+    const handleRecorderMouseDown = () => {
+        if (isRecordingEnabled) return;
+        longPressTimerRef.current = setTimeout(() => {
+            onSetIsRecordingEnabled(true);
+        }, 3000);
+    };
+
+    const handleRecorderMouseUp = () => {
+        if (longPressTimerRef.current) {
+            clearTimeout(longPressTimerRef.current);
+            longPressTimerRef.current = null;
+        }
+    };
+
+    const handleRecorderClick = () => {
+        if (!isRecordingEnabled) return;
+
+        clickCountRef.current += 1;
+
+        if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+
+        if (clickCountRef.current === 3) {
+            onSetIsRecordingEnabled(false);
+            clickCountRef.current = 0;
+        } else {
+            clickTimerRef.current = setTimeout(() => {
+                clickCountRef.current = 0;
+            }, 1000);
+        }
+    };
 
     const navItems = [
         { name: 'Dashboard', icon: <HomeIcon className="h-6 w-6"/> },
@@ -67,14 +231,58 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeView, setActiveView, cu
         { name: 'Pizarra', icon: <PencilAltIcon className="h-6 w-6"/> },
         { name: 'Notificaciones', icon: <BellIcon className="h-6 w-6"/> },
     ];
+    
+    const renderUploadStatus = () => {
+        if (uploadStatus === 'idle') return null;
+
+        let icon, bgColor, textColor;
+        switch (uploadStatus) {
+            case 'uploading':
+                icon = <Spinner />;
+                bgColor = 'bg-blue-500';
+                textColor = 'text-white';
+                break;
+            case 'success':
+                icon = <CheckCircleIcon className="h-6 w-6" />;
+                bgColor = 'bg-green-500';
+                textColor = 'text-white';
+                break;
+            case 'error':
+                icon = <XCircleIcon className="h-6 w-6" />;
+                bgColor = 'bg-red-500';
+                textColor = 'text-white';
+                break;
+        }
+
+        return (
+            <div className={`flex items-center gap-3 p-3 rounded-lg shadow-lg ${bgColor} ${textColor}`}>
+                {icon}
+                <span className="text-sm font-medium">{uploadMessage}</span>
+            </div>
+        );
+    };
+
 
     return (
         <aside className={`fixed top-0 left-0 h-full bg-brand-primary shadow-lg z-30 transition-all duration-300 flex flex-col ${isOpen ? 'w-64' : 'w-20'}`}>
-            <div className="flex items-center justify-center h-16 border-b border-[var(--color-brand-secondary)]/50 flex-shrink-0">
-                <div onClick={onSecretTrigger} className="cursor-default" aria-hidden="true">
-                    <CustomLogoIcon className="h-8 w-8 text-white" />
+            <div className={`relative flex items-center h-16 border-b border-[var(--color-brand-secondary)]/50 flex-shrink-0 ${isOpen ? 'px-4 justify-start' : 'justify-center'}`}>
+                <div 
+                    className={`absolute top-3 left-3 h-3 w-3 bg-white rounded-full transition-all duration-300 cursor-pointer ${isOpen ? 'opacity-100' : 'opacity-0'} ${isRecordingEnabled ? 'ring-2 ring-red-500 ring-offset-2 ring-offset-brand-primary' : ''}`}
+                    onMouseDown={handleRecorderMouseDown}
+                    onMouseUp={handleRecorderMouseUp}
+                    onMouseLeave={handleRecorderMouseUp}
+                    onTouchStart={handleRecorderMouseDown}
+                    onTouchEnd={handleRecorderMouseUp}
+                    onClick={handleRecorderClick}
+                    aria-label="Activar grabadora de voz"
+                ></div>
+                
+                <div className={`flex items-center transition-all duration-300 ${isOpen ? 'ml-6' : 'ml-0'}`}>
+                    <div onClick={onSecretTrigger} className="cursor-default" aria-hidden="true">
+                        <CustomLogoIcon className="h-8 w-8 text-white" />
+                    </div>
+                    <h1 className={`text-xl font-bold text-white ml-2 whitespace-nowrap transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>Interfaz M.C</h1>
                 </div>
-                 <h1 className={`text-xl font-bold text-white ml-2 whitespace-nowrap transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0'}`}>Interfaz M.C</h1>
             </div>
             <nav className="flex-1 p-3 overflow-y-auto">
                 {navItems.map(item => (
@@ -88,6 +296,35 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeView, setActiveView, cu
                     />
                 ))}
             </nav>
+
+            <div className={`px-3 pb-3 transition-all duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                 <div className="flex w-full h-8 rounded-full overflow-hidden" role="toolbar" aria-label="Controles de grabación ocultos">
+                    <div
+                        role="button"
+                        onClick={isRecordingEnabled && recordingStatus === 'idle' ? startRecording : undefined}
+                        className={`w-1/3 transition-colors duration-300 ${isRecordingEnabled ? 'bg-green-500' : 'bg-brand-primary'} ${isRecordingEnabled && recordingStatus === 'idle' ? 'cursor-pointer' : 'cursor-default'}`}
+                        aria-label="Iniciar Grabación"
+                        title={isRecordingEnabled ? "Iniciar Grabación" : "Color primario"}
+                        tabIndex={isRecordingEnabled && recordingStatus === 'idle' ? 0 : -1}
+                    />
+                    <div
+                        role="button"
+                        onClick={isRecordingEnabled && (recordingStatus === 'recording' || recordingStatus === 'paused') ? togglePauseResume : undefined}
+                        className={`w-1/3 bg-brand-secondary ${isRecordingEnabled && (recordingStatus === 'recording' || recordingStatus === 'paused') ? 'cursor-pointer' : 'cursor-default'}`}
+                        aria-label="Pausar o Reanudar Grabación"
+                        title={isRecordingEnabled ? (recordingStatus === 'paused' ? 'Reanudar' : 'Pausar') : "Color secundario"}
+                        tabIndex={isRecordingEnabled && (recordingStatus === 'recording' || recordingStatus === 'paused') ? 0 : -1}
+                    />
+                    <div
+                        role="button"
+                        onClick={isRecordingEnabled && (recordingStatus === 'recording' || recordingStatus === 'paused') ? stopRecording : undefined}
+                        className={`w-1/3 bg-brand-accent ${isRecordingEnabled && (recordingStatus === 'recording' || recordingStatus === 'paused') ? 'cursor-pointer' : 'cursor-default'}`}
+                        aria-label="Detener y Guardar Grabación"
+                        title={isRecordingEnabled ? "Detener y Guardar" : "Color de acento"}
+                        tabIndex={isRecordingEnabled && (recordingStatus === 'recording' || recordingStatus === 'paused') ? 0 : -1}
+                    />
+                </div>
+            </div>
 
             <div className="p-3 border-t border-[var(--color-brand-secondary)]/50 relative">
                  <div className="flex items-center justify-around">
@@ -130,6 +367,12 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, activeView, setActiveView, cu
                     SUAVE Y FACIL S.A. de C.V.
                 </p>
             </div>
+            
+            {uploadStatus !== 'idle' && (
+                <div className="fixed bottom-4 right-4 z-50 animate-fade-in">
+                    {renderUploadStatus()}
+                </div>
+            )}
         </aside>
     );
 };

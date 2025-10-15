@@ -13,11 +13,14 @@ interface HeaderProps {
     isAvatarLoading: boolean;
     onMarkAsRead: (activityId: string) => void;
     onMarkAllAsRead: () => void;
+    recordingStatus: 'idle' | 'recording' | 'paused';
+    recordingTime: number;
 }
 
 const Header: React.FC<HeaderProps> = ({ 
     user, onLogout, notifications, 
-    onNavigate, onUpdateAvatar, isAvatarLoading, onMarkAsRead, onMarkAllAsRead
+    onNavigate, onUpdateAvatar, isAvatarLoading, onMarkAsRead, onMarkAllAsRead,
+    recordingStatus, recordingTime
 }) => {
     const [isProfileOpen, setProfileOpen] = useState(false);
     const [isNotificationsOpen, setNotificationsOpen] = useState(false);
@@ -65,6 +68,12 @@ const Header: React.FC<HeaderProps> = ({
             return 'Zerk Lucio';
         }
         return username.split('@')[0];
+    };
+    
+    const formatRecordingTime = (seconds: number): string => {
+        const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
+        const secs = (seconds % 60).toString().padStart(2, '0');
+        return `${mins}:${secs}`;
     };
 
     const displayName = getDisplayName(user.username);
@@ -116,7 +125,14 @@ const Header: React.FC<HeaderProps> = ({
                         </div>
                         <div className="hidden md:block text-left">
                             <p className="font-semibold text-sm text-light-text dark:text-dark-text">{displayName}</p>
-                            <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">Usuario</p>
+                            {(recordingStatus === 'recording' || recordingStatus === 'paused') ? (
+                                <div className="flex items-center text-xs text-light-text-secondary dark:text-dark-text-secondary font-mono">
+                                    <div className={`h-2 w-2 bg-gray-400 dark:bg-gray-500 rounded-full mr-1.5 ${recordingStatus === 'recording' ? 'animate-pulse' : ''}`}></div>
+                                    <span>{formatRecordingTime(recordingTime)}</span>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">Usuario</p>
+                            )}
                         </div>
                     </button>
                     {isProfileOpen && (

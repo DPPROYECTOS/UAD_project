@@ -56,6 +56,8 @@ import {
 import Spinner from './components/Spinner';
 import { DoomPlayer } from './components/DoomPlayer';
 
+type RecordingStatus = 'idle' | 'recording' | 'paused';
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -106,6 +108,11 @@ const App: React.FC = () => {
 
   // --- Notifications State ---
   const [activities, setActivities] = useState<Activity[]>([]);
+
+  // --- Recorder State ---
+  const [isRecordingEnabled, setIsRecordingEnabled] = useState(false);
+  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>('idle');
+  const [recordingTime, setRecordingTime] = useState(0);
 
   // --- Easter Egg Handlers ---
   const handleSecretTrigger = () => {
@@ -366,6 +373,23 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, projects]);
 
+  // Effect to manage recording timer
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (recordingStatus === 'recording') {
+        interval = setInterval(() => {
+            setRecordingTime(prevTime => prevTime + 1);
+        }, 1000);
+    } else if (recordingStatus === 'idle' && recordingTime !== 0) {
+        setRecordingTime(0);
+    }
+    return () => {
+        if (interval) {
+            clearInterval(interval);
+        }
+    };
+  }, [recordingStatus, recordingTime]);
+
   const fetchProjects = async () => {
     try {
         setError(null);
@@ -524,6 +548,18 @@ const App: React.FC = () => {
           setTheme(theme);
           setCustomThemeColors(customThemeColors);
       }
+  };
+
+  // --- Recorder Handlers ---
+  const handleSetIsRecordingEnabled = (enabled: boolean) => {
+    setIsRecordingEnabled(enabled);
+    if (!enabled) {
+        setRecordingStatus('idle'); // Also reset status when disabled
+    }
+  };
+
+  const handleSetRecordingStatus = (status: RecordingStatus) => {
+    setRecordingStatus(status);
   };
 
   // --- Notification Handlers ---
@@ -1132,6 +1168,10 @@ const App: React.FC = () => {
         currentTheme={theme}
         onThemeChange={handleThemeChange}
         onSecretTrigger={handleSecretTrigger}
+        isRecordingEnabled={isRecordingEnabled}
+        recordingStatus={recordingStatus}
+        onSetIsRecordingEnabled={handleSetIsRecordingEnabled}
+        onSetRecordingStatus={handleSetRecordingStatus}
       />
       <div className={`flex-1 flex flex-col transition-all duration-300 ml-64 overflow-x-hidden`}>
         <Header 
@@ -1143,6 +1183,8 @@ const App: React.FC = () => {
           isAvatarLoading={isAvatarLoading}
           onMarkAsRead={(id) => handleMarkActivityAsRead(id, true)}
           onMarkAllAsRead={handleMarkAllAsRead}
+          recordingStatus={recordingStatus}
+          recordingTime={recordingTime}
         />
         <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
           <div className="animate-fade-in">
