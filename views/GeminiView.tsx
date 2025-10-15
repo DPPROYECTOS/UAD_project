@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Chat, Type } from '@google/genai';
 import PptxGenJS from 'pptxgenjs';
-import { SparklesIcon, PhotographIcon, GlobeAltIcon, PresentationChartBarIcon, BrainIcon, ChatBubbleLeftRightIcon, DocumentDownloadIcon, XCircleIcon } from '../components/Icons';
+import { SparklesIcon, PhotographIcon, GlobeAltIcon, PresentationChartBarIcon, BrainIcon, ChatBubbleLeftRightIcon, DocumentDownloadIcon, XCircleIcon, InformationCircleIcon } from '../components/Icons';
 import Spinner from '../components/Spinner';
 
 type ToolType = 'chat' | 'image' | 'search' | 'presentation' | 'training';
@@ -11,6 +11,12 @@ type SearchMessage = { role: 'user' | 'model'; content: { text: string; sources?
 type TrainingMessage = { role: 'user' | 'model'; content: { type: 'text' | 'image'; data: string } };
 type Slide = { title: string; content: string[] };
 
+interface GeminiViewProps {
+    geminiApiKey: string | null;
+    isApiKeyLoading: boolean;
+    apiKeyError: string | null;
+}
+
 const SendIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path></svg>
 );
@@ -18,12 +24,11 @@ const UserCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path></svg>
 );
 
-const GeminiView: React.FC = () => {
+const GeminiView: React.FC<GeminiViewProps> = ({ geminiApiKey, isApiKeyLoading, apiKeyError }) => {
   const [isFullMode, setIsFullMode] = useState(false);
   const [secretClickCount, setSecretClickCount] = useState(0);
   const [activeTool, setActiveTool] = useState<ToolType>('chat');
-  const isApiKeyMissing = !process.env.API_KEY;
-
+  
   const [error, setError] = useState<string | null>(null);
   
   // States for each tool
@@ -54,13 +59,13 @@ const GeminiView: React.FC = () => {
   const chatContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (isApiKeyMissing) {
-      setError("La función de IA no está configurada. Se requiere una clave API.");
+    if (!geminiApiKey) {
       return;
     }
+    setError(null);
     const initChat = () => {
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+            const ai = new GoogleGenAI({ apiKey: geminiApiKey });
             const baseSystemInstruction = 'Eres un asistente útil y amigable llamado Gemini. Ayudas a los usuarios con la gestión de proyectos, la mejora continua y tareas generales. Respondes en español.';
             const defaultChat = ai.chats.create({ model: 'gemini-2.5-flash', config: { systemInstruction: baseSystemInstruction } });
             setChat(defaultChat);
@@ -72,7 +77,7 @@ const GeminiView: React.FC = () => {
         }
     };
     initChat();
-  }, [isApiKeyMissing]);
+  }, [geminiApiKey]);
 
   useEffect(() => {
     chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
@@ -117,12 +122,12 @@ const GeminiView: React.FC = () => {
   };
   
   const handleGenerateImage = async () => {
-    if (!imagePrompt.trim() || isImageLoading) return;
+    if (!imagePrompt.trim() || isImageLoading || !geminiApiKey) return;
     setIsImageLoading(true);
     setGeneratedImageUrl(null);
     setError(null);
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+      const ai = new GoogleGenAI({ apiKey: geminiApiKey });
       const response = await ai.models.generateImages({
           model: 'imagen-4.0-generate-001',
           prompt: imagePrompt,
@@ -138,14 +143,14 @@ const GeminiView: React.FC = () => {
   };
 
   const handleSearch = async () => {
-    if (!searchQuery.trim() || isSearchLoading) return;
+    if (!searchQuery.trim() || isSearchLoading || !geminiApiKey) return;
     const query = searchQuery;
     setSearchQuery('');
     setSearchHistory(prev => [...prev, { role: 'user', content: { text: query } }]);
     setIsSearchLoading(true);
     setError(null);
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+        const ai = new GoogleGenAI({ apiKey: geminiApiKey });
         const response = await ai.models.generateContent({
             model: "gemini-2.5-flash",
             contents: query,
@@ -161,11 +166,11 @@ const GeminiView: React.FC = () => {
   };
 
   const handleGeneratePresentation = async () => {
-    if (!presentationTopic.trim() || isPresentationLoading) return;
+    if (!presentationTopic.trim() || isPresentationLoading || !geminiApiKey) return;
     setIsPresentationLoading(true);
     setPresentationSlides(null);
     setError(null);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
     try {
         setPresentationStep('Investigando tema...');
         const researchResponse = await ai.models.generateContent({
@@ -220,12 +225,13 @@ const GeminiView: React.FC = () => {
   };
   
   const handleTrainingFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!geminiApiKey) return;
     const file = e.target.files?.[0];
     if (file && file.type === 'text/plain') {
         const reader = new FileReader();
         reader.onload = (event) => {
             const content = event.target?.result as string;
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+            const ai = new GoogleGenAI({ apiKey: geminiApiKey });
             const newTrainedChat = ai.chats.create({
                 model: 'gemini-2.5-flash',
                 config: {
@@ -243,7 +249,8 @@ const GeminiView: React.FC = () => {
   };
   
   const forgetTrainedFile = () => {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    if (!geminiApiKey) return;
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
     const baseSystemInstruction = 'Eres un asistente útil y amigable llamado Gemini. Ayudas a los usuarios con la gestión de proyectos, la mejora continua y tareas generales. Respondes en español.';
     const defaultChat = ai.chats.create({ model: 'gemini-2.5-flash', config: { systemInstruction: baseSystemInstruction } });
     setTrainingChat(defaultChat);
@@ -253,13 +260,13 @@ const GeminiView: React.FC = () => {
 
   const handleTrainingSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!trainingInput.trim() || isTrainingLoading) return;
+    if (!trainingInput.trim() || isTrainingLoading || !geminiApiKey) return;
     const text = trainingInput.trim();
     setTrainingInput('');
     setTrainingMessages(prev => [...prev, { role: 'user', content: { type: 'text', data: text } }]);
     setIsTrainingLoading(true);
     setError(null);
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY! });
+    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
 
     try {
         if (text.startsWith('/imagen ')) {
@@ -325,8 +332,8 @@ const GeminiView: React.FC = () => {
         </div>
         <div className="p-4 bg-light-bg dark:bg-dark-bg/50 border-t border-light-border dark:border-dark-border">
           <form onSubmit={(e) => onSend(e, currentChat, messages, setMessages, input, setInput)} className="flex items-center gap-3">
-            <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(e, currentChat, messages, setMessages, input, setInput); }}} placeholder={isApiKeyMissing ? "Función de IA no disponible" : "Escribe tu mensaje aquí..."} className="flex-1 w-full p-3 border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card rounded-lg resize-none focus:ring-2 focus:ring-brand-accent focus:outline-none" rows={1} disabled={loading || isApiKeyMissing}/>
-            <button type="submit" disabled={loading || !input.trim() || isApiKeyMissing} className="flex-shrink-0 h-12 w-12 rounded-lg text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"><SendIcon className="h-6 w-6" /></button>
+            <textarea value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(e, currentChat, messages, setMessages, input, setInput); }}} placeholder={!geminiApiKey ? "Función de IA no disponible" : "Escribe tu mensaje aquí..."} className="flex-1 w-full p-3 border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card rounded-lg resize-none focus:ring-2 focus:ring-brand-accent focus:outline-none" rows={1} disabled={loading || !geminiApiKey}/>
+            <button type="submit" disabled={loading || !input.trim() || !geminiApiKey} className="flex-shrink-0 h-12 w-12 rounded-lg text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50 disabled:cursor-not-allowed flex items-center justify-center transition-colors"><SendIcon className="h-6 w-6" /></button>
           </form>
         </div>
       </div>
@@ -442,35 +449,75 @@ const GeminiView: React.FC = () => {
       </div>
     </div>
   );
+  
+  const renderContent = () => {
+    if (isApiKeyLoading) {
+        return (
+            <div className="flex flex-col items-center justify-center h-[70vh] text-center bg-light-card dark:bg-dark-card p-8 rounded-lg border border-light-border dark:border-dark-border">
+                <Spinner />
+                <p className="mt-4">Cargando configuración de IA...</p>
+            </div>
+        );
+    }
+
+    if (apiKeyError) {
+        return (
+            <div className="flex flex-col items-center justify-center h-[70vh] text-center bg-red-100 dark:bg-red-900/50 p-8 rounded-lg border border-red-400 dark:border-red-700">
+                <InformationCircleIcon className="h-12 w-12 text-red-500"/>
+                <h2 className="mt-4 text-xl font-bold text-red-800 dark:text-red-200">Error de Configuración</h2>
+                <p className="mt-2 max-w-md text-red-700 dark:text-red-300">{apiKeyError}</p>
+            </div>
+        );
+    }
+    
+    if (!geminiApiKey) {
+         return (
+            <div className="flex flex-col items-center justify-center h-[70vh] text-center bg-yellow-100 dark:bg-yellow-900/50 p-8 rounded-lg border border-yellow-400 dark:border-yellow-700">
+                <SparklesIcon className="h-12 w-12 text-yellow-500"/>
+                <h2 className="mt-4 text-xl font-bold text-yellow-800 dark:text-yellow-200">Función de IA no disponible</h2>
+                <p className="mt-2 max-w-md text-yellow-700 dark:text-yellow-300">El administrador no ha configurado una clave de API para Gemini. Las funciones de IA están desactivadas.</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className={`mt-6 ${isFullMode ? 'h-[75vh] flex gap-4' : ''}`}>
+            {isFullMode ? (
+            <>
+                <nav className="flex flex-col gap-2 p-2 bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border w-48">
+                {(Object.keys({chat:'Chat', image:'Imágenes', search:'Búsqueda', presentation:'Presentación', training:'Entrenamiento'}) as ToolType[]).map(tool => (
+                    <button key={tool} onClick={() => setActiveTool(tool)} className={`flex items-center gap-3 p-2 rounded-md text-sm font-medium transition-colors ${activeTool === tool ? 'bg-brand-primary/10 text-brand-primary' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
+                        {tool==='chat' && <ChatBubbleLeftRightIcon className="h-5 w-5"/>}
+                        {tool==='image' && <PhotographIcon className="h-5 w-5"/>}
+                        {tool==='search' && <GlobeAltIcon className="h-5 w-5"/>}
+                        {tool==='presentation' && <PresentationChartBarIcon className="h-5 w-5"/>}
+                        {tool==='training' && <BrainIcon className="h-5 w-5"/>}
+                        <span>{ {chat:'Chat', image:'Imágenes', search:'Búsqueda', presentation:'Presentación', training:'Entrenamiento'}[tool] }</span>
+                    </button>
+                ))}
+                </nav>
+                <div className="flex-1">{renderActiveTool()}</div>
+            </>
+            ) : (
+            renderSimpleChat(chat, chatMessages, setChatMessages, userInput, setUserInput, isLoading, setIsLoading, error, setError, handleSendMessage, chatContainerRef, 'simple')
+            )}
+        </div>
+    );
+  };
+
 
   return (
     <div>
-      <h1 className="text-3xl font-bold cursor-pointer text-light-text dark:text-dark-text" onClick={handleSecretClick}>Asistente Gemini 2.5</h1>
-      <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1">
-        {isFullMode ? 'Selecciona una herramienta para empezar.' : 'Haz una pregunta, pide un resumen o genera ideas para tus proyectos.'}
-      </p>
-
-      <div className={`mt-6 ${isFullMode ? 'h-[75vh] flex gap-4' : ''}`}>
-        {isFullMode ? (
-          <>
-            <nav className="flex flex-col gap-2 p-2 bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border w-48">
-              {(Object.keys({chat:'Chat', image:'Imágenes', search:'Búsqueda', presentation:'Presentación', training:'Entrenamiento'}) as ToolType[]).map(tool => (
-                  <button key={tool} onClick={() => setActiveTool(tool)} className={`flex items-center gap-3 p-2 rounded-md text-sm font-medium transition-colors ${activeTool === tool ? 'bg-brand-primary/10 text-brand-primary' : 'hover:bg-gray-100 dark:hover:bg-gray-700'}`}>
-                      {tool==='chat' && <ChatBubbleLeftRightIcon className="h-5 w-5"/>}
-                      {tool==='image' && <PhotographIcon className="h-5 w-5"/>}
-                      {tool==='search' && <GlobeAltIcon className="h-5 w-5"/>}
-                      {tool==='presentation' && <PresentationChartBarIcon className="h-5 w-5"/>}
-                      {tool==='training' && <BrainIcon className="h-5 w-5"/>}
-                      <span>{ {chat:'Chat', image:'Imágenes', search:'Búsqueda', presentation:'Presentación', training:'Entrenamiento'}[tool] }</span>
-                  </button>
-              ))}
-            </nav>
-            <div className="flex-1">{renderActiveTool()}</div>
-          </>
-        ) : (
-          renderSimpleChat(chat, chatMessages, setChatMessages, userInput, setUserInput, isLoading, setIsLoading, error, setError, handleSendMessage, chatContainerRef, 'simple')
-        )}
+      <div className="flex justify-between items-start">
+        <div>
+            <h1 className="text-3xl font-bold cursor-pointer" onClick={handleSecretClick}>Asistente Gemini 2.5</h1>
+            <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1">
+                {isFullMode ? 'Selecciona una herramienta para empezar.' : 'Haz una pregunta, pide un resumen o genera ideas para tus proyectos.'}
+            </p>
+        </div>
       </div>
+
+      {renderContent()}
     </div>
   );
 };

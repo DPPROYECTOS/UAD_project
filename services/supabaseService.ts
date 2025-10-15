@@ -46,6 +46,28 @@ export const signOut = async () => {
   if (error) throw error;
 };
 
+// --- Gemini API Key Function ---
+export const getGeminiApiKey = async (): Promise<string> => {
+    const { data, error } = await supabase
+      .from('api_keys')
+      .select('api_key')
+      .eq('service_name', 'gemini')
+      .single();
+  
+    if (error) {
+      if (error.code === 'PGRST116') {
+        throw new Error('No se encontró la clave de API de Gemini en la base de datos. El administrador debe configurarla.');
+      }
+      throw new Error(`Error al obtener la clave de API: ${error.message}`);
+    }
+  
+    if (!data || !data.api_key) {
+      throw new Error('La clave de API de Gemini está vacía en la base de datos.');
+    }
+  
+    return data.api_key;
+};
+
 // --- User Preferences ---
 export const getUserThemePreferences = async (): Promise<ThemePreferences | null> => {
     const { data: { user } } = await supabase.auth.getUser();

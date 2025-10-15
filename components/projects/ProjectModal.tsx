@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Project, ProjectStatus } from '../../types';
 import { XIcon, SparklesIcon } from '../Icons';
@@ -11,9 +10,10 @@ interface ProjectModalProps {
   onClose: () => void;
   onSave: (project: Omit<Project, 'id'> | Project) => void;
   projectToEdit?: Project | null;
+  geminiApiKey: string | null;
 }
 
-const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSave, projectToEdit }) => {
+const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSave, projectToEdit, geminiApiKey }) => {
   const [formData, setFormData] = useState<Omit<Project, 'id'>>({
     name: '',
     description: '',
@@ -65,10 +65,14 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSave, pr
   };
 
   const handleGenerateWithAI = async () => {
+    if (!geminiApiKey) {
+        setAiError("La clave de API de Gemini no está disponible. Contacta al administrador.");
+        return;
+    }
     setIsGenerating(true);
     setAiError(null);
     try {
-      const result = await generateProjectIdeas(aiPrompt);
+      const result = await generateProjectIdeas(aiPrompt, geminiApiKey);
       setFormData(prev => ({
         ...prev,
         name: result.name || prev.name,
@@ -105,10 +109,11 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSave, pr
                   onChange={(e) => setAiPrompt(e.target.value)}
                   placeholder="Ej: Optimizar el proceso de empaque en el almacén..."
                   className="w-full h-20 p-2 text-sm border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg rounded-md focus:ring-brand-accent"
-                  disabled={isGenerating}
+                  disabled={isGenerating || !geminiApiKey}
                 />
+                {!geminiApiKey && <p className="text-xs text-yellow-600 dark:text-yellow-400">La función de IA no está configurada por el administrador.</p>}
                  {aiError && <p className="text-sm text-red-500">{aiError}</p>}
-                <button type="button" onClick={handleGenerateWithAI} disabled={!aiPrompt || isGenerating} className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50">
+                <button type="button" onClick={handleGenerateWithAI} disabled={!aiPrompt || isGenerating || !geminiApiKey} className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50">
                   {isGenerating ? <><Spinner /> <span className="ml-2">Generando...</span></> : <>Generar con IA</>}
                 </button>
               </div>

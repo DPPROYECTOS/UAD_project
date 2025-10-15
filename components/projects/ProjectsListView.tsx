@@ -13,9 +13,10 @@ interface ProjectsListViewProps {
   onSaveProject: (project: Omit<Project, 'id'> | Project) => void;
   onUpdateProjectStatus: (projectId: string, status: ProjectStatus) => void;
   onError: (error: unknown, defaultMessage: string) => void;
+  geminiApiKey: string | null;
 }
 
-const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, isLoading, onSelectProject, onSaveProject, onUpdateProjectStatus, onError }) => {
+const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, isLoading, onSelectProject, onSaveProject, onUpdateProjectStatus, onError, geminiApiKey }) => {
   const [isModalOpen, setModalOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [statusFilter, setStatusFilter] = useState('Todos los Estados');
@@ -192,6 +193,7 @@ const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, is
         onClose={() => setModalOpen(false)} 
         onSave={onSaveProject}
         projectToEdit={projectToEdit}
+        geminiApiKey={geminiApiKey}
       />
     </>
   );

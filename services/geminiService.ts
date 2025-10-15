@@ -1,7 +1,4 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
-
-const isApiKeyMissing = !process.env.API_KEY;
 
 // Define the strict schema for the project ideas response.
 const projectIdeaSchema = {
@@ -27,18 +24,19 @@ const projectIdeaSchema = {
 /**
  * Generates project ideas using the Gemini AI model.
  * @param idea - The user's initial project idea.
+ * @param apiKey - The Gemini API key.
  * @returns A structured project object with name, description, and team.
  */
-export const generateProjectIdeas = async (idea: string) => {
-  if (isApiKeyMissing) {
-    throw new Error("AI feature is not configured. An API key is required.");
+export const generateProjectIdeas = async (idea: string, apiKey: string) => {
+  if (!apiKey) {
+    throw new Error("La clave de API de Gemini no está configurada. Por favor, contacta al administrador.");
   }
   if (!idea.trim()) {
       throw new Error("Please provide a project idea.");
   }
 
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
+    const ai = new GoogleGenAI({ apiKey });
 
     const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
@@ -62,6 +60,9 @@ export const generateProjectIdeas = async (idea: string) => {
     if (error instanceof Error) {
         if (error.message.includes('SAFETY')) {
             throw new Error("La idea fue bloqueada por filtros de seguridad. Por favor, reformula tu idea.");
+        }
+        if (error.message.includes('API key not valid')) {
+            throw new Error("La clave de API no es válida. Por favor, contacta al administrador.");
         }
         throw new Error(`Error de la IA: ${error.message}`);
     }

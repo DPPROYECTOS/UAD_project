@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { ContentType } from '../types';
@@ -19,8 +20,8 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({ onClose, onCont
     const [error, setError] = useState<string | null>(null);
     const [generatedData, setGeneratedData] = useState<string | null>(null);
 
-    // FIX: Check if the Gemini API key is available in the environment.
-    const isApiKeyMissing = !process.env.API_KEY;
+    const apiKey = localStorage.getItem('gemini-api-key');
+    const isApiKeyMissing = !apiKey;
 
     const handleGenerate = async () => {
         if (!prompt.trim()) {
@@ -28,9 +29,8 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({ onClose, onCont
             return;
         }
 
-        // FIX: Prevent API calls and inform the user if the key is missing.
         if (isApiKeyMissing) {
-            setError("AI feature is not configured. An API key is required.");
+            setError("La clave de API no está configurada. Ve a la sección 'Gemini 2.5' para añadirla.");
             return;
         }
 
@@ -39,8 +39,7 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({ onClose, onCont
         setGeneratedData(null);
 
         try {
-            // FIX: Remove the non-null assertion as we've already checked for the key.
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const ai = new GoogleGenAI({ apiKey: apiKey as string });
 
             if (contentType === ContentType.TEXT) {
                 const model = 'gemini-2.5-flash';
@@ -152,7 +151,6 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({ onClose, onCont
                     <div>
                         <label className="block text-sm font-medium text-text-secondary dark:text-dark-text-secondary mb-1">Content Type</label>
                         <div className="flex space-x-4">
-                            {/* FIX: Explicitly type `type` as ContentType to resolve issue with calling string methods on an `unknown` type. */}
                             {(Object.values(ContentType)).map((type: ContentType) => (
                                 <button
                                     key={type}
@@ -181,7 +179,7 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({ onClose, onCont
                         />
                         {isApiKeyMissing && (
                             <p className="text-xs text-yellow-500 mt-1">
-                                AI generation is disabled. An API key has not been configured.
+                                La función de IA no está configurada. Ve a la sección 'Gemini 2.5' para añadir una clave de API.
                             </p>
                         )}
                     </div>
