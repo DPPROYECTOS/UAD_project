@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import LoginView from './components/Login';
 import DashboardView from './components/Dashboard';
@@ -55,8 +55,47 @@ import {
 } from './services/supabaseService';
 import Spinner from './components/Spinner';
 import { DoomPlayer } from './components/DoomPlayer';
+import { CheckCircleIcon, XCircleIcon } from './components/Icons';
+
+declare const lamejs: any;
 
 type RecordingStatus = 'idle' | 'recording' | 'paused';
+type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
+
+/**
+ * Converts a WebM audio Blob to MP3 format using lamejs.
+ * @param {Blob} webmBlob - The recorded audio Blob in WebM format.
+ * @returns {Promise<Blob>} A new Blob in MP3 format.
+ */
+const convertWebMToMp3 = async (webmBlob: Blob): Promise<Blob> => {
+  const audioContext = new AudioContext();
+  const arrayBuffer = await webmBlob.arrayBuffer();
+  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+  const pcmSamples = audioBuffer.getChannelData(0);
+
+  const samples = new Int16Array(pcmSamples.length);
+  for (let i = 0; i < pcmSamples.length; i++) {
+    samples[i] = pcmSamples[i] * 32767;
+  }
+
+  const mp3Encoder = new lamejs.Mp3Encoder(1, audioBuffer.sampleRate, 128); // 1 channel, 128kbps
+  const mp3Data = [];
+  const sampleBlockSize = 1152;
+
+  for (let i = 0; i < samples.length; i += sampleBlockSize) {
+    const sampleChunk = samples.subarray(i, i + sampleBlockSize);
+    const mp3buf = mp3Encoder.encodeBuffer(sampleChunk);
+    if (mp3buf.length > 0) {
+      mp3Data.push(mp3buf);
+    }
+  }
+  const mp3buf = mp3Encoder.flush();
+  if (mp3buf.length > 0) {
+    mp3Data.push(mp3buf);
+  }
+
+  return new Blob(mp3Data, { type: 'audio/mpeg' });
+};
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -109,10 +148,16 @@ const App: React.FC = () => {
   // --- Notifications State ---
   const [activities, setActivities] = useState<Activity[]>([]);
 
-  // --- Recorder State ---
+  // --- Recorder State (Centralized) ---
   const [isRecordingEnabled, setIsRecordingEnabled] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>('idle');
   const [recordingTime, setRecordingTime] = useState(0);
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
+  const [uploadMessage, setUploadMessage] = useState('');
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // --- Easter Egg Handlers ---
   const handleSecretTrigger = () => {
@@ -373,6 +418,7 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, projects]);
 
+  // --- Start of Recorder Effects ---
   // Effect to manage recording timer
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | null = null;
@@ -389,6 +435,37 @@ const App: React.FC = () => {
         }
     };
   }, [recordingStatus, recordingTime]);
+
+  const stopRecording = () => {
+    if (!mediaRecorderRef.current || recordingStatus === 'idle') return;
+    
+    mediaRecorderRef.current.stop();
+    
+    if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
+    }
+
+    setRecordingStatus('idle');
+  };
+
+  useEffect(() => {
+    if (!isRecordingEnabled && (recordingStatus !== 'idle' || mediaRecorderRef.current)) {
+        stopRecording();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRecordingEnabled]);
+
+  useEffect(() => {
+    if (uploadStatus === 'success' || uploadStatus === 'error') {
+        const timer = setTimeout(() => {
+            setUploadStatus('idle');
+            setUploadMessage('');
+        }, 5000);
+        return () => clearTimeout(timer);
+    }
+  }, [uploadStatus]);
+  // --- End of Recorder Effects ---
 
   const fetchProjects = async () => {
     try {
@@ -550,16 +627,110 @@ const App: React.FC = () => {
       }
   };
 
+  // --- Recorder Logic (Centralized) ---
+  const handleUpload = async () => {
+    if (audioChunksRef.current.length === 0) {
+      console.warn("No audio chunks to upload.");
+      return;
+    }
+
+    setUploadStatus('uploading');
+    setUploadMessage('Procesando y subiendo...');
+    const audioBlobWebM = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+
+    try {
+      const mp3Blob = await convertWebMToMp3(audioBlobWebM);
+
+      const base64String = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(mp3Blob);
+        reader.onloadend = () => {
+          if (reader.result) {
+            resolve((reader.result as string).split(',')[1]);
+          } else {
+            reject(new Error("Failed to read blob as Base64."));
+          }
+        };
+        reader.onerror = (error) => reject(error);
+      });
+      
+      const now = new Date();
+      const date = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+      const time = `${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}-${now.getSeconds().toString().padStart(2, '0')}`;
+      const recordingNumber = Date.now();
+      const fileName = `GrabacionPMC_${recordingNumber}_${date}_${time}.mp3`;
+
+      const uploadUrl = 'https://script.google.com/macros/s/AKfycbzCdJDu6zoxwKVKNUNL_-Fj6rM6dc6C1o_gYIUjLwUULolGD8Y1Paq1VWf1S67XPYu2/exec';
+
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify({
+          file: base64String,
+          fileName: fileName,
+          mimeType: 'audio/mpeg'
+        })
+      });
+
+      if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
+
+      const result = await response.json();
+      
+      if (result.status === 'success') {
+        setUploadStatus('success');
+        setUploadMessage('Grabación subida correctamente.');
+      } else {
+        throw new Error(result.error || 'Error desconocido en el servidor.');
+      }
+    } catch (err) {
+      console.error("Upload or conversion failed:", err);
+      setUploadStatus('error');
+      setUploadMessage(err instanceof Error ? err.message : 'Fallo en la subida o conversión.');
+    } finally {
+      audioChunksRef.current = [];
+    }
+  };
+
+  const startRecording = async () => {
+    if (recordingStatus !== 'idle') return;
+    setUploadStatus('idle');
+    setUploadMessage('');
+    
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+        const recorder = new MediaRecorder(stream);
+        mediaRecorderRef.current = recorder;
+        audioChunksRef.current = [];
+        recorder.ondataavailable = (event) => audioChunksRef.current.push(event.data);
+        recorder.onstop = handleUpload;
+        recorder.start();
+        setRecordingStatus('recording');
+    } catch (err) {
+        console.error("Error accessing microphone:", err);
+        setUploadStatus('error');
+        setUploadMessage('No se pudo acceder al micrófono.');
+    }
+  };
+
+  const togglePauseResume = () => {
+    if (!mediaRecorderRef.current) return;
+
+    if (recordingStatus === 'recording') {
+        mediaRecorderRef.current.pause();
+        setRecordingStatus('paused');
+    } else if (recordingStatus === 'paused') {
+        mediaRecorderRef.current.resume();
+        setRecordingStatus('recording');
+    }
+  };
+
   // --- Recorder Handlers ---
   const handleSetIsRecordingEnabled = (enabled: boolean) => {
     setIsRecordingEnabled(enabled);
     if (!enabled) {
         setRecordingStatus('idle'); // Also reset status when disabled
     }
-  };
-
-  const handleSetRecordingStatus = (status: RecordingStatus) => {
-    setRecordingStatus(status);
   };
 
   // --- Notification Handlers ---
@@ -1047,6 +1218,36 @@ const App: React.FC = () => {
 
   const unreadActivities = useMemo(() => activities.filter(a => !a.isRead), [activities]);
 
+  const renderUploadStatus = () => {
+    if (uploadStatus === 'idle') return null;
+
+    let icon, bgColor, textColor;
+    switch (uploadStatus) {
+        case 'uploading':
+            icon = <Spinner />;
+            bgColor = 'bg-blue-500';
+            textColor = 'text-white';
+            break;
+        case 'success':
+            icon = <CheckCircleIcon className="h-6 w-6" />;
+            bgColor = 'bg-green-500';
+            textColor = 'text-white';
+            break;
+        case 'error':
+            icon = <XCircleIcon className="h-6 w-6" />;
+            bgColor = 'bg-red-500';
+            textColor = 'text-white';
+            break;
+    }
+
+    return (
+        <div className={`flex items-center gap-3 p-3 rounded-lg shadow-lg ${bgColor} ${textColor}`}>
+            {icon}
+            <span className="text-sm font-medium">{uploadMessage}</span>
+        </div>
+    );
+  };
+
   if (isDoomMode) {
     return <DoomPlayer onExit={handleDoomExit} />;
   }
@@ -1171,7 +1372,9 @@ const App: React.FC = () => {
         isRecordingEnabled={isRecordingEnabled}
         recordingStatus={recordingStatus}
         onSetIsRecordingEnabled={handleSetIsRecordingEnabled}
-        onSetRecordingStatus={handleSetRecordingStatus}
+        onStartRecording={startRecording}
+        onTogglePauseResume={togglePauseResume}
+        onStopRecording={stopRecording}
       />
       <div className={`flex-1 flex flex-col transition-all duration-300 ml-64 overflow-x-hidden`}>
         <Header 
@@ -1192,6 +1395,13 @@ const App: React.FC = () => {
           </div>
         </main>
       </div>
+      
+      {uploadStatus !== 'idle' && (
+        <div className="fixed bottom-24 right-6 z-50 animate-fade-in">
+            {renderUploadStatus()}
+        </div>
+      )}
+
       {isLinkModalOpen && (
         <LinkModal 
           onClose={handleCloseLinkModal} 
