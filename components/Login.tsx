@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import Spinner from './Spinner';
 import { InformationCircleIcon } from './Icons';
-import LoginRecorder from './LoginRecorder';
 
 interface LoginViewProps {
   onLogin: (email: string, password:string) => void;
@@ -81,8 +80,8 @@ const LoginView: React.FC<LoginViewProps> = ({ onLogin, isLoading, error }) => {
             </button>
           </div>
         </form>
+
       </div>
-      <LoginRecorder />
     </div>
   );
 };

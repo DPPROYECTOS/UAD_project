@@ -1,12 +1,8 @@
-
 import React from 'react';
 
 interface StatCardProps {
     title: string;
     value: string;
-    // FIX: Changed icon prop type to `React.ReactElement<{ className?: string }>`
-    // to ensure the passed element accepts a className prop for styling, resolving
-    // the React.cloneElement type error.
     icon: React.ReactElement<{ className?: string }>;
     color: 'blue' | 'yellow' | 'green' | 'red';
 }

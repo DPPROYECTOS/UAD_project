@@ -1,5 +1,5 @@
 import React from 'react';
-import { LinkItem } from '../types';
+import { LinkItem, UserPermissions } from '../types';
 import { PlusIcon, TrashIcon, ExternalLinkIcon, PencilAltIcon, LinkIcon as PageIcon } from '../components/Icons';
 import Spinner from '../components/Spinner';
 
@@ -9,10 +9,14 @@ interface LinksViewProps {
   onOpenLinkModal: () => void;
   onOpenEditLinkModal: (link: LinkItem) => void;
   onDeleteLink: (linkId: string) => void;
+  userPermissions: UserPermissions | null;
 }
 
-const LinksView: React.FC<LinksViewProps> = ({ links, isLoading, onOpenLinkModal, onOpenEditLinkModal, onDeleteLink }) => {
+const LinksView: React.FC<LinksViewProps> = ({ links, isLoading, onOpenLinkModal, onOpenEditLinkModal, onDeleteLink, userPermissions }) => {
   
+  const canCreateEdit = userPermissions?.enlaces?.canCreateEdit ?? false;
+  const canDelete = userPermissions?.enlaces?.canDelete ?? false;
+
   const renderContent = () => {
     if (isLoading) {
       return (
@@ -52,26 +56,31 @@ const LinksView: React.FC<LinksViewProps> = ({ links, isLoading, onOpenLinkModal
               >
                 <ExternalLinkIcon className="h-5 w-5" />
               </a>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation(); 
-                  onOpenEditLinkModal(link);
-                }}
-                title="Editar enlace"
-                className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-500"
-              >
-                <PencilAltIcon className="h-5 w-5" />
-              </button>
-              <button 
-                onClick={(e) => {
-                  e.stopPropagation(); 
-                  onDeleteLink(link.id);
-                }}
-                title="Eliminar enlace"
-                className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500"
-              >
-                <TrashIcon className="h-5 w-5" />
-              </button>
+              
+              {canCreateEdit && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation(); 
+                    onOpenEditLinkModal(link);
+                  }}
+                  title="Editar enlace"
+                  className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-500"
+                >
+                  <PencilAltIcon className="h-5 w-5" />
+                </button>
+              )}
+              {canDelete && (
+                <button 
+                  onClick={(e) => {
+                    e.stopPropagation(); 
+                    onDeleteLink(link.id);
+                  }}
+                  title="Eliminar enlace"
+                  className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500"
+                >
+                  <TrashIcon className="h-5 w-5" />
+                </button>
+              )}
             </div>
           </div>
         ))}
@@ -88,13 +97,15 @@ const LinksView: React.FC<LinksViewProps> = ({ links, isLoading, onOpenLinkModal
             Recursos y herramientas importantes para el equipo.
           </p>
         </div>
-        <button 
-          onClick={onOpenLinkModal}
-          className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary w-full sm:w-auto"
-        >
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Registrar Nuevo Link
-        </button>
+        {canCreateEdit && (
+          <button 
+            onClick={onOpenLinkModal}
+            className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary w-full sm:w-auto"
+          >
+            <PlusIcon className="h-5 w-5 mr-2" />
+            Registrar Nuevo Link
+          </button>
+        )}
       </div>
 
       {renderContent()}

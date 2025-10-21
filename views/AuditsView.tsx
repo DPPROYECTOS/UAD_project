@@ -1,10 +1,11 @@
 import React, { useState, useMemo } from 'react';
-import { AuditItem } from '../types';
+import { AuditItem, UserPermissions } from '../types';
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../components/Icons';
 
 interface AuditsViewProps {
   audits: AuditItem[];
   onOpenModal: (date: string, audit: AuditItem | null) => void;
+  userPermissions: UserPermissions | null;
 }
 
 // --- Holiday Helper Functions ---
@@ -112,8 +113,10 @@ const generateOccurrences = (
 };
 
 
-const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal }) => {
+const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal, userPermissions }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
+
+  const canManage = userPermissions?.auditorias?.canManage ?? false;
 
   const firstDayOfMonth = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), [currentDate]);
   
@@ -184,13 +187,15 @@ const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal }) => {
             Programa, visualiza y gestiona todas tus auditorías.
           </p>
         </div>
-        <button 
-          onClick={() => onOpenModal(toYMDString(new Date()), null)}
-          className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary w-full sm:w-auto"
-        >
-          <PlusIcon className="h-5 w-5 mr-2" />
-          Nueva Auditoría
-        </button>
+        {canManage && (
+            <button 
+                onClick={() => onOpenModal(toYMDString(new Date()), null)}
+                className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary w-full sm:w-auto"
+            >
+                <PlusIcon className="h-5 w-5 mr-2" />
+                Nueva Auditoría
+            </button>
+        )}
       </div>
       
       <div className="bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border shadow-md p-4 sm:p-6">
@@ -234,11 +239,12 @@ const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal }) => {
             return (
               <div 
                 key={day.toISOString()} 
-                className={`relative p-2 min-h-[120px] flex flex-col cursor-pointer transition-colors hover:bg-light-bg dark:hover:bg-dark-bg 
+                className={`relative p-2 min-h-[120px] flex flex-col transition-colors 
+                  ${canManage ? 'cursor-pointer hover:bg-light-bg dark:hover:bg-dark-bg' : 'cursor-default'}
                   ${isCurrentMonth ? 'bg-light-card dark:bg-dark-card' : 'bg-light-bg/50 dark:bg-dark-bg/20'}
                   ${isWeekend ? 'weekend-cell' : ''} 
                   ${isHoliday ? 'holiday-cell' : ''}`}
-                onClick={() => onOpenModal(dayString, null)}
+                onClick={() => canManage && onOpenModal(dayString, null)}
               >
                 <div className={`flex items-center justify-center h-7 w-7 text-sm font-semibold rounded-full 
                   ${isToday ? 'bg-brand-primary text-white' : ''}
@@ -255,10 +261,13 @@ const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal }) => {
                                 e.stopPropagation();
                                 onOpenModal(dayString, audit);
                             }}
-                            className={`p-1.5 text-xs font-medium rounded-md text-white truncate cursor-pointer ${audit.color || 'bg-gray-500'}`}
+                            className={`p-1.5 text-xs font-medium rounded-md text-white cursor-pointer ${audit.color || 'bg-gray-500'}`}
                             title={audit.title}
                         >
-                            {audit.title}
+                            <div className="flex justify-between items-center">
+                                <span className="truncate flex-1">{audit.title}</span>
+                                {audit.timeOfAudit && <span className="ml-1 flex-shrink-0 opacity-80">{audit.timeOfAudit}</span>}
+                            </div>
                         </div>
                     ))}
                 </div>

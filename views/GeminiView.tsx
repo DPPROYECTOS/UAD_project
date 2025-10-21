@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GoogleGenAI, Chat, Type, Modality } from '@google/genai';
 import PptxGenJS from 'pptxgenjs';
-import { SparklesIcon, PhotographIcon, GlobeAltIcon, PresentationChartBarIcon, BrainIcon, ChatBubbleLeftRightIcon, DocumentDownloadIcon, XCircleIcon, InformationCircleIcon } from '../components/Icons';
+import { SparklesIcon, PhotographIcon, GlobeAltIcon, PresentationChartBarIcon, BrainIcon, ChatBubbleLeftRightIcon, DocumentDownloadIcon, XCircleIcon, InformationCircleIcon, UserCircleIcon } from '../components/Icons';
 import Spinner from '../components/Spinner';
+import { UserPermissions } from '../types';
 
 type ToolType = 'chat' | 'image' | 'search' | 'presentation' | 'training';
 
@@ -16,16 +17,14 @@ interface GeminiViewProps {
     geminiApiKey: string | null;
     isApiKeyLoading: boolean;
     apiKeyError: string | null;
+    userPermissions: UserPermissions | null;
 }
 
 const SendIcon: React.FC<{ className?: string }> = ({ className }) => (
   <svg className={className} fill="currentColor" viewBox="0 0 20 20"><path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path></svg>
 );
-const UserCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg className={className} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path></svg>
-);
 
-const GeminiView: React.FC<GeminiViewProps> = ({ geminiApiKey, isApiKeyLoading, apiKeyError }) => {
+const GeminiView: React.FC<GeminiViewProps> = ({ geminiApiKey, isApiKeyLoading, apiKeyError, userPermissions }) => {
   const [isFullMode, setIsFullMode] = useState(false);
   const [secretClickCount, setSecretClickCount] = useState(0);
   const [activeTool, setActiveTool] = useState<ToolType>('chat');
@@ -66,8 +65,10 @@ const GeminiView: React.FC<GeminiViewProps> = ({ geminiApiKey, isApiKeyLoading, 
   const presentationContainerRef = useRef<HTMLDivElement>(null);
   const trainingContainerRef = useRef<HTMLDivElement>(null);
 
+  const canUse = userPermissions?.gemini?.canUse ?? false;
+
   useEffect(() => {
-    if (!geminiApiKey) return;
+    if (!geminiApiKey || !canUse) return;
     setError(null);
     try {
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
@@ -80,7 +81,7 @@ const GeminiView: React.FC<GeminiViewProps> = ({ geminiApiKey, isApiKeyLoading, 
         console.error("Error initializing Gemini Chat:", err);
         setError(err instanceof Error ? err.message : "No se pudo inicializar el chat de IA.");
     }
-  }, [geminiApiKey]);
+  }, [geminiApiKey, canUse]);
 
   useEffect(() => { chatContainerRef.current?.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' }); }, [chatMessages, isChatSending]);
   useEffect(() => { imageContainerRef.current?.scrollTo({ top: imageContainerRef.current.scrollHeight, behavior: 'smooth' }); }, [imageMessages, isImageSending]);
@@ -518,6 +519,18 @@ const GeminiView: React.FC<GeminiViewProps> = ({ geminiApiKey, isApiKeyLoading, 
     );
   };
 
+
+  if (!canUse) {
+    return (
+      <div>
+        <h1 className="text-3xl font-bold">Asistente Gemini 2.5</h1>
+        <div className="mt-6 text-center p-8 bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border">
+            <h2 className="text-xl font-bold">Acceso Denegado</h2>
+            <p className="mt-2 text-light-text-secondary dark:text-dark-text-secondary">No tienes permiso para usar el asistente de IA. Contacta a un administrador.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>

@@ -9,6 +9,7 @@ interface ProjectTasksTabProps {
   onToggleTask: (id: string) => void;
   onUpdateTask: (task: ProjectTask) => void;
   onDeleteTask: (id: string) => void;
+  isEditor: boolean;
 }
 
 const addDays = (date: Date, days: number): Date => {
@@ -17,7 +18,7 @@ const addDays = (date: Date, days: number): Date => {
   return result;
 };
 
-const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAddTask, onToggleTask, onUpdateTask, onDeleteTask }) => {
+const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAddTask, onToggleTask, onUpdateTask, onDeleteTask, isEditor }) => {
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskStartDate, setNewTaskStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [newTaskDuration, setNewTaskDuration] = useState(1);
@@ -29,8 +30,7 @@ const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAdd
   const [addingSubtaskTo, setAddingSubtaskTo] = useState<string | null>(null);
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
   
-  const { taskTree, tasksById, childrenMap } = useMemo(() => {
-    const tasksById = new Map(tasks.map(t => [t.id, t]));
+  const { taskTree, childrenMap } = useMemo(() => {
     const childrenMap = new Map<string, ProjectTask[]>();
     tasks.forEach(t => {
         if (t.parentId) {
@@ -39,7 +39,7 @@ const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAdd
         }
     });
     const taskTree = tasks.filter(t => !t.parentId);
-    return { taskTree, tasksById, childrenMap };
+    return { taskTree, childrenMap };
   }, [tasks]);
 
   const validateTaskDates = (startDateStr: string, duration: number): boolean => {
@@ -140,7 +140,7 @@ const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAdd
     return (
       <div key={task.id} className={`bg-light-bg dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border ${level > 0 ? 'ml-6' : ''}`}>
         <div className="p-3 flex items-start justify-between">
-           {isEditing ? (
+           {isEditing && isEditor ? (
                <div className="flex-grow">
                    <input type="text" name="title" value={editingTaskData.title} onChange={handleEditDataChange} className="p-1 mb-2 w-full border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-bg rounded-md text-sm"/>
                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 text-sm">
@@ -163,7 +163,7 @@ const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAdd
            ) : (
                 <>
                 <div className="flex items-start flex-grow min-w-0">
-                    <input type="checkbox" checked={task.completed} onChange={() => onToggleTask(task.id)} className="h-5 w-5 mt-0.5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary cursor-pointer flex-shrink-0" />
+                    <input type="checkbox" checked={task.completed} onChange={() => onToggleTask(task.id)} disabled={!isEditor} className="h-5 w-5 mt-0.5 rounded border-gray-300 text-brand-primary focus:ring-brand-primary flex-shrink-0 disabled:cursor-not-allowed" />
                     <div className="ml-3 min-w-0">
                          <div className="flex items-center">
                             {taskChildren.length > 0 && <button onClick={() => toggleExpand(task.id)} className="mr-1 p-0.5 rounded-full hover:bg-gray-200 dark:hover:bg-dark-bg"><ChevronRightIcon className={`h-4 w-4 transition-transform ${isExpanded ? 'rotate-90' : ''}`} /></button>}
@@ -175,18 +175,20 @@ const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAdd
                         </div>
                     </div>
                 </div>
-                <div className="flex items-center flex-shrink-0 ml-4">
-                    <button onClick={() => handleAddSubtaskClick(task.id)} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-gray-200 dark:hover:bg-dark-bg" title="Añadir sub-tarea"><PlusIcon className="h-5 w-5"/></button>
-                    <button onClick={() => handleEditClick(task)} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-gray-200 dark:hover:bg-dark-bg" title="Editar"><PencilAltIcon className="h-5 w-5"/></button>
-                    <button onClick={() => onDeleteTask(task.id)} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:text-red-500 dark:hover:text-red-400" title="Eliminar"><TrashIcon className="h-5 w-5" /></button>
-                </div>
+                {isEditor && (
+                    <div className="flex items-center flex-shrink-0 ml-4">
+                        <button onClick={() => handleAddSubtaskClick(task.id)} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-gray-200 dark:hover:bg-dark-bg" title="Añadir sub-tarea"><PlusIcon className="h-5 w-5"/></button>
+                        <button onClick={() => handleEditClick(task)} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-gray-200 dark:hover:bg-dark-bg" title="Editar"><PencilAltIcon className="h-5 w-5"/></button>
+                        <button onClick={() => onDeleteTask(task.id)} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:text-red-500 dark:hover:text-red-400" title="Eliminar"><TrashIcon className="h-5 w-5" /></button>
+                    </div>
+                )}
                 </>
            )}
         </div>
-        {(isExpanded || isAddingSubtask) && (
+        {(isExpanded || (isAddingSubtask && isEditor)) && (
             <div className="pl-6 pt-2 pb-3 space-y-3">
                 {isExpanded && taskChildren.map(child => renderTask(child, level + 1))}
-                {isAddingSubtask && (
+                {isAddingSubtask && isEditor && (
                      <form onSubmit={(e) => handleAddTask(e, task.id)} className="p-3 bg-light-card dark:bg-dark-card rounded-lg border border-dashed border-brand-accent space-y-3">
                         <input type="text" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="Título de la sub-tarea..." autoFocus className="w-full p-2 border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg rounded-md text-sm"/>
                         <div className="flex items-center gap-2">
@@ -208,17 +210,19 @@ const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAdd
 
   return (
     <div className="space-y-4">
-      <form onSubmit={(e) => handleAddTask(e)} className="p-4 bg-light-bg dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border">
-        <div className="flex flex-col sm:flex-row items-center gap-3">
-            <input type="text" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="Añadir nueva tarea principal..." className="flex-grow w-full p-2 border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-bg rounded-md"/>
-            <div className="flex w-full sm:w-auto items-center gap-3">
-                 <input type="date" value={newTaskStartDate} onChange={(e) => setNewTaskStartDate(e.target.value)} className="p-2 w-full border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-bg rounded-md" aria-label="Fecha de inicio"/>
-                 <input type="number" value={newTaskDuration} onChange={(e) => setNewTaskDuration(parseInt(e.target.value, 10) || 1)} min="1" className="p-2 w-24 border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-bg rounded-md" aria-label="Duración en días"/>
-                <button type="submit" className="flex-shrink-0 p-2 rounded-md text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50" disabled={!newTaskTitle.trim() || newTaskDuration < 1}><PlusIcon className="h-5 w-5" /></button>
+      {isEditor && (
+        <form onSubmit={(e) => handleAddTask(e)} className="p-4 bg-light-bg dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border">
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+                <input type="text" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="Añadir nueva tarea principal..." className="flex-grow w-full p-2 border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-bg rounded-md"/>
+                <div className="flex w-full sm:w-auto items-center gap-3">
+                    <input type="date" value={newTaskStartDate} onChange={(e) => setNewTaskStartDate(e.target.value)} className="p-2 w-full border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-bg rounded-md" aria-label="Fecha de inicio"/>
+                    <input type="number" value={newTaskDuration} onChange={(e) => setNewTaskDuration(parseInt(e.target.value, 10) || 1)} min="1" className="p-2 w-24 border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-bg rounded-md" aria-label="Duración en días"/>
+                    <button type="submit" className="flex-shrink-0 p-2 rounded-md text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50" disabled={!newTaskTitle.trim() || newTaskDuration < 1}><PlusIcon className="h-5 w-5" /></button>
+                </div>
             </div>
-        </div>
-        {formError && !addingSubtaskTo && <div className="mt-3 flex items-center text-sm text-red-600 dark:text-red-400"><InformationCircleIcon className="h-5 w-5 mr-2"/><p>{formError}</p></div>}
-      </form>
+            {formError && !addingSubtaskTo && <div className="mt-3 flex items-center text-sm text-red-600 dark:text-red-400"><InformationCircleIcon className="h-5 w-5 mr-2"/><p>{formError}</p></div>}
+        </form>
+      )}
 
       <div className="space-y-3">
         {taskTree.length > 0 ? (

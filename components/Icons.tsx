@@ -445,26 +445,24 @@ export const BrainIcon: React.FC<{ className?: string }> = ({ className }) => (
     </Icon>
 );
 
+export const MicrophoneIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 013-3a3 3 0 013 3v8.25a3 3 0 01-3 3z" />
+    </Icon>
+);
+
+export const VideoCameraIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z" />
+    </Icon>
+);
+
 export const RecordIcon: React.FC<{ className?: string }> = ({ className }) => (
     <Icon className={className} fill="currentColor">
-        <circle cx="12" cy="12" r="8" />
+        <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25z" clipRule="evenodd" />
     </Icon>
- );
- 
- export const PlayIcon: React.FC<{ className?: string }> = ({ className }) => (
-     <Icon className={className} fill="currentColor">
-         <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
-     </Icon>
- );
- 
- export const PauseIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <Icon className={className} fill="currentColor">
-         <path d="M5.25 3.75A1.5 1.5 0 003.75 5.25v9.5A1.5 1.5 0 005.25 16.25h1.5A1.5 1.5 0 008.25 14.75v-9.5A1.5 1.5 0 006.75 3.75h-1.5zm6 0A1.5 1.5 0 0010.75 5.25v9.5A1.5 1.5 0 0012.25 16.25h1.5A1.5 1.5 0 0015.25 14.75v-9.5A1.5 1.5 0 0013.75 3.75h-1.5z" />
-    </Icon>
- );
- 
- export const StopIcon: React.FC<{ className?: string }> = ({ className }) => (
-     <Icon className={className} fill="currentColor">
-         <path d="M5.25 5.25A2.25 2.25 0 003 7.5v9A2.25 2.25 0 005.25 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0014.25 5.25h-9z" />
-     </Icon>
- );
+);
+
+export const UserCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <svg className={className} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path></svg>
+);

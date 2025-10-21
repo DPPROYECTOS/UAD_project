@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Project, ProjectStatus, ProjectTask } from '../../types';
+import { Project, ProjectStatus, ProjectTask, UserPermissions } from '../../types';
 import { PlusIcon, SearchIcon, FolderOpenIcon } from '../Icons';
 import ProjectModal from './ProjectModal';
 import StatusSelector from './StatusSelector';
@@ -14,9 +14,10 @@ interface ProjectsListViewProps {
   onUpdateProjectStatus: (projectId: string, status: ProjectStatus) => void;
   onError: (error: unknown, defaultMessage: string) => void;
   geminiApiKey: string | null;
+  userPermissions: UserPermissions | null;
 }
 
-const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, isLoading, onSelectProject, onSaveProject, onUpdateProjectStatus, onError, geminiApiKey }) => {
+const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, isLoading, onSelectProject, onSaveProject, onUpdateProjectStatus, onError, geminiApiKey, userPermissions }) => {
   const [isModalOpen, setModalOpen] = useState(false);
   const [projectToEdit, setProjectToEdit] = useState<Project | null>(null);
   const [statusFilter, setStatusFilter] = useState('Todos los Estados');
@@ -85,7 +86,7 @@ const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, is
                             <StatusSelector 
                                 currentStatus={project.status} 
                                 onUpdate={(newStatus) => onUpdateProjectStatus(project.id, newStatus)} 
-                                isInteractive={project.status === ProjectStatus.EN_REVISION}
+                                isInteractive={userPermissions?.proyectos.canEdit && project.status === ProjectStatus.EN_REVISION}
                             />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -111,7 +112,7 @@ const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, is
                              <StatusSelector 
                                 currentStatus={project.status} 
                                 onUpdate={(newStatus) => onUpdateProjectStatus(project.id, newStatus)}
-                                isInteractive={project.status === ProjectStatus.EN_REVISION}
+                                isInteractive={userPermissions?.proyectos.canEdit && project.status === ProjectStatus.EN_REVISION}
                             />
                         </div>
                     </div>
@@ -140,15 +141,17 @@ const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, is
             Gestiona todas tus iniciativas y mejoras.
           </p>
         </div>
-        <div className="flex w-full sm:w-auto">
-            <button 
-                onClick={handleOpenCreateModal}
-                className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary w-full"
-            >
-                <PlusIcon className="h-5 w-5 mr-2" />
-                Nuevo Proyecto
-            </button>
-        </div>
+        {userPermissions?.proyectos?.canCreate && (
+            <div className="flex w-full sm:w-auto">
+                <button 
+                    onClick={handleOpenCreateModal}
+                    className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary w-full"
+                >
+                    <PlusIcon className="h-5 w-5 mr-2" />
+                    Nuevo Proyecto
+                </button>
+            </div>
+        )}
       </div>
 
       <div className="mb-4 bg-light-card dark:bg-dark-card p-4 rounded-lg border border-light-border dark:border-dark-border flex flex-col sm:flex-row gap-4 items-end">
@@ -188,13 +191,15 @@ const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, is
          {renderContent()}
       </div>
 
-      <ProjectModal 
-        isOpen={isModalOpen} 
-        onClose={() => setModalOpen(false)} 
-        onSave={onSaveProject}
-        projectToEdit={projectToEdit}
-        geminiApiKey={geminiApiKey}
-      />
+      {isModalOpen && (
+        <ProjectModal 
+            isOpen={isModalOpen} 
+            onClose={() => setModalOpen(false)} 
+            onSave={onSaveProject}
+            projectToEdit={projectToEdit}
+            geminiApiKey={geminiApiKey}
+        />
+      )}
     </>
   );
 };

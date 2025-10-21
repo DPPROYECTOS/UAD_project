@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Project, ProjectTask, ProjectStatus, Document, Folder } from '../../types';
+import { Project, ProjectTask, ProjectStatus, Document, Folder, UserPermissions } from '../../types';
 import { ArrowLeftIcon, TrashIcon, PencilAltIcon } from '../Icons';
 import ConfirmationModal from './ConfirmationModal';
 import ProjectTasksTab from './ProjectTasksTab';
@@ -20,13 +20,14 @@ interface ProjectDetailViewProps {
   onDeleteTask: (id: string) => void;
   onAddDocument: (file: File, folderId: string, projectId: string | null) => Promise<void>;
   onDeleteDocument: (doc: Document) => Promise<void>;
+  userPermissions: UserPermissions | null;
 }
 
 const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
   const { 
       project, tasks, documents, folders, onBackToList, onDeleteProject, 
       onSaveProject, onAddTask, onToggleTask, onUpdateTask, onDeleteTask,
-      onAddDocument, onDeleteDocument
+      onAddDocument, onDeleteDocument, userPermissions
   } = props;
   const [activeTab, setActiveTab] = useState('Resumen');
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -69,6 +70,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
     setIsEditing(false);
   };
 
+  const canEditProject = userPermissions?.proyectos?.canEdit ?? false;
+  const canDeleteProject = userPermissions?.proyectos?.canDelete ?? false;
+  const canManageTasks = userPermissions?.proyectos?.canManageTasks ?? false;
+
 
   const renderActiveTabContent = () => {
     switch (activeTab) {
@@ -80,6 +85,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
                   onToggleTask={onToggleTask}
                   onUpdateTask={onUpdateTask}
                   onDeleteTask={onDeleteTask}
+                  isEditor={canManageTasks}
                 />;
       case 'Resumen':
         return (
@@ -88,7 +94,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
             <div className="space-y-4 bg-light-card dark:bg-dark-card p-6 rounded-lg border border-light-border dark:border-dark-border">
               <div className="flex justify-between items-center mb-2">
                   <h3 className="text-lg font-bold">Información del Proyecto</h3>
-                  {!isEditing && (
+                  {canEditProject && !isEditing && (
                       <button 
                           onClick={() => setIsEditing(true)}
                           className="flex items-center text-sm font-medium text-brand-primary hover:text-brand-secondary"
@@ -99,7 +105,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
                   )}
               </div>
 
-              {isEditing ? (
+              {isEditing && canEditProject ? (
                   <div className="space-y-4">
                       <div>
                           <label className="text-sm font-medium">Objetivo del Proyecto</label>
@@ -164,7 +170,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
                       </div>
                       <div>
                           <p className="text-xs font-semibold text-light-text-secondary dark:text-dark-text-secondary uppercase tracking-wider">Fechas</p>
-                          {/* FIX: Corrected typo from toLocaleDateDateString to toLocaleDateString. */}
                           <p className="font-medium">{new Date(project.startDate).toLocaleDateString()} - {project.endDate ? new Date(project.endDate).toLocaleDateString() : 'Sin definir'}</p>
                       </div>
                   </div>
@@ -188,6 +193,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
                         folders={folders} 
                         onAddDocument={onAddDocument} 
                         onDeleteDocument={onDeleteDocument}
+                        userPermissions={userPermissions}
                     />;
       case 'Gantt':
              return (
@@ -214,10 +220,12 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
             <h1 className="text-3xl font-bold">{project.name}</h1>
             <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1">{project.description}</p>
         </div>
-        <button onClick={() => setDeleteModalOpen(true)} className="flex items-center px-4 py-2 text-sm font-medium rounded-md text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20">
-            <TrashIcon className="h-5 w-5 mr-2" />
-            Eliminar
-        </button>
+        {canDeleteProject && (
+            <button onClick={() => setDeleteModalOpen(true)} className="flex items-center px-4 py-2 text-sm font-medium rounded-md text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20">
+                <TrashIcon className="h-5 w-5 mr-2" />
+                Eliminar
+            </button>
+        )}
       </div>
       
       <div className="border-b border-light-border dark:border-dark-border mb-6">

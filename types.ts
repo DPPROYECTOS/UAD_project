@@ -4,14 +4,13 @@ import { RealtimeChannel } from '@supabase/supabase-js';
 export interface User {
   id: string;
   username: string;
-  avatarUrl?: string;
-  avatarPath?: string;
+  avatarUrl?: string | null;
 }
 
 export interface DisplayUser {
   id: string;
   name: string;
-  avatarUrl: string;
+  avatarUrl?: string;
 }
 
 export interface ThemePreferences {
@@ -19,6 +18,41 @@ export interface ThemePreferences {
   user_id: string;
   theme_name: 'light' | 'dark' | 'custom';
   custom_theme_colors?: Record<string, string> | null;
+}
+
+export interface UserPermissions {
+  sidebar: { [key: string]: boolean };
+  proyectos: {
+    canCreate: boolean;
+    canEdit: boolean;
+    canDelete: boolean;
+    canManageTasks: boolean;
+  };
+  proyectos_documentos: {
+    canUpload: boolean;
+    canView: boolean;
+    canDownload: boolean;
+    canDelete: boolean;
+  };
+  documentos: {
+    canUpload: boolean;
+    canDownload: boolean;
+    canDelete: boolean;
+    canManageFolders: boolean;
+  };
+  enlaces: {
+    canCreateEdit: boolean;
+    canDelete: boolean;
+  };
+  auditorias: {
+    canManage: boolean;
+  };
+  pizarra: {
+    canEdit: boolean;
+  };
+  gemini: {
+    canUse: boolean;
+  };
 }
 
 
@@ -102,6 +136,7 @@ export interface AuditItem {
     id: string;
     title: string;
     date: string; // YYYY-MM-DD (start date for recurring events)
+    timeOfAudit?: string; // HH:MM
     color: string;
     recurrence: RecurrenceRule;
 }
@@ -118,6 +153,15 @@ export interface Activity {
   projectName?: string;
   isRead: boolean;
 }
+
+// --- UI Components ---
+export interface ToastNotification {
+    id: string;
+    title: string;
+    message: string;
+    type: 'info' | 'warning' | 'error' | 'success';
+}
+
 
 // --- Content (Generic, from AI) ---
 export enum ContentType {

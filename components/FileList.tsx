@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { UploadedFile } from '../types';
+// Fix: deleteFile is now used, getSignedFileUrl is available from the service.
 import { deleteFile, getSignedFileUrl, supabase } from '../services/supabaseService';
 import { DocumentTextIcon, TableIcon, DocumentDownloadIcon, TrashIcon, CollectionIcon, EyeIcon, InformationCircleIcon } from './Icons';
 import Spinner from './Spinner';
@@ -75,37 +76,12 @@ const FileList: React.FC<FileListProps> = ({ files, onFileDeleted, isLoading }) 
         setLoadingAction(`${fileToDelete.id}-delete`);
     
         try {
-            // Paso 1: Verificar explícitamente la sesión del usuario primero para evitar errores silenciosos.
-            const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-            if (sessionError) {
-                throw new Error(`Error de sesión: ${sessionError.message}`);
-            }
-            if (!session?.user) {
-                throw new Error('Sesión no válida o expirada. Por favor, inicie sesión de nuevo.');
-            }
-            const userId = session.user.id;
-    
-            // Paso 2: Realizar la eliminación con el ID de usuario verificado.
-            const filePath = `${userId}/${fileToDelete.name}`;
-            const { data, error: deleteError } = await supabase.storage
-                .from('user_files')
-                .remove([filePath]);
-    
-            if (deleteError) {
-                // Error explícito de la API de Supabase.
-                throw new Error(`Error de Supabase: ${deleteError.message}`);
-            }
-    
-            if (!data || data.length === 0) {
-                // Falla clásica "silenciosa" de RLS (la API no devuelve error, pero no borra nada).
-                throw new Error('Permiso denegado. No tienes autorización para eliminar este archivo.');
-            }
-    
-            // Paso 3: Si llegamos aquí, fue un éxito.
+            // Fix: Refactored to use the deleteFile service function.
+            await deleteFile(fileToDelete.name);
             onFileDeleted(fileToDelete.id);
     
         } catch (err) {
-            // Paso 4: Capturar CUALQUIER error de los pasos anteriores y mostrarlo.
+            // Step 4: Capturar CUALQUIER error de los pasos anteriores y mostrarlo.
             console.error("Fallo al eliminar el archivo:", err);
             const message = err instanceof Error ? err.message : 'Ocurrió un error inesperado.';
             setActionError({ fileId: fileToDelete.id, message });

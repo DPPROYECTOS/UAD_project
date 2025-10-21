@@ -14,8 +14,9 @@ import NotificationsView from './views/NotificationsView';
 import GeminiView from './views/GeminiView';
 import AuditsView from './views/AuditsView';
 import AuditModal from './components/AuditModal';
-import WhiteboardView from './views/WhiteboardView'; // Import the new WhiteboardView
-import { User, Project, ProjectTask, ProjectStatus, Activity, Folder, Document, DisplayUser, LinkItem, AuditItem, RecurrenceRule, ThemePreferences } from './types';
+import WhiteboardView from './views/WhiteboardView';
+import AdminView from './views/AdminView';
+import { User, Project, ProjectTask, ProjectStatus, Activity, Folder, Document, LinkItem, AuditItem, RecurrenceRule, ToastNotification, UserPermissions } from './types';
 import { 
   signIn, 
   signOut, 
@@ -42,20 +43,17 @@ import {
   addAudit,
   updateAudit,
   deleteAudit,
-  getAvatarBlobUrl,
   updateAvatar,
-  getNotifications,
-  addNotification,
   getUserThemePreferences,
   upsertUserThemePreferences,
-  markNotificationReadStatus,
-  markAllNotificationsAsRead,
-  subscribeToNotifications,
   getGeminiApiKey,
+  getUserPermissions,
 } from './services/supabaseService';
 import Spinner from './components/Spinner';
 import { DoomPlayer } from './components/DoomPlayer';
 import { CheckCircleIcon, XCircleIcon } from './components/Icons';
+import FloatingRecorder from './components/FloatingRecorder';
+import ToastContainer from './components/ToastContainer';
 
 declare const lamejs: any;
 
@@ -97,6 +95,68 @@ const convertWebMToMp3 = async (webmBlob: Blob): Promise<Blob> => {
   return new Blob(mp3Data, { type: 'audio/mpeg' });
 };
 
+// --- Audit Notification Helpers ---
+const toYMDString = (date: Date) => {
+  return date.toISOString().split('T')[0];
+};
+
+const generateOccurrences = (
+  audit: AuditItem,
+  viewStart: Date,
+  viewEnd: Date
+): { date: Date; audit: AuditItem }[] => {
+  const results: { date: Date; audit: AuditItem }[] = [];
+  const startDate = new Date(audit.date + 'T00:00:00Z');
+
+  if (audit.recurrence.type === 'none') {
+    if (startDate >= viewStart && startDate <= viewEnd) {
+      results.push({ date: startDate, audit });
+    }
+    return results;
+  }
+
+  let current = new Date(startDate.getTime());
+
+  if (current < viewStart) {
+      const { type, interval = 1, unit = 'days' } = audit.recurrence;
+      if (type === 'weekly') {
+          const diffWeeks = Math.floor((viewStart.getTime() - current.getTime()) / (1000 * 60 * 60 * 24 * 7));
+          current.setUTCDate(current.getUTCDate() + Math.max(0, diffWeeks -1) * 7);
+      } else if (type === 'monthly') {
+           const diffMonths = (viewStart.getUTCFullYear() - current.getUTCFullYear()) * 12 + (viewStart.getUTCMonth() - current.getUTCMonth());
+           current.setUTCMonth(current.getUTCMonth() + Math.max(0, diffMonths -1));
+      }
+  }
+
+  while (current <= viewEnd) {
+    if (current >= viewStart) {
+      results.push({ date: current, audit });
+    }
+    
+    if (results.length > 50) break; 
+
+    const { type, interval = 1, unit = 'days' } = audit.recurrence;
+    let nextDate = new Date(current.getTime());
+    switch (type) {
+      case 'weekly': nextDate.setUTCDate(nextDate.getUTCDate() + 7); break;
+      case 'monthly': nextDate.setUTCMonth(nextDate.getUTCMonth() + 1); break;
+      case 'custom':
+        switch (unit) {
+          case 'days': nextDate.setUTCDate(nextDate.getUTCDate() + interval); break;
+          case 'weeks': nextDate.setUTCDate(nextDate.getUTCDate() + interval * 7); break;
+          case 'months': nextDate.setUTCMonth(nextDate.getUTCMonth() + interval); break;
+        }
+        break;
+      default: return results;
+    }
+    
+    if(nextDate.getTime() === current.getTime()) break;
+    current = nextDate;
+  }
+  return results;
+};
+
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -104,6 +164,9 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState('Dashboard');
+
+  // --- NEW: User Permissions State ---
+  const [userPermissions, setUserPermissions] = useState<UserPermissions | null>(null);
 
   // --- Gemini API Key State ---
   const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
@@ -145,11 +208,10 @@ const App: React.FC = () => {
   const [selectedAuditDate, setSelectedAuditDate] = useState<string | null>(null);
   const [auditToDelete, setAuditToDelete] = useState<AuditItem | null>(null);
 
-  // --- Notifications State ---
+  // --- Notifications State (Session Only) ---
   const [activities, setActivities] = useState<Activity[]>([]);
 
   // --- Recorder State (Centralized) ---
-  const [isRecordingEnabled, setIsRecordingEnabled] = useState(false);
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>('idle');
   const [recordingTime, setRecordingTime] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
@@ -158,6 +220,19 @@ const App: React.FC = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  
+  // --- Toast Notification State ---
+  const [toastNotifications, setToastNotifications] = useState<ToastNotification[]>([]);
+
+  const addToast = (title: string, message: string, type: ToastNotification['type'] = 'warning') => {
+      const id = uuidv4();
+      setToastNotifications(prev => [...prev, { id, title, message, type }]);
+  };
+
+  const removeToast = (id: string) => {
+      setToastNotifications(prev => prev.filter(n => n.id !== id));
+  };
+
 
   // --- Easter Egg Handlers ---
   const handleSecretTrigger = () => {
@@ -173,16 +248,6 @@ const App: React.FC = () => {
   const handleDoomExit = () => {
     setIsDoomMode(false);
   };
-
-  // Effect to clean up blob URLs to prevent memory leaks
-  useEffect(() => {
-    let currentUrl = user?.avatarUrl;
-    return () => {
-        if (currentUrl && currentUrl.startsWith('blob:')) {
-            URL.revokeObjectURL(currentUrl);
-        }
-    };
-  }, [user?.avatarUrl]);
 
   // Effect to apply the current theme to the document
   useEffect(() => {
@@ -213,42 +278,20 @@ const App: React.FC = () => {
     
   }, [theme, customThemeColors]);
 
-  // Effect to manage auth state changes from Supabase
+  // --- NEW AUTHENTICATION & USER DETAILS FLOW ---
+
+  // Effect to set the basic user object as soon as auth state is known.
   useEffect(() => {
     setAuthLoading(true);
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
         const currentUser = session?.user;
-        
         if (currentUser) {
-            (async () => {
-                let avatarBlobUrl: string | undefined = undefined;
-                try {
-                    const [avatarPath, themePrefs] = await Promise.all([
-                        currentUser.user_metadata?.avatar_path,
-                        getUserThemePreferences()
-                    ]);
-                    
-                    if (avatarPath) {
-                        const blobUrl = await getAvatarBlobUrl(avatarPath);
-                        if (blobUrl) avatarBlobUrl = blobUrl;
-                    }
-                    if (themePrefs) {
-                        setTheme(themePrefs.theme_name);
-                        if (themePrefs.theme_name === 'custom' && themePrefs.custom_theme_colors) {
-                            setCustomThemeColors(themePrefs.custom_theme_colors as Record<string, string>);
-                        }
-                    }
-                } catch (e) {
-                    console.error("Failed to fetch user data on auth change, proceeding without it.", e);
-                } finally {
-                    setUser({ 
-                        id: currentUser.id, 
-                        username: currentUser.email || 'Usuario',
-                        avatarUrl: avatarBlobUrl,
-                        avatarPath: currentUser.user_metadata?.avatar_path,
-                    });
+            setUser(prevUser => {
+                if (prevUser && prevUser.id === currentUser.id && prevUser.avatarUrl) {
+                    return { ...prevUser, id: currentUser.id, username: currentUser.email || 'Usuario' };
                 }
-            })();
+                return { id: currentUser.id, username: currentUser.email || 'Usuario', avatarUrl: null };
+            });
         } else {
             setUser(null);
             setAuthLoading(false); 
@@ -259,6 +302,50 @@ const App: React.FC = () => {
         subscription.unsubscribe();
     };
   }, []);
+
+  // Effect to fetch user-specific details (theme, avatar, permissions) after the user object is created.
+  useEffect(() => {
+    if (!user) return; 
+
+    const fetchUserDetails = async () => {
+        try {
+            const { data: { user: supabaseUser } } = await supabase.auth.getUser();
+            if (!supabaseUser) return;
+            
+            // Fetch permissions first as they might control other parts of the UI
+            const permissions = await getUserPermissions();
+            setUserPermissions(permissions);
+
+            // Fetch theme
+            const themePrefs = await getUserThemePreferences();
+            if (themePrefs) {
+                setTheme(themePrefs.theme_name);
+                if (themePrefs.theme_name === 'custom' && themePrefs.custom_theme_colors) {
+                    setCustomThemeColors(themePrefs.custom_theme_colors as Record<string, string>);
+                }
+            }
+            
+            // Fetch avatar
+            let finalAvatarUrl: string | null = null;
+            const avatarPath = supabaseUser.user_metadata?.avatar_path;
+            if (avatarPath) {
+                const { data } = supabase.storage.from('user_files').getPublicUrl(avatarPath);
+                finalAvatarUrl = data.publicUrl;
+            }
+            
+            setUser(currentUser => {
+                if (!currentUser || currentUser.id !== user.id) return currentUser;
+                return { ...currentUser, avatarUrl: finalAvatarUrl };
+            });
+        } catch (e) {
+            console.error("Failed to fetch user details (permissions/theme/avatar).", e);
+        }
+    };
+
+    fetchUserDetails();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]); // This effect runs when the user ID changes.
+
 
   // Effect to fetch data when a user logs in, or clear data on logout.
   useEffect(() => {
@@ -273,7 +360,6 @@ const App: React.FC = () => {
                   fetchDocuments(),
                   fetchLinks(),
                   fetchAudits(),
-                  fetchNotifications(),
               ]);
             } catch (err) {
               console.error("Failed to fetch primary data", err);
@@ -310,44 +396,10 @@ const App: React.FC = () => {
         setActiveView('Dashboard');
         setGeminiApiKey(null);
         setApiKeyError(null);
+        setUserPermissions(null); // Clear permissions on logout
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]); // This effect runs whenever the user object changes.
-
-  // Effect for real-time notifications
-  useEffect(() => {
-    if (!user) return;
-
-    const handleNewNotification = async (notification: Activity) => {
-        // Don't show a notification for an action the current user just took.
-        // The `addActivity` function which triggers notifications already refreshes the list via `fetchNotifications`,
-        // so this real-time handler would cause a duplicate.
-        if (notification.user.id === user.id) {
-            return;
-        }
-
-        let avatarBlobUrl = '';
-        if (notification.user.avatarUrl) { // This is the path from the payload
-            avatarBlobUrl = await getAvatarBlobUrl(notification.user.avatarUrl) || '';
-        }
-
-        const notificationWithAvatar: Activity = {
-            ...notification,
-            user: {
-                ...notification.user,
-                avatarUrl: avatarBlobUrl,
-            },
-        };
-
-        // Add to the top of the list
-        setActivities(prev => [notificationWithAvatar, ...prev]);
-    };
-
-    const channel = subscribeToNotifications(handleNewNotification);
-
-    return () => {
-        supabase.removeChannel(channel);
-    };
-  }, [user]);
   
   // This effect synchronizes project status based on task progress and start date.
   useEffect(() => {
@@ -418,6 +470,76 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tasks, projects]);
 
+  // --- NEW: Effect for audit notifications ---
+  useEffect(() => {
+    if (!user || audits.length === 0) {
+        return;
+    }
+
+    const checkUpcomingAudits = () => {
+        const now = new Date();
+        const notificationIntervals = [
+            { minutes: 15, id: '15m' },
+            { minutes: 30, id: '30m' },
+            { minutes: 60, id: '1h' },
+            { minutes: 24 * 60, id: '1d' },
+        ];
+        
+        const viewStart = now;
+        const viewEnd = new Date(now.getTime() + (25 * 60 * 60 * 1000));
+
+        audits.forEach(audit => {
+            const occurrences = generateOccurrences(audit, viewStart, viewEnd);
+
+            occurrences.forEach(({ date: occurrenceDate, audit: a }) => {
+                // Combine date with time for precise calculation
+                const occurrenceDateTime = new Date(`${toYMDString(occurrenceDate)}T${a.timeOfAudit || '00:00:00'}`);
+
+                const diffMinutes = (occurrenceDateTime.getTime() - now.getTime()) / (1000 * 60);
+
+                notificationIntervals.forEach(interval => {
+                    if (diffMinutes > interval.minutes - 1 && diffMinutes <= interval.minutes) {
+                        if (interval.id === '1d') {
+                            const occurrenceDay = occurrenceDateTime.getUTCDay();
+                            if (occurrenceDay === 0 || occurrenceDay === 6) { // 0=Sun, 6=Sat
+                                return;
+                            }
+                        }
+
+                        const notificationId = `audit_notification_${a.id}_${occurrenceDateTime.toISOString()}_${interval.id}`;
+                        if (!localStorage.getItem(notificationId)) {
+                            const timeText = interval.id === '1d' ? 'mañana' : `en ${interval.minutes} minutos`;
+                            
+                            if (interval.id === '1d') {
+                                addActivity(
+                                    `comienza ${timeText}`,
+                                    `La auditoría "${a.title}"`,
+                                    'high'
+                                );
+                            } else {
+                                addToast(
+                                    `Recordatorio de Auditoría`,
+                                    `"${a.title}" comienza ${timeText}.`,
+                                    'info'
+                                );
+                            }
+                            localStorage.setItem(notificationId, 'true');
+                        }
+                    }
+                });
+            });
+        });
+    };
+    
+    checkUpcomingAudits();
+    const intervalId = setInterval(checkUpcomingAudits, 60 * 1000);
+
+    return () => {
+        clearInterval(intervalId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, audits]);
+  
   // --- Start of Recorder Effects ---
   // Effect to manage recording timer
   useEffect(() => {
@@ -448,13 +570,6 @@ const App: React.FC = () => {
 
     setRecordingStatus('idle');
   };
-
-  useEffect(() => {
-    if (!isRecordingEnabled && (recordingStatus !== 'idle' || mediaRecorderRef.current)) {
-        stopRecording();
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRecordingEnabled]);
 
   useEffect(() => {
     if (uploadStatus === 'success' || uploadStatus === 'error') {
@@ -549,36 +664,6 @@ const App: React.FC = () => {
     }
   };
   
-  const fetchNotifications = async () => {
-    try {
-        const notificationsFromDb = await getNotifications();
-        
-        const avatarUrlMap = new Map<string, string>();
-        const uniqueAvatarPaths = [...new Set(notificationsFromDb.map(n => n.user.avatarUrl).filter(Boolean))];
-
-        await Promise.all(uniqueAvatarPaths.map(async (path) => {
-            if (path && !avatarUrlMap.has(path)) {
-              const blobUrl = await getAvatarBlobUrl(path);
-              if (blobUrl) {
-                  avatarUrlMap.set(path, blobUrl);
-              }
-            }
-        }));
-
-        const notificationsWithAvatars = notificationsFromDb.map(n => ({
-            ...n,
-            user: {
-                ...n.user,
-                avatarUrl: avatarUrlMap.get(n.user.avatarUrl) || '',
-            },
-        }));
-        
-        setActivities(notificationsWithAvatars);
-    } catch (err) {
-        handleDatabaseError(err, 'Failed to fetch notifications.');
-    }
-  };
-
 
   const handleDatabaseError = (err: unknown, defaultMessage: string) => {
     console.error("A database operation failed. Raw error object:", err);
@@ -586,25 +671,6 @@ const App: React.FC = () => {
     // ... (error handling logic remains the same)
     setError(finalMessage);
   }
-
-  const handleRefreshData = async () => {
-    setError(null);
-    try {
-      // The individual fetch functions will set their own loading states,
-      // which will be displayed in their respective views.
-      await Promise.all([
-        fetchProjects(),
-        fetchTasks(),
-        fetchFolders(),
-        fetchDocuments(),
-        fetchLinks(),
-        fetchAudits(),
-        fetchNotifications(),
-      ]);
-    } catch (err) {
-      handleDatabaseError(err, 'Ocurrió un error al refrescar los datos.');
-    }
-  };
 
   // --- Theme Handler ---
   const handleThemeChange = async (newTheme: string, customColors?: Record<string, string> | null) => {
@@ -657,10 +723,20 @@ const App: React.FC = () => {
       const now = new Date();
       const date = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
       const time = `${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}-${now.getSeconds().toString().padStart(2, '0')}`;
-      const recordingNumber = Date.now();
-      const fileName = `GrabacionPMC_${recordingNumber}_${date}_${time}.mp3`;
+      
+      const uploadUrl = user
+        ? 'https://script.google.com/macros/s/AKfycbzCdJDu6zoxwKVKNUNL_-Fj6rM6dc6C1o_gYIUjLwUULolGD8Y1Paq1VWf1S67XPYu2/exec' // Logged-in URL
+        : 'https://script.google.com/macros/s/AKfycbzvxhlawPZkPIFf7TeAn3I5l38u6y4tee1MEvtaMbsb8V_xcVLofePoc4Dh80pLgxFM/exec'; // Logged-out URL
 
-      const uploadUrl = 'https://script.google.com/macros/s/AKfycbzCdJDu6zoxwKVKNUNL_-Fj6rM6dc6C1o_gYIUjLwUULolGD8Y1Paq1VWf1S67XPYu2/exec';
+      let fileName = '';
+      if (user) {
+        const recordingNumber = Date.now();
+        fileName = `GrabacionPMC_${recordingNumber}_${date}_${time}.mp3`;
+      } else {
+        let counter = parseInt(localStorage.getItem('genericRecordingCounter') || '0', 10) + 1;
+        localStorage.setItem('genericRecordingCounter', String(counter));
+        fileName = `GrabacionGenerica_${counter}_${date}_${time}.mp3`;
+      }
 
       const response = await fetch(uploadUrl, {
         method: 'POST',
@@ -692,7 +768,6 @@ const App: React.FC = () => {
   };
 
   const startRecording = async () => {
-    if (recordingStatus !== 'idle') return;
     setUploadStatus('idle');
     setUploadMessage('');
     
@@ -725,14 +800,6 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Recorder Handlers ---
-  const handleSetIsRecordingEnabled = (enabled: boolean) => {
-    setIsRecordingEnabled(enabled);
-    if (!enabled) {
-        setRecordingStatus('idle'); // Also reset status when disabled
-    }
-  };
-
   // --- Notification Handlers ---
   const addActivity = async (
     action: string, 
@@ -742,54 +809,84 @@ const App: React.FC = () => {
   ) => {
     if (!user) return;
 
-    try {
-      const projectName = projectId ? projects.find(p => p.id === projectId)?.name : undefined;
-      
-      await addNotification(
+    // 1. Create notification for local state
+    const projectName = projectId ? projects.find(p => p.id === projectId)?.name : undefined;
+    
+    const getDisplayName = (username: string): string => {
+        const email = (username || '').toLowerCase();
+        if (email === 'darienperez695@gmail.com') return 'PHOBOS';
+        if (email === 'mejoraproyectos0@gmail.com') return 'Zerk Lucio';
+        return username.split('@')[0];
+    };
+
+    const newActivity: Activity = {
+        id: uuidv4(), // local unique ID
+        user: {
+            id: user.id,
+            name: getDisplayName(user.username),
+            avatarUrl: user.avatarUrl || undefined,
+        },
         action,
         target,
+        timestamp: new Date().toISOString(),
         importance,
         projectId,
-        projectName
-      );
+        projectName,
+        isRead: false,
+    };
 
-      // Re-fetch the entire notification list to ensure perfect consistency
-      // This solves potential race conditions and state mismatches.
-      await fetchNotifications();
-    } catch (err) {
-      handleDatabaseError(err, 'Failed to save activity.');
-    }
-  };
+    setActivities(prev => [newActivity, ...prev]);
 
-  const handleMarkActivityAsRead = async (activityId: string, read: boolean) => {
-    const originalActivities = activities;
-    // Optimistic update
-    setActivities(prev => 
-        prev.map(act => act.id === activityId ? { ...act, isRead: read } : act)
-    );
+    // 2. Upload to Google Drive as a text file
     try {
-        await markNotificationReadStatus(activityId, read);
-    } catch (err) {
-        handleDatabaseError(err, 'Failed to update notification status.');
-        // Revert on error
-        setActivities(originalActivities);
-    }
-  };
+        const content = `Timestamp: ${newActivity.timestamp}\nUser ID: ${newActivity.user.id}\nUser Name: ${newActivity.user.name}\nAction: ${newActivity.action}\nTarget: ${newActivity.target}\nImportance: ${newActivity.importance}\nProject ID: ${newActivity.projectId || 'N/A'}\nProject Name: ${newActivity.projectName || 'N/A'}`;
+        
+        const textBlob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        
+        const base64String = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(textBlob);
+            reader.onloadend = () => {
+                if (reader.result) {
+                    resolve((reader.result as string).split(',')[1]);
+                } else {
+                    reject(new Error("Failed to read blob as Base64."));
+                }
+            };
+            reader.onerror = (error) => reject(error);
+        });
+        
+        const now = new Date();
+        const date = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+        const time = `${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}-${now.getSeconds().toString().padStart(2, '0')}`;
+        const fileName = `Notificacion_${date}_${time}.txt`;
 
-  const handleMarkAllAsRead = async () => {
-    const originalActivities = activities;
-    const unreadIds = activities.filter(a => !a.isRead).map(a => a.id);
-    if (unreadIds.length === 0) return;
+        const uploadUrl = 'https://script.google.com/macros/s/AKfycbzCdJDu6zoxwKVKNUNL_-Fj6rM6dc6C1o_gYIUjLwUULolGD8Y1Paq1VWf1S67XPYu2/exec';
+        
+        const response = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+                file: base64String,
+                fileName: fileName,
+                mimeType: 'text/plain'
+            })
+        });
 
-    // Optimistic update
-    setActivities(prev => prev.map(act => ({ ...act, isRead: true })));
-    
-    try {
-        await markAllNotificationsAsRead(unreadIds);
+        if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
+
+        const result = await response.json();
+        if (result.status !== 'success') {
+            throw new Error(result.error || 'Error desconocido en el servidor durante la subida.');
+        }
+        
     } catch (err) {
-        handleDatabaseError(err, 'Failed to mark all notifications as read.');
-        // Revert on error
-        setActivities(originalActivities);
+        console.error("Failed to upload notification:", err);
+        addToast(
+            'Error de Sincronización',
+            'No se pudo guardar la notificación en Drive. Será visible solo en esta sesión.',
+            'error'
+        );
     }
   };
 
@@ -1095,7 +1192,7 @@ const App: React.FC = () => {
     setSelectedAuditDate(null);
   };
 
-  const handleSaveAudit = async (auditData: { title: string; color: string; recurrence: RecurrenceRule }) => {
+  const handleSaveAudit = async (auditData: { title: string; color: string; recurrence: RecurrenceRule; timeOfAudit: string }) => {
     try {
         setError(null);
         if (editingAudit) {
@@ -1105,6 +1202,7 @@ const App: React.FC = () => {
               title: auditData.title,
               color: auditData.color,
               recurrence: auditData.recurrence,
+              timeOfAudit: auditData.timeOfAudit,
           };
           const savedAudit = await updateAudit(updatedAuditData);
           setAudits(audits.map(a => a.id === savedAudit.id ? savedAudit : a));
@@ -1116,13 +1214,14 @@ const App: React.FC = () => {
             title: auditData.title,
             color: auditData.color,
             recurrence: auditData.recurrence,
+            timeOfAudit: auditData.timeOfAudit,
           };
           const savedAudit = await addAudit(newAuditData);
           setAudits(prev => [savedAudit, ...prev]);
           await addActivity('programó una nueva auditoría', `"${savedAudit.title}"`, 'medium');
         }
     } catch (err) {
-      handleDatabaseError(err, 'Failed to save audit.');
+        handleDatabaseError(err, 'Failed to save audit.');
     } finally {
         handleCloseAuditModal();
     }
@@ -1151,8 +1250,7 @@ const App: React.FC = () => {
     }
   };
 
-
-  // --- Navigation ---
+ // --- Navigation ---
   const handleSelectProject = (project: Project) => {
     setSelectedProject(project);
   };
@@ -1192,15 +1290,14 @@ const App: React.FC = () => {
   const handleUpdateAvatar = async (file: File) => {
     if (!user) return;
     
-    if (user.avatarUrl && user.avatarUrl.startsWith('blob:')) {
-        URL.revokeObjectURL(user.avatarUrl);
-    }
-
     setIsAvatarLoading(true);
     setError(null);
     try {
-      const newAvatarBlobUrl = await updateAvatar(file);
-      setUser(prevUser => prevUser ? { ...prevUser, avatarUrl: newAvatarBlobUrl } : null);
+      const newAvatarUrl = await updateAvatar(file);
+      setUser(prevUser => {
+        if (!prevUser) return null;
+        return { ...prevUser, avatarUrl: newAvatarUrl };
+      });
       await addActivity('actualizó su foto de perfil', '', 'low');
     } catch (err) {
       handleDatabaseError(err, 'No se pudo actualizar la foto de perfil.');
@@ -1212,40 +1309,6 @@ const App: React.FC = () => {
   const changeView = (view: string) => {
     setSelectedProject(null);
     setActiveView(view);
-    // Trigger a full data refresh every time the main view changes.
-    handleRefreshData();
-  };
-
-  const unreadActivities = useMemo(() => activities.filter(a => !a.isRead), [activities]);
-
-  const renderUploadStatus = () => {
-    if (uploadStatus === 'idle') return null;
-
-    let icon, bgColor, textColor;
-    switch (uploadStatus) {
-        case 'uploading':
-            icon = <Spinner />;
-            bgColor = 'bg-blue-500';
-            textColor = 'text-white';
-            break;
-        case 'success':
-            icon = <CheckCircleIcon className="h-6 w-6" />;
-            bgColor = 'bg-green-500';
-            textColor = 'text-white';
-            break;
-        case 'error':
-            icon = <XCircleIcon className="h-6 w-6" />;
-            bgColor = 'bg-red-500';
-            textColor = 'text-white';
-            break;
-    }
-
-    return (
-        <div className={`flex items-center gap-3 p-3 rounded-lg shadow-lg ${bgColor} ${textColor}`}>
-            {icon}
-            <span className="text-sm font-medium">{uploadMessage}</span>
-        </div>
-    );
   };
 
   if (isDoomMode) {
@@ -1262,7 +1325,20 @@ const App: React.FC = () => {
   }
 
   if (!user) {
-    return <LoginView onLogin={handleLogin} isLoading={isLoading} error={error} />;
+    return (
+      <>
+        <LoginView onLogin={handleLogin} isLoading={isLoading} error={error} />
+        <FloatingRecorder 
+          recordingStatus={recordingStatus}
+          recordingTime={recordingTime}
+          uploadStatus={uploadStatus}
+          uploadMessage={uploadMessage}
+          onStartRecording={startRecording}
+          onTogglePauseResume={togglePauseResume}
+          onStopRecording={stopRecording}
+        />
+      </>
+    );
   }
   
   const renderActiveView = () => {
@@ -1292,13 +1368,14 @@ const App: React.FC = () => {
                     folders={folders}
                     onBackToList={handleBackToList}
                     onDeleteProject={handleDeleteProject}
+                    onSaveProject={handleSaveProject}
                     onAddTask={handleAddTask}
                     onToggleTask={handleToggleTask}
                     onUpdateTask={handleUpdateTask}
                     onDeleteTask={handleDeleteTask}
-                    onSaveProject={handleSaveProject}
                     onAddDocument={handleAddDocument}
                     onDeleteDocument={handleDeleteDocument}
+                    userPermissions={userPermissions}
                  /></>;
         }
         return <>{globalErrorDisplay}<ProjectsListView 
@@ -1310,6 +1387,7 @@ const App: React.FC = () => {
                   onUpdateProjectStatus={handleUpdateProjectStatus}
                   onError={handleDatabaseError}
                   geminiApiKey={geminiApiKey}
+                  userPermissions={userPermissions}
                 /></>;
       case 'Documentos':
         return <>{globalErrorDisplay}<DocumentsView 
@@ -1321,6 +1399,7 @@ const App: React.FC = () => {
                   onDeleteFolder={handleDeleteFolder}
                   onAddDocument={handleAddDocument}
                   onDeleteDocument={handleDeleteDocument}
+                  userPermissions={userPermissions}
                 /></>;
       case 'Enlaces':
         return <>{globalErrorDisplay}<LinksView 
@@ -1329,26 +1408,40 @@ const App: React.FC = () => {
                   onOpenLinkModal={handleOpenLinkModal}
                   onOpenEditLinkModal={handleOpenEditLinkModal}
                   onDeleteLink={handleDeleteLink}
+                  userPermissions={userPermissions}
                 /></>;
       case 'Auditorias':
           return <>{globalErrorDisplay}<AuditsView 
                     audits={audits}
                     onOpenModal={handleOpenAuditModal}
+                    userPermissions={userPermissions}
                  /></>;
       case 'Pizarra':
-        return <>{globalErrorDisplay}<WhiteboardView />;</>;
+        return <>{globalErrorDisplay}<WhiteboardView userPermissions={userPermissions} />;</>;
       case 'Gemini 2.5':
         return <>{globalErrorDisplay}<GeminiView 
                   geminiApiKey={geminiApiKey}
                   isApiKeyLoading={isApiKeyLoading}
                   apiKeyError={apiKeyError}
+                  userPermissions={userPermissions}
                 /></>;
       case 'Notificaciones':
         return <>{globalErrorDisplay}<NotificationsView 
                   notifications={activities} 
                   onNavigate={changeView} 
-                  onMarkAsRead={handleMarkActivityAsRead}
                 /></>;
+      case 'Administrador':
+        if (user?.username !== 'darienperez695@gmail.com') {
+          // If a non-admin somehow gets here, redirect to dashboard.
+          return <>{globalErrorDisplay}<DashboardView 
+                      projects={projects}
+                      audits={audits}
+                      activities={activities.slice(0, 5)}
+                      tasks={tasks}
+                      onSelectProject={handleSelectProjectById}
+                  /></>;
+        }
+        return <>{globalErrorDisplay}<AdminView /> </>;
       default:
         return <>{globalErrorDisplay}<DashboardView 
                     projects={projects}
@@ -1362,6 +1455,7 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text font-sans">
+      <ToastContainer notifications={toastNotifications} onDismiss={removeToast} />
       <Sidebar 
         isOpen={true} 
         activeView={activeView}
@@ -1369,25 +1463,27 @@ const App: React.FC = () => {
         currentTheme={theme}
         onThemeChange={handleThemeChange}
         onSecretTrigger={handleSecretTrigger}
-        isRecordingEnabled={isRecordingEnabled}
         recordingStatus={recordingStatus}
-        onSetIsRecordingEnabled={handleSetIsRecordingEnabled}
+        recordingTime={recordingTime}
+        uploadStatus={uploadStatus}
+        uploadMessage={uploadMessage}
         onStartRecording={startRecording}
         onTogglePauseResume={togglePauseResume}
         onStopRecording={stopRecording}
+        user={user}
+        userPermissions={userPermissions}
       />
       <div className={`flex-1 flex flex-col transition-all duration-300 ml-64 overflow-x-hidden`}>
         <Header 
-          user={user}
-          onLogout={handleLogout}
-          notifications={unreadActivities}
-          onNavigate={changeView}
+          user={user!}
           onUpdateAvatar={handleUpdateAvatar}
           isAvatarLoading={isAvatarLoading}
-          onMarkAsRead={(id) => handleMarkActivityAsRead(id, true)}
-          onMarkAllAsRead={handleMarkAllAsRead}
+          onLogout={handleLogout}
+          notifications={activities}
+          onNavigate={changeView}
           recordingStatus={recordingStatus}
           recordingTime={recordingTime}
+          isEditor={true}
         />
         <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
           <div className="animate-fade-in">
@@ -1395,12 +1491,6 @@ const App: React.FC = () => {
           </div>
         </main>
       </div>
-      
-      {uploadStatus !== 'idle' && (
-        <div className="fixed bottom-24 right-6 z-50 animate-fade-in">
-            {renderUploadStatus()}
-        </div>
-      )}
 
       {isLinkModalOpen && (
         <LinkModal 
@@ -1425,6 +1515,7 @@ const App: React.FC = () => {
             onClose={handleCloseAuditModal}
             onSave={handleSaveAudit}
             onDelete={handleDeleteAudit}
+            isReadOnly={!userPermissions?.auditorias.canManage}
         />
       )}
       {auditToDelete && (

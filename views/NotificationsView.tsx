@@ -5,7 +5,6 @@ import { BellIcon, CheckCircleIcon } from '../components/Icons';
 interface NotificationsViewProps {
   notifications: Activity[];
   onNavigate: (view: string) => void;
-  onMarkAsRead: (activityId: string, read: boolean) => void;
 }
 
 const timeAgo = (isoDate: string): string => {
@@ -42,10 +41,9 @@ const importanceBgClasses = {
 }
 
 
-const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, onNavigate, onMarkAsRead }) => {
+const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, onNavigate }) => {
   const [dateFilter, setDateFilter] = useState('all');
   const [importanceFilter, setImportanceFilter] = useState('all');
-  const [readFilter, setReadFilter] = useState('all');
 
 
   const filteredNotifications = useMemo(() => {
@@ -66,14 +64,9 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, on
       // Importance filter
       const importanceMatch = importanceFilter === 'all' || activity.importance === importanceFilter;
 
-      // Read status filter
-      const readMatch = readFilter === 'all' 
-        || (readFilter === 'read' && activity.isRead)
-        || (readFilter === 'unread' && !activity.isRead);
-
-      return dateMatch && importanceMatch && readMatch;
+      return dateMatch && importanceMatch;
     });
-  }, [notifications, dateFilter, importanceFilter, readFilter]);
+  }, [notifications, dateFilter, importanceFilter]);
 
   return (
     <div>
@@ -113,26 +106,13 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, on
             <option value="low">Baja</option>
           </select>
         </div>
-        <div className="flex-grow">
-          <label htmlFor="read-filter" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Filtrar por Estado</label>
-          <select 
-            id="read-filter" 
-            value={readFilter} 
-            onChange={e => setReadFilter(e.target.value)}
-            className="w-full px-4 py-2 rounded-lg border border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg focus:outline-none focus:ring-2 focus:ring-brand-accent"
-          >
-            <option value="all">Todas</option>
-            <option value="read">Leídas</option>
-            <option value="unread">No Leídas</option>
-          </select>
-        </div>
       </div>
 
       <div className="bg-light-card dark:bg-dark-card p-4 rounded-lg border border-light-border dark:border-dark-border">
         {filteredNotifications.length > 0 ? (
           <ul className="divide-y divide-light-border dark:divide-dark-border">
             {filteredNotifications.map(activity => (
-              <li key={activity.id} className={`py-4 flex items-center group transition-opacity ${activity.isRead ? 'opacity-60' : ''}`}>
+              <li key={activity.id} className="py-4 flex items-center group">
                 <div className="flex-shrink-0 mr-4">
                     {activity.user.avatarUrl ? (
                         <img
@@ -156,13 +136,6 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, on
                     {activity.projectName && <span className="font-semibold">{activity.projectName}</span>}
                   </div>
                 </div>
-                 <button 
-                    onClick={() => onMarkAsRead(activity.id, !activity.isRead)} 
-                    title={activity.isRead ? "Marcar como no leído" : "Marcar como leído"}
-                    className={`ml-4 flex-shrink-0 p-2 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all ${activity.isRead ? 'text-gray-500 hover:text-brand-primary' : 'text-brand-primary hover:text-gray-500'}`}
-                >
-                    <CheckCircleIcon className="h-6 w-6"/>
-                </button>
               </li>
             ))}
           </ul>

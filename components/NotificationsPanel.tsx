@@ -6,8 +6,6 @@ interface NotificationsPanelProps {
   notifications: Activity[]; // Should only be unread notifications
   onClose: () => void;
   onNavigate: () => void;
-  onMarkAsRead: (activityId: string) => void;
-  onMarkAllAsRead: () => void;
 }
 
 const timeAgo = (isoDate: string): string => {
@@ -32,17 +30,12 @@ const timeAgo = (isoDate: string): string => {
 }
 
 
-const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ notifications, onClose, onNavigate, onMarkAsRead, onMarkAllAsRead }) => {
+const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ notifications, onClose, onNavigate }) => {
 
   return (
     <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-light-card dark:bg-dark-card rounded-md shadow-lg border border-light-border dark:border-dark-border animate-fade-in z-50" style={{ animationDuration: '0.2s' }}>
       <div className="flex justify-between items-center p-3 border-b border-light-border dark:border-dark-border">
         <h3 className="font-semibold text-light-text dark:text-dark-text">Notificaciones Nuevas</h3>
-        {notifications.length > 0 && (
-          <button onClick={onMarkAllAsRead} className="text-xs font-medium text-brand-primary hover:underline">
-            Marcar todas como leídas
-          </button>
-        )}
       </div>
       <div className="max-h-96 overflow-y-auto">
         {notifications.length > 0 ? (
@@ -68,13 +61,6 @@ const NotificationsPanel: React.FC<NotificationsPanelProps> = ({ notifications, 
                   {timeAgo(activity.timestamp)}
                 </p>
               </div>
-              <button 
-                onClick={() => onMarkAsRead(activity.id)} 
-                title="Marcar como leído"
-                className="ml-2 flex-shrink-0 p-1 rounded-full opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity text-light-text-secondary hover:text-brand-primary"
-              >
-                  <CheckCircleIcon className="h-5 w-5"/>
-              </button>
             </div>
           ))
         ) : (

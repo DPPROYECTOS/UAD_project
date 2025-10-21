@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Project, Document, Folder } from '../types';
+import { Project, Document, Folder, UserPermissions } from '../types';
 import { FolderIcon, DocumentTextIcon, UploadIcon, TrashIcon, CollectionIcon, InformationCircleIcon, PlusIcon, EyeIcon, DocumentDownloadIcon, SearchIcon } from '../components/Icons';
 import Spinner from '../components/Spinner';
 import ConfirmationModal from '../components/projects/ConfirmationModal';
@@ -15,6 +15,7 @@ interface DocumentsViewProps {
   onDeleteFolder: (id: string) => Promise<void>;
   onAddDocument: (file: File, folderId: string, projectId: string | null) => Promise<void>;
   onDeleteDocument: (doc: Document) => Promise<void>;
+  userPermissions: UserPermissions | null;
 }
 
 const ChevronRightIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -80,7 +81,7 @@ const buildFolderTree = (folders: Folder[]): Folder[] => {
 };
 
 
-const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, documents, isLoading, onAddFolder, onDeleteFolder, onAddDocument, onDeleteDocument }) => {
+const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, documents, isLoading, onAddFolder, onDeleteFolder, onAddDocument, onDeleteDocument, userPermissions }) => {
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
@@ -97,6 +98,11 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [viewerFile, setViewerFile] = useState<{ url: string; name: string; mimeType: string; } | null>(null);
+
+  const canUpload = userPermissions?.documentos?.canUpload ?? false;
+  const canDownload = userPermissions?.documentos?.canDownload ?? false;
+  const canDelete = userPermissions?.documentos?.canDelete ?? false;
+  const canManageFolders = userPermissions?.documentos?.canManageFolders ?? false;
 
   const folderTree = useMemo(() => buildFolderTree(folders), [folders]);
   
@@ -292,18 +298,20 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
              <FolderIcon className={`h-5 w-5 mr-2 flex-shrink-0 ${hasChildren ? '' : 'ml-[20px]'}`} />
              <span className="truncate flex-1">{folder.name}</span>
            </button>
-           <div className="flex items-center">
-             <button onClick={() => setAddingToParentId(folder.id)} className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-light-text-secondary hover:text-brand-primary" title="Añadir sub-carpeta">
-                <PlusIcon className="h-4 w-4" />
-             </button>
-            {folder.name !== 'General' && (
-              <button onClick={() => setFolderToDelete(folder)} className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-light-text-secondary hover:text-red-500" title={`Eliminar ${folder.name}`}>
-                <TrashIcon className="h-4 w-4" />
+           {canManageFolders && (
+            <div className="flex items-center">
+              <button onClick={() => setAddingToParentId(folder.id)} className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-light-text-secondary hover:text-brand-primary" title="Añadir sub-carpeta">
+                  <PlusIcon className="h-4 w-4" />
               </button>
-            )}
-           </div>
+              {folder.name !== 'General' && (
+                <button onClick={() => setFolderToDelete(folder)} className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-light-text-secondary hover:text-red-500" title={`Eliminar ${folder.name}`}>
+                  <TrashIcon className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+           )}
         </div>
-        {addingToParentId === folder.id && (
+        {canManageFolders && addingToParentId === folder.id && (
            <form onSubmit={handleAddNewFolder} className="my-1" style={{ paddingLeft: `${(level + 1) * 1.5}rem` }}>
                <input
                  type="text"
@@ -356,9 +364,11 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
           <div className="p-4 bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border h-full flex flex-col">
             <div className="flex justify-between items-center mb-2">
                 <h2 className="font-semibold">Carpetas</h2>
-                <button onClick={() => setAddingToParentId(null)} className="p-1 rounded-full text-light-text-secondary hover:text-brand-primary" title="Añadir carpeta principal">
-                    <PlusIcon className="h-5 w-5" />
-                </button>
+                {canManageFolders && (
+                  <button onClick={() => setAddingToParentId(null)} className="p-1 rounded-full text-light-text-secondary hover:text-brand-primary" title="Añadir carpeta principal">
+                      <PlusIcon className="h-5 w-5" />
+                  </button>
+                )}
             </div>
             <nav className="space-y-1 flex-grow overflow-y-auto">
               {isLoading ? ( <div className="flex justify-center items-center h-full"><Spinner /></div> ) : 
@@ -366,7 +376,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
                     folderTree.map(folder => <FolderTreeItem key={folder.id} folder={folder} level={0} />)
                 )
               }
-               {addingToParentId === null && (
+               {canManageFolders && addingToParentId === null && (
                 <form onSubmit={handleAddNewFolder} className="mt-2">
                     <input
                         type="text"
@@ -386,48 +396,50 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
         {/* Main Content */}
         <main className="flex-1">
           <div className="p-4 bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border">
-             <form onSubmit={handleAddDocumentSubmit} className="p-4 bg-light-bg dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border mb-4 space-y-4">
-                <h3 className="text-lg font-semibold">Subir Nuevo Documento</h3>
-                {error && (
-                    <div className="bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center text-sm" role="alert">
-                        <InformationCircleIcon className="h-5 w-5 mr-3 flex-shrink-0" />
-                        <span>{error}</span>
-                        <button type="button" onClick={() => setError(null)} className="ml-auto text-lg font-bold">&times;</button>
-                    </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="project-select" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Asociar a Proyecto (Opcional)</label>
-                        <select
-                            id="project-select"
-                            value={selectedProjectId}
-                            onChange={e => setSelectedProjectId(e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                        >
-                            <option value="">General (Sin Proyecto)</option>
-                            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                        </select>
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Carpeta de Destino</label>
-                        <p className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-light-card/50 dark:bg-dark-card/50 truncate" title={currentFolderName}>{currentFolderName}</p>
-                    </div>
-                </div>
-                 <div>
-                    <label htmlFor="file-upload-input" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Archivo</label>
-                    <input
-                        id="file-upload-input"
-                        type="file"
-                        onChange={handleFileChange}
-                        className="w-full text-sm text-light-text-secondary dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-accent/20 file:text-brand-primary hover:file:bg-brand-accent/30"
-                    />
-                </div>
-                <div className="flex justify-end">
-                    <button type="submit" disabled={isUploading || !selectedFile || !selectedFolderId} className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50">
-                        {isUploading ? <><Spinner /> <span className="ml-2">Subiendo...</span></> : <><UploadIcon className="h-5 w-5 mr-2" /> Subir Documento</>}
-                    </button>
-                </div>
-            </form>
+             {canUpload && (
+              <form onSubmit={handleAddDocumentSubmit} className="p-4 bg-light-bg dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border mb-4 space-y-4">
+                  <h3 className="text-lg font-semibold">Subir Nuevo Documento</h3>
+                  {error && (
+                      <div className="bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center text-sm" role="alert">
+                          <InformationCircleIcon className="h-5 w-5 mr-3 flex-shrink-0" />
+                          <span>{error}</span>
+                          <button type="button" onClick={() => setError(null)} className="ml-auto text-lg font-bold">&times;</button>
+                      </div>
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                          <label htmlFor="project-select" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Asociar a Proyecto (Opcional)</label>
+                          <select
+                              id="project-select"
+                              value={selectedProjectId}
+                              onChange={e => setSelectedProjectId(e.target.value)}
+                              className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card focus:outline-none focus:ring-2 focus:ring-brand-accent"
+                          >
+                              <option value="">General (Sin Proyecto)</option>
+                              {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                          </select>
+                      </div>
+                      <div>
+                          <label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Carpeta de Destino</label>
+                          <p className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-light-card/50 dark:bg-dark-card/50 truncate" title={currentFolderName}>{currentFolderName}</p>
+                      </div>
+                  </div>
+                  <div>
+                      <label htmlFor="file-upload-input" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Archivo</label>
+                      <input
+                          id="file-upload-input"
+                          type="file"
+                          onChange={handleFileChange}
+                          className="w-full text-sm text-light-text-secondary dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-accent/20 file:text-brand-primary hover:file:bg-brand-accent/30"
+                      />
+                  </div>
+                  <div className="flex justify-end">
+                      <button type="submit" disabled={isUploading || !selectedFile || !selectedFolderId} className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50">
+                          {isUploading ? <><Spinner /> <span className="ml-2">Subiendo...</span></> : <><UploadIcon className="h-5 w-5 mr-2" /> Subir Documento</>}
+                      </button>
+                  </div>
+              </form>
+             )}
             
             <h2 className="text-xl font-bold mb-3">
               {isSearching ? `Resultados para "${searchQuery}"` : `Archivos en "${currentFolderName}"`}
@@ -450,12 +462,16 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({ projects, folders, docume
                         <button onClick={() => handleAction(doc, 'preview')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-500" title="Previsualizar">
                            {loadingAction === `${doc.id}-preview` ? <Spinner /> : <EyeIcon className="h-5 w-5" />}
                         </button>
-                        <button onClick={() => handleAction(doc, 'download')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-green-100 dark:hover:bg-green-900/50 hover:text-green-500" title="Descargar">
-                           {loadingAction === `${doc.id}-download` ? <Spinner /> : <DocumentDownloadIcon className="h-5 w-5" />}
-                        </button>
-                        <button onClick={() => setDocToDelete(doc)} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}>
-                           <TrashIcon className="h-5 w-5" />
-                        </button>
+                        {canDownload && (
+                          <button onClick={() => handleAction(doc, 'download')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-green-100 dark:hover:bg-green-900/50 hover:text-green-500" title="Descargar">
+                            {loadingAction === `${doc.id}-download` ? <Spinner /> : <DocumentDownloadIcon className="h-5 w-5" />}
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button onClick={() => setDocToDelete(doc)} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}>
+                            <TrashIcon className="h-5 w-5" />
+                          </button>
+                        )}
                     </div>
                   </li>
                 ))}

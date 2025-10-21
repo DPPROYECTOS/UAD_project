@@ -1,7 +1,4 @@
-
 import React from 'react';
-// FIX: Replaced 'Task' with 'OldTask as Task' and 'TaskStatus' with 'OldTaskStatus as TaskStatus'
-// to match the exported members from the types file.
 import { OldTask as Task, TaskPriority, OldTaskStatus as TaskStatus } from '../types';
 import { ClipboardListIcon } from './Icons';
 

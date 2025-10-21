@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Project, Document, Folder } from '../../types';
+import { Project, Document, Folder, UserPermissions } from '../../types';
 import { getSignedUrlForDocument } from '../../services/supabaseService';
 import { UploadIcon, TrashIcon, CollectionIcon, InformationCircleIcon, EyeIcon, DocumentDownloadIcon, DocumentTextIcon } from '../Icons';
 import Spinner from '../Spinner';
@@ -12,9 +12,10 @@ interface ProjectDocumentsTabProps {
   folders: Folder[];
   onAddDocument: (file: File, folderId: string, projectId: string | null) => Promise<void>;
   onDeleteDocument: (doc: Document) => Promise<void>;
+  userPermissions: UserPermissions | null;
 }
 
-const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, documents, folders, onAddDocument, onDeleteDocument }) => {
+const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, documents, folders, onAddDocument, onDeleteDocument, userPermissions }) => {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [selectedFolderId, setSelectedFolderId] = useState<string>('');
     const [isUploading, setIsUploading] = useState(false);
@@ -31,6 +32,11 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
             setSelectedFolderId(generalFolder.id);
         }
     }, [folders, selectedFolderId]);
+    
+    const canUpload = userPermissions?.proyectos_documentos?.canUpload ?? false;
+    const canView = userPermissions?.proyectos_documentos?.canView ?? false;
+    const canDownload = userPermissions?.proyectos_documentos?.canDownload ?? false;
+    const canDelete = userPermissions?.proyectos_documentos?.canDelete ?? false;
 
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -124,44 +130,46 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
 
     return (
         <div className="space-y-6">
-            <form onSubmit={handleUploadSubmit} className="p-4 bg-light-bg dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border space-y-4">
-                <h3 className="text-lg font-semibold">Subir Nuevo Documento</h3>
-                {error && (
-                    <div className="bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center text-sm" role="alert">
-                        <InformationCircleIcon className="h-5 w-5 mr-3 flex-shrink-0" />
-                        <span>{error}</span>
-                        <button type="button" onClick={() => setError(null)} className="ml-auto text-lg font-bold">&times;</button>
+            {canUpload && (
+                <form onSubmit={handleUploadSubmit} className="p-4 bg-light-bg dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border space-y-4">
+                    <h3 className="text-lg font-semibold">Subir Nuevo Documento</h3>
+                    {error && (
+                        <div className="bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center text-sm" role="alert">
+                            <InformationCircleIcon className="h-5 w-5 mr-3 flex-shrink-0" />
+                            <span>{error}</span>
+                            <button type="button" onClick={() => setError(null)} className="ml-auto text-lg font-bold">&times;</button>
+                        </div>
+                    )}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="folder-select" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Carpeta de Destino</label>
+                            <select
+                                id="folder-select"
+                                value={selectedFolderId}
+                                onChange={e => setSelectedFolderId(e.target.value)}
+                                className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card focus:outline-none focus:ring-2 focus:ring-brand-accent"
+                            >
+                                <option value="">Selecciona una carpeta</option>
+                                {folders.filter(f => !f.parentId).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label htmlFor="project-file-upload" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Archivo</label>
+                            <input
+                                id="project-file-upload"
+                                type="file"
+                                onChange={handleFileChange}
+                                className="w-full text-sm text-light-text-secondary dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-accent/20 file:text-brand-primary hover:file:bg-brand-accent/30"
+                            />
+                        </div>
                     </div>
-                )}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                     <div>
-                        <label htmlFor="folder-select" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Carpeta de Destino</label>
-                        <select
-                            id="folder-select"
-                            value={selectedFolderId}
-                            onChange={e => setSelectedFolderId(e.target.value)}
-                            className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card focus:outline-none focus:ring-2 focus:ring-brand-accent"
-                        >
-                            <option value="">Selecciona una carpeta</option>
-                            {folders.filter(f => !f.parentId).map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-                        </select>
+                    <div className="flex justify-end">
+                        <button type="submit" disabled={isUploading || !selectedFile || !selectedFolderId} className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50">
+                            {isUploading ? <><Spinner /> <span className="ml-2">Subiendo...</span></> : <><UploadIcon className="h-5 w-5 mr-2" /> Subir a '{project.name}'</>}
+                        </button>
                     </div>
-                    <div>
-                        <label htmlFor="project-file-upload" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Archivo</label>
-                        <input
-                            id="project-file-upload"
-                            type="file"
-                            onChange={handleFileChange}
-                            className="w-full text-sm text-light-text-secondary dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-accent/20 file:text-brand-primary hover:file:bg-brand-accent/30"
-                        />
-                    </div>
-                </div>
-                <div className="flex justify-end">
-                    <button type="submit" disabled={isUploading || !selectedFile || !selectedFolderId} className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50">
-                        {isUploading ? <><Spinner /> <span className="ml-2">Subiendo...</span></> : <><UploadIcon className="h-5 w-5 mr-2" /> Subir a '{project.name}'</>}
-                    </button>
-                </div>
-            </form>
+                </form>
+            )}
 
             <div className="bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border p-4">
                 <h2 className="text-xl font-bold mb-3">Archivos del Proyecto</h2>
@@ -177,15 +185,21 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
                                     </div>
                                 </div>
                                 <div className="flex items-center space-x-1 flex-shrink-0">
-                                    <button disabled={!!actionLoadingId} onClick={() => handlePreview(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-500" title="Previsualizar">
-                                        {actionLoadingId === doc.id ? <Spinner/> : <EyeIcon className="h-5 w-5" />}
-                                    </button>
-                                    <button disabled={!!actionLoadingId} onClick={() => handleDownload(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-green-100 dark:hover:bg-green-900/50 hover:text-green-500" title="Descargar">
-                                        {actionLoadingId === (doc.id + '-download') ? <Spinner/> : <DocumentDownloadIcon className="h-5 w-5" />}
-                                    </button>
-                                    <button disabled={!!actionLoadingId} onClick={() => setDocToDelete(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}>
-                                        <TrashIcon className="h-5 w-5" />
-                                    </button>
+                                    {canView && (
+                                        <button disabled={!!actionLoadingId} onClick={() => handlePreview(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-500" title="Previsualizar">
+                                            {actionLoadingId === doc.id ? <Spinner/> : <EyeIcon className="h-5 w-5" />}
+                                        </button>
+                                    )}
+                                    {canDownload && (
+                                        <button disabled={!!actionLoadingId} onClick={() => handleDownload(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-green-100 dark:hover:bg-green-900/50 hover:text-green-500" title="Descargar">
+                                            {actionLoadingId === (doc.id + '-download') ? <Spinner/> : <DocumentDownloadIcon className="h-5 w-5" />}
+                                        </button>
+                                    )}
+                                    {canDelete && (
+                                        <button disabled={!!actionLoadingId} onClick={() => setDocToDelete(doc)} className="p-2 rounded-full text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}>
+                                            <TrashIcon className="h-5 w-5" />
+                                        </button>
+                                    )}
                                 </div>
                             </li>
                         ))}

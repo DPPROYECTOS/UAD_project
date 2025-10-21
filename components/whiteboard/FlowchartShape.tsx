@@ -18,13 +18,14 @@ interface FlowchartShapeComponentProps {
   onAnchorMouseUp: (itemId: string, anchor: AnchorPosition, e: React.MouseEvent) => void;
   scale: number;
   setGuideLines: React.Dispatch<React.SetStateAction<any[]>>;
+  isReadOnly: boolean;
 }
 
 const ANCHORS: AnchorPosition[] = ['top', 'right', 'bottom', 'left'];
 
 const FlowchartShapeComponent: React.FC<FlowchartShapeComponentProps> = ({
   shape, allItems, onUpdateState, onPersist, onInteractionStart, isSelected, isEditing, onSetEditing,
-  isConnecting, connectionStartId, onAnchorMouseDown, onAnchorMouseUp, scale, setGuideLines
+  isConnecting, connectionStartId, onAnchorMouseDown, onAnchorMouseUp, scale, setGuideLines, isReadOnly
 }) => {
   const itemRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -37,7 +38,7 @@ const FlowchartShapeComponent: React.FC<FlowchartShapeComponentProps> = ({
   }, [isEditing]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (isEditing || e.button !== 0) return;
+    if (isReadOnly || isEditing || e.button !== 0) return;
     e.stopPropagation();
     onInteractionStart(shape.id);
 
@@ -181,6 +182,7 @@ const FlowchartShapeComponent: React.FC<FlowchartShapeComponentProps> = ({
   };
 
   const handleResizeMouseDown = (e: React.MouseEvent) => {
+    if (isReadOnly) return;
     e.stopPropagation();
     onInteractionStart(shape.id);
 
@@ -206,6 +208,7 @@ const FlowchartShapeComponent: React.FC<FlowchartShapeComponentProps> = ({
   };
   
   const handleRotateMouseDown = (e: React.MouseEvent) => {
+    if (isReadOnly) return;
     e.stopPropagation();
     onInteractionStart(shape.id);
 
@@ -325,9 +328,9 @@ const FlowchartShapeComponent: React.FC<FlowchartShapeComponentProps> = ({
         height: `${shape.height}px`,
         zIndex: shape.zIndex,
       }}
-      className={`absolute select-none group ${!isEditing ? 'cursor-move' : ''} ${isSelected ? 'outline-2 outline-dashed outline-brand-primary' : ''}`}
+      className={`absolute select-none group ${!isReadOnly && !isEditing ? 'cursor-move' : ''} ${isSelected ? 'outline-2 outline-dashed outline-brand-primary' : ''}`}
       onMouseDown={handleMouseDown}
-      onDoubleClick={() => onSetEditing(shape.id)}
+      onDoubleClick={() => !isReadOnly && onSetEditing(shape.id)}
     >
       <div className="w-full h-full relative">
         <svg className="w-full h-full absolute">{renderShape()}</svg>
@@ -358,7 +361,7 @@ const FlowchartShapeComponent: React.FC<FlowchartShapeComponentProps> = ({
         </div>
       </div>
 
-      {isConnecting && connectionStartId !== shape.id && ANCHORS.map(anchor => (
+      {isConnecting && connectionStartId !== shape.id && !isReadOnly && ANCHORS.map(anchor => (
         <div
           key={anchor}
           className="absolute w-3 h-3 bg-blue-500 rounded-full border-2 border-white cursor-pointer hover:scale-125 transition-transform"
@@ -371,7 +374,7 @@ const FlowchartShapeComponent: React.FC<FlowchartShapeComponentProps> = ({
         />
       ))}
 
-      {isSelected && !isConnecting && (
+      {isSelected && !isConnecting && !isReadOnly && (
         <>
           <div
             className="absolute -bottom-2 -right-2 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity"

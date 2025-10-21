@@ -18,13 +18,14 @@ interface TextItemComponentProps {
   onAnchorMouseUp: (itemId: string, anchor: AnchorPosition, e: React.MouseEvent) => void;
   scale: number;
   setGuideLines: React.Dispatch<React.SetStateAction<any[]>>;
+  isReadOnly: boolean;
 }
 
 const ANCHORS: AnchorPosition[] = ['top', 'right', 'bottom', 'left'];
 
 const TextItemComponent: React.FC<TextItemComponentProps> = ({
   textItem, allItems, onUpdateState, onPersist, onInteractionStart, isSelected, isEditing, onSetEditing,
-  isConnecting, connectionStartId, onAnchorMouseDown, onAnchorMouseUp, scale, setGuideLines
+  isConnecting, connectionStartId, onAnchorMouseDown, onAnchorMouseUp, scale, setGuideLines, isReadOnly
 }) => {
   const itemRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -37,7 +38,7 @@ const TextItemComponent: React.FC<TextItemComponentProps> = ({
   }, [isEditing]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (isEditing || e.button !== 0) return;
+    if (isReadOnly || isEditing || e.button !== 0) return;
     e.stopPropagation();
     onInteractionStart(textItem.id);
     
@@ -175,6 +176,7 @@ const TextItemComponent: React.FC<TextItemComponentProps> = ({
   };
   
   const handleResizeMouseDown = (e: React.MouseEvent) => {
+    if (isReadOnly) return;
     e.stopPropagation();
     onInteractionStart(textItem.id);
 
@@ -200,6 +202,7 @@ const TextItemComponent: React.FC<TextItemComponentProps> = ({
   };
 
   const handleRotateMouseDown = (e: React.MouseEvent) => {
+    if (isReadOnly) return;
     e.stopPropagation();
     onInteractionStart(textItem.id);
 
@@ -266,9 +269,9 @@ const TextItemComponent: React.FC<TextItemComponentProps> = ({
         height: `${textItem.height}px`,
         zIndex: textItem.zIndex,
       }}
-      className={`absolute select-none group flex flex-col p-2 ${!isEditing ? 'cursor-move' : ''} ${isSelected ? 'outline-2 outline-dashed outline-brand-primary' : ''}`}
+      className={`absolute select-none group flex flex-col p-2 ${!isReadOnly && !isEditing ? 'cursor-move' : ''} ${isSelected ? 'outline-2 outline-dashed outline-brand-primary' : ''}`}
       onMouseDown={handleMouseDown}
-      onDoubleClick={() => onSetEditing(textItem.id)}
+      onDoubleClick={() => !isReadOnly && onSetEditing(textItem.id)}
     >
       {isEditing ? (
         <textarea
@@ -289,7 +292,7 @@ const TextItemComponent: React.FC<TextItemComponentProps> = ({
         </div>
       )}
 
-      {isConnecting && connectionStartId !== textItem.id && ANCHORS.map(anchor => (
+      {isConnecting && connectionStartId !== textItem.id && !isReadOnly && ANCHORS.map(anchor => (
         <div
           key={anchor}
           className="absolute w-3 h-3 bg-blue-500 rounded-full border-2 border-white cursor-pointer hover:scale-125 transition-transform"
@@ -302,7 +305,7 @@ const TextItemComponent: React.FC<TextItemComponentProps> = ({
         />
       ))}
 
-      {isSelected && !isConnecting && (
+      {isSelected && !isConnecting && !isReadOnly && (
         <>
           <div
             className="absolute -bottom-2 -right-2 cursor-se-resize opacity-0 group-hover:opacity-100 transition-opacity"

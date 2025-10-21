@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { jsPDF } from 'jspdf';
 import {
   WhiteboardItem, Note, FlowchartShape, Connector, TextStyle, Point,
-  FlowchartShapeType, AnchorPosition, WhiteboardState, TextItem
+  FlowchartShapeType, AnchorPosition, WhiteboardState, TextItem, UserPermissions
 } from '../types';
 import {
     getWhiteboardsForUser,
@@ -45,7 +45,11 @@ const defaultConnectorTextStyle: TextStyle = {
 
 const MAX_HISTORY_LENGTH = 20;
 
-const WhiteboardView: React.FC = () => {
+interface WhiteboardViewProps {
+  userPermissions: UserPermissions | null;
+}
+
+const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
   const [items, setItems] = useState<WhiteboardItem[]>([]);
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -88,6 +92,9 @@ const WhiteboardView: React.FC = () => {
   const canvasRef = useRef<HTMLDivElement>(null);
   const zIndexCounter = useRef(0);
 
+  // --- PERMISSIONS ---
+  const canEdit = userPermissions?.pizarra?.canEdit ?? false;
+  
   const selectedItem = items.find(item => item.id === selectedItemId);
   const selectedConnector = connectors.find(c => c.id === selectedConnectorId);
 
@@ -101,6 +108,8 @@ const WhiteboardView: React.FC = () => {
 
   // --- History Management ---
   const saveState = useCallback((newItems: WhiteboardItem[], newConnectors: Connector[]) => {
+      if (!canEdit) return; // Do not save state in read-only mode
+
       const newState: WhiteboardState = { items: newItems, connectors: newConnectors };
       
       const newHistory = history.slice(0, historyIndex + 1);
@@ -116,10 +125,10 @@ const WhiteboardView: React.FC = () => {
       setItems(newItems);
       setConnectors(newConnectors);
       setHasUnsavedChanges(true);
-  }, [history, historyIndex]);
+  }, [history, historyIndex, canEdit]);
   
   const handleUndo = () => {
-    if (canUndo) {
+    if (canUndo && canEdit) {
       const newIndex = historyIndex - 1;
       const prevState = history[newIndex];
       setItems(prevState.items);
@@ -130,7 +139,7 @@ const WhiteboardView: React.FC = () => {
   };
 
   const handleRedo = () => {
-    if (canRedo) {
+    if (canRedo && canEdit) {
       const newIndex = historyIndex + 1;
       const nextState = history[newIndex];
       setItems(nextState.items);
@@ -141,26 +150,27 @@ const WhiteboardView: React.FC = () => {
   };
 
   const handlePersistState = useCallback(() => {
+      if (!canEdit) return; // Do not persist in read-only mode
       const currentState = { items, connectors };
       const lastHistoryState = history[historyIndex];
       if (JSON.stringify(currentState) === JSON.stringify(lastHistoryState)) {
           return;
       }
       saveState(items, connectors);
-  }, [items, connectors, history, historyIndex, saveState]);
+  }, [items, connectors, history, historyIndex, saveState, canEdit]);
 
 
   // --- Unsaved changes listener ---
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (hasUnsavedChanges) {
+      if (hasUnsavedChanges && canEdit) {
         e.preventDefault();
         e.returnValue = '';
       }
     };
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
+  }, [hasUnsavedChanges, canEdit]);
 
 
   // --- Toast Effect ---
@@ -237,7 +247,7 @@ const WhiteboardView: React.FC = () => {
   // --- Keyboard Navigation ---
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (editingItemId) return;
+      if (editingItemId || !canEdit) return; // Ignore if editing or in read-only mode
 
       // Undo/Redo shortcuts
       if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
@@ -288,19 +298,22 @@ const WhiteboardView: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedItemId, editingItemId, items, handlePersistState, handleUndo, handleRedo]);
+  }, [selectedItemId, editingItemId, items, handlePersistState, handleUndo, handleRedo, canEdit]);
   
   const updateItemState = (itemUpdate: Partial<WhiteboardItem> & { id: string }) => {
+    if (!canEdit) return;
     setItems(prev => prev.map(item => item.id === itemUpdate.id ? { ...item, ...itemUpdate } : item));
     setHasUnsavedChanges(true);
   };
   
   const updateConnectorState = (connectorUpdate: Partial<Connector> & { id: string }) => {
+      if (!canEdit) return;
       setConnectors(prev => prev.map(c => c.id === connectorUpdate.id ? { ...c, ...connectorUpdate } : c));
       setHasUnsavedChanges(true);
   };
 
   const addItem = (type: 'note' | FlowchartShapeType | 'text') => {
+    if (!canEdit) return;
     zIndexCounter.current = items.length > 0 ? Math.max(...items.map(i => i.zIndex)) + 1 : 1;
     const newItemId = uuidv4();
     const rect = canvasRef.current?.getBoundingClientRect();
@@ -357,6 +370,7 @@ const WhiteboardView: React.FC = () => {
   };
   
   const deleteSelectedItem = () => {
+    if (!canEdit) return;
     if (selectedItemId) {
       const newItems = items.filter(i => i.id !== selectedItemId);
       const newConnectors = connectors.filter(c => c.from !== selectedItemId && c.to !== selectedItemId);
@@ -371,6 +385,7 @@ const WhiteboardView: React.FC = () => {
   };
   
   const handleInteractionStart = (id: string) => {
+    if (!canEdit) return;
     zIndexCounter.current = items.length > 0 ? Math.max(...items.map(i => i.zIndex)) + 1 : 1;
     const newItems = items.map(item => item.id === id ? { ...item, zIndex: zIndexCounter.current } : item);
     saveState(newItems, connectors);
@@ -381,6 +396,7 @@ const WhiteboardView: React.FC = () => {
   };
 
   const handleSetEditing = (id: string | null) => {
+    if (!canEdit) return;
     if (editingItemId && !id) {
         handlePersistState(); // Save state when finishing editing
     }
@@ -392,6 +408,7 @@ const WhiteboardView: React.FC = () => {
   };
   
   const handleSetEditingConnector = (id: string | null) => {
+    if (!canEdit) return;
     if (editingConnectorId && !id) {
         handlePersistState(); // Save state when finishing editing
     }
@@ -414,6 +431,7 @@ const WhiteboardView: React.FC = () => {
   };
 
   const updateStyle = (styleProp: Partial<TextStyle>) => {
+    if (!canEdit) return;
     if (selectedItem) {
         const newItems = items.map(i => i.id === selectedItem.id ? { ...i, style: { ...i.style, ...styleProp } } : i);
         saveState(newItems, connectors);
@@ -424,6 +442,7 @@ const WhiteboardView: React.FC = () => {
   };
   
   const toggleStyle = (style: 'bold' | 'italic') => {
+    if (!canEdit) return;
     const item = selectedItem || selectedConnector;
     if (!item) return;
 
@@ -443,7 +462,7 @@ const WhiteboardView: React.FC = () => {
   };
 
   const toggleListStyle = (listType: 'bullet' | 'number') => {
-    if (!selectedItem) return;
+    if (!selectedItem || !canEdit) return;
 
     const currentListStyle = selectedItem.style.listStyle;
     const newListStyle = currentListStyle === listType ? 'none' : listType;
@@ -488,6 +507,7 @@ const WhiteboardView: React.FC = () => {
   };
 
   const handleAnchorMouseDown = (startItemId: string, startAnchor: AnchorPosition, e: React.MouseEvent) => {
+    if (!canEdit) return;
     e.stopPropagation();
     const rect = canvasRef.current!.getBoundingClientRect();
     const screenPoint = { x: e.clientX, y: e.clientY };
@@ -527,6 +547,7 @@ const WhiteboardView: React.FC = () => {
   };
 
   const handleAnchorMouseUp = (endItemId: string, endAnchor: AnchorPosition, e: React.MouseEvent) => {
+    if (!canEdit) return;
     e.stopPropagation();
     if (!connectionPreview || connectionPreview.startItemId === endItemId) {
       setConnectionPreview(null);
@@ -624,6 +645,7 @@ const WhiteboardView: React.FC = () => {
   };
 
   const handleConnectorDragMouseDown = (e: React.MouseEvent, connector: Connector, segment: 'from' | 'to') => {
+      if (!canEdit) return;
       e.stopPropagation();
       const startMouseX = e.clientX;
       const startMouseY = e.clientY;
@@ -655,6 +677,7 @@ const WhiteboardView: React.FC = () => {
   };
   
   const handleConnectorMidpointDragMouseDown = (e: React.MouseEvent, connector: Connector) => {
+      if (!canEdit) return;
       e.stopPropagation();
       
       const pathInfo = calculateOrthogonalPath(connector, items);
@@ -965,6 +988,7 @@ const WhiteboardView: React.FC = () => {
     
   // --- Save/Load Handlers ---
   const handleNewWhiteboard = () => {
+    if(!canEdit) return;
     if(hasUnsavedChanges && !window.confirm("Tienes cambios sin guardar. ¿Estás seguro de que quieres crear una nueva pizarra?")) return;
     setItems([]);
     setConnectors([]);
@@ -976,6 +1000,7 @@ const WhiteboardView: React.FC = () => {
   };
 
   const handleSaveClick = async () => {
+    if (!canEdit) return;
     if (!currentWhiteboard) {
       setIsSaveAsModalOpen(true);
     } else {
@@ -994,6 +1019,7 @@ const WhiteboardView: React.FC = () => {
   };
 
   const handleConfirmSaveAs = async (e: React.FormEvent) => {
+    if (!canEdit) return;
     e.preventDefault();
     if (!newWhiteboardName.trim()) return;
     setIsLoading(true);
@@ -1013,7 +1039,7 @@ const WhiteboardView: React.FC = () => {
   };
 
   const handleOpenClick = async () => {
-    if(hasUnsavedChanges && !window.confirm("Tienes cambios sin guardar. ¿Estás seguro de que quieres abrir otra pizarra?")) return;
+    if(hasUnsavedChanges && canEdit && !window.confirm("Tienes cambios sin guardar. ¿Estás seguro de que quieres abrir otra pizarra?")) return;
     setIsLoading(true);
     try {
         const boards = await getWhiteboardsForUser();
@@ -1053,7 +1079,7 @@ const WhiteboardView: React.FC = () => {
   };
   
   const handleDeleteWhiteboard = async () => {
-    if (!boardToDelete) return;
+    if (!boardToDelete || !canEdit) return;
     setIsLoading(true);
     try {
         await deleteWhiteboard(boardToDelete.id);
@@ -1076,7 +1102,7 @@ const WhiteboardView: React.FC = () => {
         return;
     }
 
-    if (hasUnsavedChanges) {
+    if (hasUnsavedChanges && canEdit) {
         if (!window.confirm("Tienes cambios sin guardar. ¿Quieres descartarlos y cargar la última versión guardada?")) {
             return;
         }
@@ -1113,7 +1139,7 @@ const WhiteboardView: React.FC = () => {
   };
     
   // --- Canvas Styling ---
-  const isDarkMode = document.body.classList.contains('dark');
+  const isDarkMode = document.documentElement.classList.contains('theme-dark');
   const gridColor = isDarkMode ? 'rgba(75, 85, 99, 0.5)' : 'rgba(209, 213, 219, 0.8)';
   const gridSize = 20 * scale;
   const gridStyle = {
@@ -1131,37 +1157,41 @@ const WhiteboardView: React.FC = () => {
       <div className="sticky top-0 z-10 bg-light-bg dark:bg-dark-bg pt-1 pb-4">
         <h1 className="text-3xl font-bold">
           {currentWhiteboard?.name || 'Pizarra Nueva'}
-          {hasUnsavedChanges && <span className="text-brand-primary text-lg ml-2">*</span>}
+          {hasUnsavedChanges && canEdit && <span className="text-brand-primary text-lg ml-2">*</span>}
         </h1>
         <div className="mt-4 flex flex-wrap items-center gap-2 p-2 rounded-lg bg-light-card dark:bg-dark-card border border-light-border dark:border-dark-border">
-            <button onClick={handleNewWhiteboard} title="Nueva Pizarra" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><DocumentAddIcon /></button>
+            <button onClick={handleNewWhiteboard} title="Nueva Pizarra" disabled={!canEdit} className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed"><DocumentAddIcon /></button>
             <button onClick={handleOpenClick} title="Abrir Pizarra" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><FolderOpenIcon /></button>
-            <button onClick={handleSaveClick} title="Guardar Pizarra" className={`p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg ${hasUnsavedChanges ? 'text-brand-primary' : ''}`}><SaveIcon /></button>
+            <button onClick={handleSaveClick} title="Guardar Pizarra" disabled={!canEdit} className={`p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed ${hasUnsavedChanges && canEdit ? 'text-brand-primary' : ''}`}><SaveIcon /></button>
             <button onClick={handleRefresh} title="Refrescar Pizarra" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:text-gray-400 disabled:cursor-not-allowed" disabled={!currentWhiteboard}><RefreshIcon /></button>
             <button onClick={handleOpenExportModal} title="Exportar Pizarra" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><DocumentDownloadIcon /></button>
-            <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>
-            <button onClick={handleUndo} disabled={!canUndo} title="Deshacer (Ctrl+Z)" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed"><UndoIcon /></button>
-            <button onClick={handleRedo} disabled={!canRedo} title="Rehacer (Ctrl+Y)" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed"><RedoIcon /></button>
-            <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>
-            <button onClick={() => addItem('note')} title="Añadir Nota" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><DocumentTextIcon /></button>
-            <button onClick={() => addItem('text')} title="Añadir Texto" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><TextIcon /></button>
-            <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>
-            <button onClick={() => addItem('rectangle')} title="Proceso" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><RectangleIcon /></button>
-            <button onClick={() => addItem('oval')} title="Terminador (Inicio/Fin)" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><OvalIcon /></button>
-            <button onClick={() => addItem('diamond')} title="Decisión" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><DiamondIcon /></button>
-            <button onClick={() => addItem('parallelogram')} title="Datos (Entrada/Salida)" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><ParallelogramIcon /></button>
-            <button onClick={() => addItem('predefined-process')} title="Proceso Predefinido" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><PredefinedProcessIcon /></button>
-            <button onClick={() => addItem('document')} title="Documento" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><FlowchartDocumentIcon /></button>
-            <button onClick={() => addItem('database')} title="Base de Datos" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><DatabaseIcon /></button>
-            <button onClick={() => addItem('connector-circle')} title="Conector en Página" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><CircleIcon /></button>
+            {canEdit && <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>}
+            <button onClick={handleUndo} disabled={!canUndo || !canEdit} title="Deshacer (Ctrl+Z)" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed"><UndoIcon /></button>
+            <button onClick={handleRedo} disabled={!canRedo || !canEdit} title="Rehacer (Ctrl+Y)" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed"><RedoIcon /></button>
+            {canEdit && (
+              <>
+                <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>
+                <button onClick={() => addItem('note')} title="Añadir Nota" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><DocumentTextIcon /></button>
+                <button onClick={() => addItem('text')} title="Añadir Texto" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><TextIcon /></button>
+                <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>
+                <button onClick={() => addItem('rectangle')} title="Proceso" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><RectangleIcon /></button>
+                <button onClick={() => addItem('oval')} title="Terminador (Inicio/Fin)" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><OvalIcon /></button>
+                <button onClick={() => addItem('diamond')} title="Decisión" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><DiamondIcon /></button>
+                <button onClick={() => addItem('parallelogram')} title="Datos (Entrada/Salida)" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><ParallelogramIcon /></button>
+                <button onClick={() => addItem('predefined-process')} title="Proceso Predefinido" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><PredefinedProcessIcon /></button>
+                <button onClick={() => addItem('document')} title="Documento" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><FlowchartDocumentIcon /></button>
+                <button onClick={() => addItem('database')} title="Base de Datos" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><DatabaseIcon /></button>
+                <button onClick={() => addItem('connector-circle')} title="Conector en Página" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><CircleIcon /></button>
+                
+                <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>
+                
+                <button onClick={() => setIsConnecting(!isConnecting)} title="Unir Elementos" className={`p-2 rounded ${isConnecting ? 'bg-blue-500 text-white' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}><LinkIcon /></button>
+              </>
+            )}
             
-            <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>
+            {(selectedItem || selectedConnector) && canEdit && <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>}
             
-            <button onClick={() => setIsConnecting(!isConnecting)} title="Unir Elementos" className={`p-2 rounded ${isConnecting ? 'bg-blue-500 text-white' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}><LinkIcon /></button>
-            
-            {(selectedItem || selectedConnector) && <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>}
-            
-            {(selectedItem || selectedConnector) && (
+            {(selectedItem || selectedConnector) && canEdit && (
             <>
                 <select value={(selectedItem || selectedConnector)!.style.fontFamily} onChange={e => updateStyle({ fontFamily: e.target.value as any })} className="p-1 rounded bg-light-bg dark:bg-dark-bg border border-light-border dark:border-dark-border text-sm">
                     {FONT_FAMILIES.map(f => <option key={f} value={f}>{f}</option>)}
@@ -1174,17 +1204,17 @@ const WhiteboardView: React.FC = () => {
                 <label title="Color de Texto" className="flex items-center gap-1 p-1 rounded hover:bg-light-bg dark:hover:bg-dark-bg"> T <input type="color" value={(selectedItem || selectedConnector)!.style.color} onChange={e => updateStyle({ color: e.target.value })} className="w-6 h-6 border-none bg-transparent" /></label>
             </>
             )}
-            {selectedItem && (
+            {selectedItem && canEdit && (
                 <>
                     <button onClick={() => toggleListStyle('bullet')} title="Viñetas" className={`p-2 rounded ${selectedItem?.style.listStyle === 'bullet' ? 'bg-gray-300 dark:bg-gray-600' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}><ListBulletIcon /></button>
                     <button onClick={() => toggleListStyle('number')} title="Numeración" className={`p-2 rounded ${selectedItem?.style.listStyle === 'number' ? 'bg-gray-300 dark:bg-gray-600' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}><ListNumberIcon /></button>
                 </>
             )}
-            {selectedItem && selectedItem.type !== 'note' && selectedItem.type !== 'text' && <label title="Color de Relleno" className="flex items-center gap-1 p-1 rounded hover:bg-light-bg dark:hover:bg-dark-bg"> <RectangleIcon className="h-4 w-4"/> <input type="color" value={(selectedItem as FlowchartShape).fillColor} onChange={e => {
+            {selectedItem && selectedItem.type !== 'note' && selectedItem.type !== 'text' && canEdit && <label title="Color de Relleno" className="flex items-center gap-1 p-1 rounded hover:bg-light-bg dark:hover:bg-dark-bg"> <RectangleIcon className="h-4 w-4"/> <input type="color" value={(selectedItem as FlowchartShape).fillColor} onChange={e => {
                 const newItems = items.map(i => i.id === selectedItem.id ? { ...i, fillColor: e.target.value } as WhiteboardItem : i);
                 saveState(newItems, connectors);
             }} className="w-6 h-6 border-none bg-transparent" /></label>}
-            {(selectedItemId || selectedConnectorId) && (
+            {(selectedItemId || selectedConnectorId) && canEdit && (
                 <button onClick={deleteSelectedItem} title="Eliminar" className="p-2 rounded hover:bg-red-100 dark:hover:bg-red-900/50 text-red-500"><TrashIcon /></button>
             )}
         </div>
@@ -1227,7 +1257,7 @@ const WhiteboardView: React.FC = () => {
                     <g key={conn.id} className="pointer-events-auto" onDoubleClick={() => handleSetEditingConnector(conn.id)}>
                         <path d={pathInfo.d} stroke="transparent" strokeWidth="15" fill="none" className="cursor-pointer" onClick={(e) => { e.stopPropagation(); setSelectedItemId(null); setSelectedConnectorId(conn.id); }} />
                         <path d={pathInfo.d} stroke={isSelected ? '#0086D4' : '#6B7280'} strokeWidth={isSelected ? 3 : 2} fill="none" markerEnd={isSelected ? "url(#arrowhead-selected)" : "url(#arrowhead)"} className="pointer-events-none" />
-                        {isSelected && pathInfo.p2 && (
+                        {isSelected && canEdit && pathInfo.p2 && (
                             <>
                                 {/* From Segment Handle */}
                                 <circle cx={(pathInfo.p2.x + pathInfo.p3.x) / 2} cy={(pathInfo.p2.y + pathInfo.p3.y) / 2} r="5" fill="#0086D4" stroke="white" strokeWidth="2"
@@ -1277,12 +1307,13 @@ const WhiteboardView: React.FC = () => {
           </svg>
 
           {items.map(item => {
+            const isReadOnly = !canEdit;
             if (item.type === 'note') {
-                return <StickyNoteComponent key={item.id} note={item} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={handleInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} />;
+                return <StickyNoteComponent key={item.id} note={item} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={handleInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} isReadOnly={isReadOnly} />;
             } else if (item.type === 'text') {
-                return <TextItemComponent key={item.id} textItem={item as TextItem} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={handleInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} />;
+                return <TextItemComponent key={item.id} textItem={item as TextItem} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={handleInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} isReadOnly={isReadOnly} />;
             } else {
-                return <FlowchartShapeComponent key={item.id} shape={item as FlowchartShape} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={handleInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} />;
+                return <FlowchartShapeComponent key={item.id} shape={item as FlowchartShape} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={handleInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} isReadOnly={isReadOnly} />;
             }
           })}
 
@@ -1292,7 +1323,7 @@ const WhiteboardView: React.FC = () => {
               if (!pathInfo.midPoint) return null;
               const isEditing = editingConnectorId === conn.id;
 
-              if (isEditing) {
+              if (isEditing && canEdit) {
                   return (
                       <textarea
                           key={conn.id}
@@ -1412,7 +1443,7 @@ const WhiteboardView: React.FC = () => {
                                         <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">Actualizado: {new Date(board.updated_at).toLocaleString()}</p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <button onClick={() => setBoardToDelete(board)} className="p-2 text-red-500 opacity-0 group-hover:opacity-100"><TrashIcon className="h-4 w-4"/></button>
+                                        {canEdit && <button onClick={() => setBoardToDelete(board)} className="p-2 text-red-500 opacity-0 group-hover:opacity-100"><TrashIcon className="h-4 w-4"/></button>}
                                         <button onClick={() => handleLoadWhiteboard(board)} className="px-3 py-1 text-sm rounded-md text-white bg-brand-primary hover:bg-brand-secondary">Abrir</button>
                                     </div>
                                 </li>

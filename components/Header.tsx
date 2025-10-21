@@ -6,27 +6,44 @@ import Spinner from './Spinner';
 
 interface HeaderProps {
     user: User;
-    onLogout: () => void;
-    notifications: Activity[]; // Should be unread notifications
-    onNavigate: (view: string) => void;
     onUpdateAvatar: (file: File) => void;
-    isAvatarLoading: boolean;
-    onMarkAsRead: (activityId: string) => void;
-    onMarkAllAsRead: () => void;
+    isAvatarLoading?: boolean;
+    onLogout: () => void;
+    notifications: Activity[];
+    onNavigate: (view: string) => void;
     recordingStatus: 'idle' | 'recording' | 'paused';
     recordingTime: number;
+    isEditor: boolean;
 }
 
+const toRoman = (num: number): string => {
+  if (num < 0 || num > 59) return String(num).padStart(2, '0');
+  if (num === 0) return '00';
+  
+  const val = [50, 40, 10, 9, 5, 4, 1];
+  const syb = ["L", "XL", "X", "IX", "V", "IV", "I"];
+  
+  let result = '';
+  let i = 0;
+  while (num > 0) {
+    for (let _ = 0; _ < Math.floor(num / val[i]); _++) {
+      result += syb[i];
+    }
+    num %= val[i];
+    i++;
+  }
+  return result;
+};
+
 const Header: React.FC<HeaderProps> = ({ 
-    user, onLogout, notifications, 
-    onNavigate, onUpdateAvatar, isAvatarLoading, onMarkAsRead, onMarkAllAsRead,
-    recordingStatus, recordingTime
+    user, onUpdateAvatar, isAvatarLoading, onLogout, notifications, 
+    onNavigate,
+    recordingStatus, recordingTime, isEditor
 }) => {
     const [isProfileOpen, setProfileOpen] = useState(false);
     const [isNotificationsOpen, setNotificationsOpen] = useState(false);
     const profileRef = useRef<HTMLDivElement>(null);
     const notificationsRef = useRef<HTMLDivElement>(null);
-    const avatarInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -41,22 +58,15 @@ const Header: React.FC<HeaderProps> = ({
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const handleAvatarClick = (e: React.MouseEvent) => {
-        e.preventDefault();
-        avatarInputRef.current?.click();
-    };
-
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files && e.target.files[0]) {
-            onUpdateAvatar(e.target.files[0]);
-            setProfileOpen(false); // Close dropdown after selection
-        }
-    };
-
-
     const handleNavigateToNotifications = () => {
         setNotificationsOpen(false);
         onNavigate('Notificaciones');
+    };
+    
+    const formatTime = (seconds: number) => {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${toRoman(mins)}:${toRoman(secs)}`;
     };
 
     const getDisplayName = (username: string): string => {
@@ -70,12 +80,6 @@ const Header: React.FC<HeaderProps> = ({
         return username.split('@')[0];
     };
     
-    const formatRecordingTime = (seconds: number): string => {
-        const mins = Math.floor(seconds / 60).toString().padStart(2, '0');
-        const secs = (seconds % 60).toString().padStart(2, '0');
-        return `${mins}:${secs}`;
-    };
-
     const displayName = getDisplayName(user.username);
     const avatarInitial = displayName.charAt(0).toUpperCase();
     const unreadCount = notifications.length;
@@ -83,7 +87,7 @@ const Header: React.FC<HeaderProps> = ({
     return (
         <header className="flex-shrink-0 flex items-center justify-between p-4 bg-light-card dark:bg-dark-card shadow-sm h-16 border-b border-light-border dark:border-dark-border z-20">
             <div className="flex items-center">
-                 {/* This space is intentionally left blank after removing the refresh button */}
+                {/* Timer display moved to user profile section */}
             </div>
 
             <div className="flex items-center space-x-2 sm:space-x-4">
@@ -101,8 +105,6 @@ const Header: React.FC<HeaderProps> = ({
                             notifications={notifications}
                             onClose={() => setNotificationsOpen(false)}
                             onNavigate={handleNavigateToNotifications}
-                            onMarkAsRead={onMarkAsRead}
-                            onMarkAllAsRead={onMarkAllAsRead}
                         />
                     )}
                 </div>
@@ -110,42 +112,55 @@ const Header: React.FC<HeaderProps> = ({
                 <div className="relative" ref={profileRef}>
                     <button onClick={() => setProfileOpen(!isProfileOpen)} className="flex items-center space-x-3 focus:outline-none">
                          <div className="relative h-10 w-10">
-                            {user.avatarUrl ? (
-                                <img src={user.avatarUrl} alt="Foto de perfil" className="h-10 w-10 rounded-full object-cover" />
-                            ) : (
-                                <div className="h-10 w-10 rounded-full bg-brand-primary flex items-center justify-center text-white font-bold text-lg">
-                                    {avatarInitial}
-                                </div>
-                            )}
+                            <div className="h-10 w-10 rounded-full bg-brand-primary flex items-center justify-center text-white font-bold text-lg overflow-hidden">
+                                {user.avatarUrl ? (
+                                    <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                                ) : (
+                                    avatarInitial
+                                )}
+                            </div>
                             {isAvatarLoading && (
-                                <div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center">
+                                <div className="absolute inset-0 bg-black/60 rounded-full flex items-center justify-center text-white">
                                     <Spinner />
                                 </div>
                             )}
                         </div>
                         <div className="hidden md:block text-left">
                             <p className="font-semibold text-sm text-light-text dark:text-dark-text">{displayName}</p>
-                            {(recordingStatus === 'recording' || recordingStatus === 'paused') ? (
-                                <div className="flex items-center text-xs text-light-text-secondary dark:text-dark-text-secondary font-mono">
-                                    <div className={`h-2 w-2 bg-gray-400 dark:bg-gray-500 rounded-full mr-1.5 ${recordingStatus === 'recording' ? 'animate-pulse' : ''}`}></div>
-                                    <span>{formatRecordingTime(recordingTime)}</span>
+                            <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">Usuario Activo</p>
+                            {(recordingStatus === 'recording' || recordingStatus === 'paused') && (
+                                <div className={`flex items-center justify-center gap-1 font-mono text-xs mt-0.5 rounded px-1.5 py-0.5 ${recordingStatus === 'recording' ? 'bg-light-text-secondary/10 dark:bg-dark-text-secondary/20 animate-pulse text-light-text-secondary dark:text-dark-text-secondary' : 'text-light-text-secondary/50 dark:text-dark-text-secondary/50'}`}>
+                                    <span>{formatTime(recordingTime)}</span>
                                 </div>
-                            ) : (
-                                <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">Usuario</p>
                             )}
                         </div>
                     </button>
                     {isProfileOpen && (
                          <div className="absolute right-0 mt-2 w-64 bg-light-card dark:bg-dark-card rounded-md shadow-lg border border-light-border dark:border-dark-border animate-fade-in overflow-hidden" style={{animationDuration: '0.2s'}}>
                             <div className="flex items-center p-4 border-b border-light-border dark:border-dark-border">
-                                <div className="flex-shrink-0 mr-3">
-                                    {user.avatarUrl ? (
-                                        <img src={user.avatarUrl} alt="Foto de perfil" className="h-14 w-14 rounded-full object-cover" />
-                                    ) : (
-                                        <div className="h-14 w-14 rounded-full bg-brand-primary flex items-center justify-center text-white font-bold text-xl">
-                                            {avatarInitial}
-                                        </div>
-                                    )}
+                                <div className="relative flex-shrink-0 mr-3 group">
+                                    <div className="h-14 w-14 rounded-full bg-brand-primary flex items-center justify-center text-white font-bold text-xl overflow-hidden">
+                                        {isAvatarLoading ? <Spinner /> : user.avatarUrl ? (
+                                            <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                                        ) : (
+                                            avatarInitial
+                                        )}
+                                    </div>
+                                    <label htmlFor="avatar-upload" className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
+                                        <PencilAltIcon className="h-6 w-6" />
+                                    </label>
+                                    <input 
+                                        id="avatar-upload" 
+                                        type="file" 
+                                        className="hidden" 
+                                        accept="image/png, image/jpeg"
+                                        onChange={(e) => {
+                                            if (e.target.files && e.target.files[0]) {
+                                                onUpdateAvatar(e.target.files[0]);
+                                                setProfileOpen(false);
+                                            }
+                                        }}
+                                    />
                                 </div>
                                 <div className="min-w-0">
                                     <p className="text-sm font-medium text-light-text dark:text-dark-text truncate" title={displayName}>{displayName}</p>
@@ -153,11 +168,6 @@ const Header: React.FC<HeaderProps> = ({
                                 </div>
                             </div>
                             <div className="py-1">
-                                <input type="file" ref={avatarInputRef} onChange={handleFileChange} className="hidden" accept="image/png, image/jpeg" />
-                                <a href="#" onClick={handleAvatarClick} className="flex items-center w-full px-4 py-2 text-sm text-light-text-secondary dark:text-dark-text-secondary hover:bg-light-bg dark:hover:bg-dark-bg">
-                                    <PencilAltIcon className="mr-3 h-5 w-5"/>
-                                    Cambiar foto
-                                </a>
                                 <a href="#" onClick={(e) => { e.preventDefault(); onLogout(); }} className="flex items-center w-full px-4 py-2 text-sm text-light-text-secondary dark:text-dark-text-secondary hover:bg-light-bg dark:hover:bg-dark-bg">
                                     <LogoutIcon className="mr-3 h-5 w-5"/>
                                     Cerrar Sesión
