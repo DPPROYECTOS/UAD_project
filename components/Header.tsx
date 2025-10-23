@@ -9,8 +9,9 @@ interface HeaderProps {
     onUpdateAvatar: (file: File) => void;
     isAvatarLoading?: boolean;
     onLogout: () => void;
-    notifications: Activity[];
+    unreadCount: number;
     onNavigate: (view: string) => void;
+    onMarkAllAsRead: () => void;
     recordingStatus: 'idle' | 'recording' | 'paused';
     recordingTime: number;
     isEditor: boolean;
@@ -36,8 +37,8 @@ const toRoman = (num: number): string => {
 };
 
 const Header: React.FC<HeaderProps> = ({ 
-    user, onUpdateAvatar, isAvatarLoading, onLogout, notifications, 
-    onNavigate,
+    user, onUpdateAvatar, isAvatarLoading, onLogout, unreadCount,
+    onNavigate, onMarkAllAsRead,
     recordingStatus, recordingTime, isEditor
 }) => {
     const [isProfileOpen, setProfileOpen] = useState(false);
@@ -82,7 +83,6 @@ const Header: React.FC<HeaderProps> = ({
     
     const displayName = getDisplayName(user.username);
     const avatarInitial = displayName.charAt(0).toUpperCase();
-    const unreadCount = notifications.length;
 
     return (
         <header className="flex-shrink-0 flex items-center justify-between p-4 bg-light-card dark:bg-dark-card shadow-sm h-16 border-b border-light-border dark:border-dark-border z-20">
@@ -102,21 +102,23 @@ const Header: React.FC<HeaderProps> = ({
                     </button>
                     {isNotificationsOpen && (
                         <NotificationsPanel
-                            notifications={notifications}
                             onClose={() => setNotificationsOpen(false)}
                             onNavigate={handleNavigateToNotifications}
+                            onMarkAllAsRead={onMarkAllAsRead}
                         />
                     )}
                 </div>
 
                 <div className="relative" ref={profileRef}>
-                    <button onClick={() => setProfileOpen(!isProfileOpen)} className="flex items-center space-x-3 focus:outline-none">
+                    <button onClick={() => setProfileOpen(!isProfileOpen)} className="group flex items-center space-x-3 focus:outline-none">
                          <div className="relative h-10 w-10">
                             <div className="h-10 w-10 rounded-full bg-brand-primary flex items-center justify-center text-white font-bold text-lg overflow-hidden">
                                 {user.avatarUrl ? (
-                                    <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                                    <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover transition-transform duration-300 ease-in-out group-hover:scale-125" />
                                 ) : (
-                                    avatarInitial
+                                    <div className="h-full w-full flex items-center justify-center transition-transform duration-300 ease-in-out group-hover:scale-125">
+                                      {avatarInitial}
+                                    </div>
                                 )}
                             </div>
                             {isAvatarLoading && (
@@ -139,11 +141,13 @@ const Header: React.FC<HeaderProps> = ({
                          <div className="absolute right-0 mt-2 w-64 bg-light-card dark:bg-dark-card rounded-md shadow-lg border border-light-border dark:border-dark-border animate-fade-in overflow-hidden" style={{animationDuration: '0.2s'}}>
                             <div className="flex items-center p-4 border-b border-light-border dark:border-dark-border">
                                 <div className="relative flex-shrink-0 mr-3 group">
-                                    <div className="h-14 w-14 rounded-full bg-brand-primary flex items-center justify-center text-white font-bold text-xl overflow-hidden">
+                                    <div className="h-24 w-24 rounded-full bg-brand-primary flex items-center justify-center text-white font-bold text-xl overflow-hidden">
                                         {isAvatarLoading ? <Spinner /> : user.avatarUrl ? (
-                                            <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+                                            <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-125" />
                                         ) : (
-                                            avatarInitial
+                                            <div className="h-full w-full flex items-center justify-center transition-transform duration-300 group-hover:scale-125">
+                                              {avatarInitial}
+                                            </div>
                                         )}
                                     </div>
                                     <label htmlFor="avatar-upload" className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">

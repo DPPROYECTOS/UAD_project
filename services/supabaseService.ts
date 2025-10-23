@@ -1,7 +1,8 @@
+
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 // Fix: Added 'Content' to import list to support addContentItem.
-import { WhiteboardItem, Project, ProjectStatus, ProjectTask, ContentType, Folder, Document, LinkItem, AuditItem, WhiteboardItemOld, WhiteboardState, SavedWhiteboard, Connector, TextStyle, Activity, ThemePreferences, User, Content, UserPermissions } from '../types';
+import { WhiteboardItem, Project, ProjectStatus, ProjectTask, ContentType, Folder, Document, LinkItem, AuditItem, WhiteboardItemOld, WhiteboardState, SavedWhiteboard, Connector, TextStyle, ThemePreferences, User, Content, UserPermissions } from '../types';
 
 // These credentials are intentionally public for this project.
 // In a production environment, they should be stored securely in environment variables.
@@ -88,6 +89,7 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
     const { data, error } = await supabase.from('user_ui_settings').select('permissions').eq('user_id', user.id).single();
     if (error && error.code !== 'PGRST116') throw new Error(`Error fetching permissions: ${error.message}`);
 
+    // Fix: Added missing 'juegos' property to defaultPermissions.
     const defaultPermissions: UserPermissions = {
       sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, gemini: true, auditorias: true, pizarra: true, notificaciones: true },
       proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
@@ -97,8 +99,10 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
       auditorias: { canManage: true },
       pizarra: { canEdit: true },
       gemini: { canUse: true },
+      juegos: { canUnlock: false },
     };
     if (!data || !data.permissions) return defaultPermissions;
+    // Fix: Added missing 'juegos' property to the returned permissions object.
     return {
         sidebar: { ...defaultPermissions.sidebar, ...(data.permissions.sidebar || {}) },
         proyectos: { ...defaultPermissions.proyectos, ...(data.permissions.proyectos || {}) },
@@ -108,6 +112,7 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
         auditorias: { ...defaultPermissions.auditorias, ...(data.permissions.auditorias || {}) },
         pizarra: { ...defaultPermissions.pizarra, ...(data.permissions.pizarra || {}) },
         gemini: { ...defaultPermissions.gemini, ...(data.permissions.gemini || {}) },
+        juegos: { ...defaultPermissions.juegos, ...(data.permissions.juegos || {}) },
     };
 };
 

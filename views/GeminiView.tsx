@@ -73,7 +73,7 @@ const GeminiView: React.FC<GeminiViewProps> = ({ geminiApiKey, isApiKeyLoading, 
     try {
         const ai = new GoogleGenAI({ apiKey: geminiApiKey });
         const baseSystemInstruction = 'Eres un asistente útil y amigable llamado Gemini. Ayudas a los usuarios con la gestión de proyectos, la mejora continua y tareas generales. Respondes en español.';
-        const defaultChat = ai.chats.create({ model: 'gemini-2.5-flash', config: { systemInstruction: baseSystemInstruction } });
+        const defaultChat = ai.chats.create({ model: 'gemini-flash-latest', config: { systemInstruction: baseSystemInstruction } });
         setChat(defaultChat);
         setTrainingChat(defaultChat);
         setChatMessages([{ role: 'model', content: '¡Hola! Soy Gemini, tu asistente de IA. ¿Cómo puedo ayudarte a mejorar tus proyectos hoy?' }]);
@@ -181,7 +181,7 @@ const GeminiView: React.FC<GeminiViewProps> = ({ geminiApiKey, isApiKeyLoading, 
         if (!currentChat) {
             const ai = new GoogleGenAI({ apiKey: geminiApiKey });
             currentChat = ai.chats.create({
-                model: 'gemini-2.5-flash',
+                model: 'gemini-flash-latest',
                 config: { tools: [{googleSearch: {}}] }
             });
             setSearchChat(currentChat);
@@ -212,16 +212,16 @@ const GeminiView: React.FC<GeminiViewProps> = ({ geminiApiKey, isApiKeyLoading, 
         
         if (!presentationSlides) {
             setPresentationStep('Investigando tema...');
-            const researchResponse = await ai.models.generateContent({ model: "gemini-2.5-flash", contents: `Recolecta información detallada y completa sobre el siguiente tema: "${prompt}".`, config: { tools: [{googleSearch: {}}] } });
+            const researchResponse = await ai.models.generateContent({ model: "gemini-flash-latest", contents: `Recolecta información detallada y completa sobre el siguiente tema: "${prompt}".`, config: { tools: [{googleSearch: {}}] } });
             setPresentationStep('Creando diapositivas...');
-            const structureResponse = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: `Usando la siguiente información, crea una presentación de 5 a 8 diapositivas. Para cada diapositiva, provee un título y una lista de puntos clave (viñetas). Información: ${researchResponse.text}`, config: { responseMimeType: "application/json", responseSchema: slideSchema } });
+            const structureResponse = await ai.models.generateContent({ model: 'gemini-flash-latest', contents: `Usando la siguiente información, crea una presentación de 5 a 8 diapositivas. Para cada diapositiva, provee un título y una lista de puntos clave (viñetas). Información: ${researchResponse.text}`, config: { responseMimeType: "application/json", responseSchema: slideSchema } });
             const parsedSlides = JSON.parse(structureResponse.text).slides;
             setPresentationSlides(parsedSlides);
             setPresentationMessages(prev => [...prev, { role: 'model', content: 'He creado una presentación inicial para ti. ¿Quieres hacer algún cambio?' }]);
         } else {
             setPresentationStep('Aplicando cambios...');
             const fullPrompt = `Dada la siguiente estructura de presentación en formato JSON: ${JSON.stringify(presentationSlides)}. Por favor, aplica la siguiente modificación: "${prompt}". Devuelve la estructura JSON COMPLETA y actualizada de toda la presentación.`;
-            const editResponse = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: fullPrompt, config: { responseMimeType: "application/json", responseSchema: slideSchema } });
+            const editResponse = await ai.models.generateContent({ model: 'gemini-flash-latest', contents: fullPrompt, config: { responseMimeType: "application/json", responseSchema: slideSchema } });
             const updatedSlides = JSON.parse(editResponse.text).slides;
             setPresentationSlides(updatedSlides);
             setPresentationMessages(prev => [...prev, { role: 'model', content: '¡Listo! He actualizado las diapositivas con tus cambios.' }]);

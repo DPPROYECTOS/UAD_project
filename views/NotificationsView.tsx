@@ -4,6 +4,9 @@ import { BellIcon, CheckCircleIcon } from '../components/Icons';
 
 interface NotificationsViewProps {
   notifications: Activity[];
+  readNotificationIds: Set<string>;
+  onMarkAsRead: (id: string) => void;
+  onMarkAllAsRead: () => void;
   onNavigate: (view: string) => void;
 }
 
@@ -41,10 +44,9 @@ const importanceBgClasses = {
 }
 
 
-const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, onNavigate }) => {
+const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, readNotificationIds, onMarkAsRead, onMarkAllAsRead, onNavigate }) => {
   const [dateFilter, setDateFilter] = useState('all');
   const [importanceFilter, setImportanceFilter] = useState('all');
-
 
   const filteredNotifications = useMemo(() => {
     const now = new Date();
@@ -70,10 +72,10 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, on
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h1 className="text-3xl font-bold">Historial de Notificaciones</h1>
-        <button onClick={() => onNavigate('Dashboard')} className="text-sm font-medium text-brand-primary hover:underline">
-          Volver al Dashboard
+        <button onClick={onMarkAllAsRead} className="text-sm font-medium text-brand-primary hover:underline">
+          Marcar todo como leído
         </button>
       </div>
 
@@ -111,9 +113,20 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, on
       <div className="bg-light-card dark:bg-dark-card p-4 rounded-lg border border-light-border dark:border-dark-border">
         {filteredNotifications.length > 0 ? (
           <ul className="divide-y divide-light-border dark:divide-dark-border">
-            {filteredNotifications.map(activity => (
-              <li key={activity.id} className="py-4 flex items-center group">
-                <div className="flex-shrink-0 mr-4">
+            {filteredNotifications.map(activity => {
+              const isRead = readNotificationIds.has(activity.id);
+              return (
+              <li 
+                key={activity.id} 
+                className={`py-4 flex items-center group transition-opacity duration-300 ${isRead ? 'opacity-50' : 'opacity-100'}`}
+                onClick={() => onMarkAsRead(activity.id)}
+              >
+                {!isRead && (
+                    <div className="flex-shrink-0 mr-4 h-10 flex items-center">
+                        <div className={`h-2 w-2 rounded-full ${importanceBgClasses[activity.importance]}`}></div>
+                    </div>
+                )}
+                <div className={`flex-shrink-0 mr-4 ${isRead ? 'ml-10' : ''}`}>
                     {activity.user.avatarUrl ? (
                         <img
                             src={activity.user.avatarUrl}
@@ -137,7 +150,8 @@ const NotificationsView: React.FC<NotificationsViewProps> = ({ notifications, on
                   </div>
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ul>
         ) : (
           <div className="text-center py-16 text-light-text-secondary dark:text-dark-text-secondary">

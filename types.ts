@@ -53,6 +53,9 @@ export interface UserPermissions {
   gemini: {
     canUse: boolean;
   };
+  juegos: {
+    canUnlock: boolean;
+  };
 }
 
 

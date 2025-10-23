@@ -5,7 +5,8 @@ import {
   ClipboardListIcon, 
   LinkIcon,
   PencilAltIcon,
-  SparklesIcon
+  SparklesIcon,
+  GameControllerIcon
 } from '../components/Icons';
 // Fix: Import UserPermissions from ../types
 import { getAdminData, savePermissionsForUser } from '../services/supabaseService';
@@ -56,6 +57,10 @@ const geminiPermissions = [
     { id: 'canUse', label: 'Usar Gemini' },
 ];
 
+const juegosPermissions = [
+    { id: 'canUnlock', label: 'Puede Desbloquear' },
+];
+
 
 const AdminView: React.FC = () => {
   const [activeTab, setActiveTab] = useState('proyectos');
@@ -74,6 +79,7 @@ const AdminView: React.FC = () => {
       auditorias: { canManage: true },
       pizarra: { canEdit: true },
       gemini: { canUse: true },
+      juegos: { canUnlock: false },
   }), []);
 
   useEffect(() => {
@@ -105,6 +111,7 @@ const AdminView: React.FC = () => {
                     auditorias: { ...defaultPermissions.auditorias, ...(user.permissions?.auditorias || {}) },
                     pizarra: { ...defaultPermissions.pizarra, ...(user.permissions?.pizarra || {}) },
                     gemini: { ...defaultPermissions.gemini, ...(user.permissions?.gemini || {}) },
+                    juegos: { ...defaultPermissions.juegos, ...(user.permissions?.juegos || {}) },
                 };
             });
             setAllUserPermissions(populatedPermissions);
@@ -244,6 +251,17 @@ const AdminView: React.FC = () => {
                             <div className="flex items-center p-2 text-sm rounded-md bg-light-bg dark:bg-dark-bg sticky left-0"><span title={perm.label}>{perm.label}</span></div>
                             {users.map(user => (
                                 <div key={`${perm.id}-${user.id}`} className="flex justify-center"><input type="checkbox" className="h-4 w-4 rounded border-light-border dark:border-dark-border text-brand-primary focus:ring-brand-primary" checked={allUserPermissions[user.id]?.gemini?.[perm.id as keyof UserPermissions['gemini']] ?? false} onChange={(e) => handlePermissionChange(user.id, 'gemini', perm.id, e.target.checked)} /></div>
+                            ))}
+                        </React.Fragment>
+                    ))}
+
+                    {/* Juegos Permissions */}
+                    <div className="col-span-full font-bold text-brand-primary pt-4 pb-2 flex items-center gap-2"><GameControllerIcon className="h-5 w-5"/>Juegos</div>
+                    {juegosPermissions.map(perm => (
+                        <React.Fragment key={`juegos-${perm.id}`}>
+                            <div className="flex items-center p-2 text-sm rounded-md bg-light-bg dark:bg-dark-bg sticky left-0"><span title={perm.label}>{perm.label}</span></div>
+                            {users.map(user => (
+                                <div key={`${perm.id}-${user.id}`} className="flex justify-center"><input type="checkbox" className="h-4 w-4 rounded border-light-border dark:border-dark-border text-brand-primary focus:ring-brand-primary" checked={allUserPermissions[user.id]?.juegos?.[perm.id as keyof UserPermissions['juegos']] ?? false} onChange={(e) => handlePermissionChange(user.id, 'juegos', perm.id, e.target.checked)} /></div>
                             ))}
                         </React.Fragment>
                     ))}

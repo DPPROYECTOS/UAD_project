@@ -466,3 +466,10 @@ export const RecordIcon: React.FC<{ className?: string }> = ({ className }) => (
 export const UserCircleIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={className} fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd"></path></svg>
 );
+
+export const GameControllerIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 6.75h.01M9 9.75h.01M9.75 12.75h.01M12 9.75h.01M12.75 6.75h.01M15 9.75h.01M15.75 12.75h.01M6 10.5a.75.75 0 01.75-.75h2.5a.75.75 0 010 1.5h-2.5a.75.75 0 01-.75-.75z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5C4.5 3.358 7.858 1.5 12 1.5s7.5 1.858 7.5 9z" />
+    </Icon>
+);

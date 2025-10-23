@@ -16,6 +16,8 @@ import AuditsView from './views/AuditsView';
 import AuditModal from './components/AuditModal';
 import WhiteboardView from './views/WhiteboardView';
 import AdminView from './views/AdminView';
+import GamesView from './views/GamesView';
+import SecretCodeModal from './components/SecretCodeModal';
 import { User, Project, ProjectTask, ProjectStatus, Activity, Folder, Document, LinkItem, AuditItem, RecurrenceRule, ToastNotification, UserPermissions } from './types';
 import { 
   signIn, 
@@ -50,7 +52,7 @@ import {
   getUserPermissions,
 } from './services/supabaseService';
 import Spinner from './components/Spinner';
-import { DoomPlayer } from './components/DoomPlayer';
+import { GamePlayer } from './components/GamePlayer';
 import { CheckCircleIcon, XCircleIcon } from './components/Icons';
 import FloatingRecorder from './components/FloatingRecorder';
 import ToastContainer from './components/ToastContainer';
@@ -156,6 +158,29 @@ const generateOccurrences = (
   return results;
 };
 
+const games = {
+  doom: {
+    title: 'DOOM',
+    url: 'https://silentspacemarine.com/',
+  },
+  ctr: {
+    title: 'Crash Team Racing',
+    url: 'https://www.minijuegos.com/embed/crash-team-racing',
+  },
+  cb1: {
+    title: 'Crash Bandicoot',
+    url: 'https://www.minijuegos.com/embed/crash-bandicoot',
+  },
+  bc: {
+    title: 'Battle City',
+    url: 'https://www.minijuegos.com/embed/battle-city',
+  },
+  msx: {
+    title: 'Metal Slug X',
+    url: 'https://www.minijuegos.com/embed/metal-slug-x',
+  },
+};
+
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -174,9 +199,15 @@ const App: React.FC = () => {
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
 
 
-  // --- Easter Egg State ---
-  const [isDoomMode, setIsDoomMode] = useState(false);
+  // --- Game & Easter Egg State ---
+  const [activeGame, setActiveGame] = useState<keyof typeof games | null>(null);
   const [secretClickCount, setSecretClickCount] = useState(0);
+
+  // --- NEW Secret Games Section State ---
+  const [secretSequence, setSecretSequence] = useState<string[]>([]);
+  const [isCodeModalVisible, setIsCodeModalVisible] = useState(false);
+  const [isGamesSectionUnlocked, setIsGamesSectionUnlocked] = useState(false);
+
 
   // --- Theme State ---
   const [theme, setTheme] = useState('dark'); // 'light', 'dark', 'custom'
@@ -208,8 +239,9 @@ const App: React.FC = () => {
   const [selectedAuditDate, setSelectedAuditDate] = useState<string | null>(null);
   const [auditToDelete, setAuditToDelete] = useState<AuditItem | null>(null);
 
-  // --- Notifications State (Session Only) ---
+  // --- Notifications State ---
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
 
   // --- Recorder State (Centralized) ---
   const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>('idle');
@@ -234,20 +266,65 @@ const App: React.FC = () => {
   };
 
 
-  // --- Easter Egg Handlers ---
+  // --- Game & Easter Egg Handlers ---
   const handleSecretTrigger = () => {
+    // New sequence logic
+    handleSecretSequenceStep('logo');
+
+    // Original Doom logic
     const newCount = secretClickCount + 1;
     if (newCount >= 9) {
-      setIsDoomMode(true);
+      handleGameEnter('doom');
       setSecretClickCount(0);
     } else {
       setSecretClickCount(newCount);
     }
   };
 
-  const handleDoomExit = () => {
-    setIsDoomMode(false);
+  const handleGameEnter = (gameId: keyof typeof games) => {
+    setActiveGame(gameId);
   };
+  
+  const handleGameExit = () => {
+    setActiveGame(null);
+  };
+  
+  // --- New Secret Section Handlers ---
+  const handleSecretSequenceStep = (step: string) => {
+    if (isGamesSectionUnlocked) return; // Already unlocked, do nothing
+
+    const correctSequence = ['logo', 'footer', 'pizarra', 'notificaciones'];
+    const currentSequenceLength = secretSequence.length;
+
+    if (correctSequence[currentSequenceLength] === step) {
+        const newSequence = [...secretSequence, step];
+        setSecretSequence(newSequence);
+        if (newSequence.length === correctSequence.length) {
+            if (userPermissions?.juegos?.canUnlock) {
+                setIsCodeModalVisible(true);
+            } else {
+                addToast("Acceso Denegado", "No tienes permiso para acceder a esta sección.", "error");
+                setSecretSequence([]);
+            }
+        }
+    } else {
+        setSecretSequence(step === 'logo' ? ['logo'] : []);
+    }
+  };
+
+  const handleCodeSubmit = (code: string): boolean => {
+    if (code === '4815162342') {
+        setIsGamesSectionUnlocked(true);
+        setIsCodeModalVisible(false);
+        setSecretSequence([]);
+        addToast("Éxito", "Sala de juegos desbloqueada.", "success");
+        return true;
+    } else {
+        setSecretSequence([]); // Reset on failure
+        return false;
+    }
+  };
+
 
   // Effect to apply the current theme to the document
   useEffect(() => {
@@ -306,6 +383,13 @@ const App: React.FC = () => {
   // Effect to fetch user-specific details (theme, avatar, permissions) after the user object is created.
   useEffect(() => {
     if (!user) return; 
+
+    // Load read notification IDs from localStorage
+    const savedReadIds = localStorage.getItem('readNotificationIds');
+    if (savedReadIds) {
+        setReadNotificationIds(new Set(JSON.parse(savedReadIds)));
+    }
+
 
     const fetchUserDetails = async () => {
         try {
@@ -392,6 +476,7 @@ const App: React.FC = () => {
         setLinks([]);
         setAudits([]);
         setActivities([]);
+        setReadNotificationIds(new Set()); // Clear read IDs
         setSelectedProject(null);
         setActiveView('Dashboard');
         setGeminiApiKey(null);
@@ -510,19 +595,11 @@ const App: React.FC = () => {
                         if (!localStorage.getItem(notificationId)) {
                             const timeText = interval.id === '1d' ? 'mañana' : `en ${interval.minutes} minutos`;
                             
-                            if (interval.id === '1d') {
-                                addActivity(
-                                    `comienza ${timeText}`,
-                                    `La auditoría "${a.title}"`,
-                                    'high'
-                                );
-                            } else {
-                                addToast(
-                                    `Recordatorio de Auditoría`,
-                                    `"${a.title}" comienza ${timeText}.`,
-                                    'info'
-                                );
-                            }
+                            addActivity(
+                                `comienza ${timeText}`,
+                                `La auditoría "${a.title}"`,
+                                'high'
+                            );
                             localStorage.setItem(notificationId, 'true');
                         }
                     }
@@ -809,7 +886,6 @@ const App: React.FC = () => {
   ) => {
     if (!user) return;
 
-    // 1. Create notification for local state
     const projectName = projectId ? projects.find(p => p.id === projectId)?.name : undefined;
     
     const getDisplayName = (username: string): string => {
@@ -818,9 +894,9 @@ const App: React.FC = () => {
         if (email === 'mejoraproyectos0@gmail.com') return 'Zerk Lucio';
         return username.split('@')[0];
     };
-
+    
     const newActivity: Activity = {
-        id: uuidv4(), // local unique ID
+        id: uuidv4(), // Use a temporary local unique ID
         user: {
             id: user.id,
             name: getDisplayName(user.username),
@@ -834,60 +910,28 @@ const App: React.FC = () => {
         projectName,
         isRead: false,
     };
-
     setActivities(prev => [newActivity, ...prev]);
+  };
 
-    // 2. Upload to Google Drive as a text file
-    try {
-        const content = `Timestamp: ${newActivity.timestamp}\nUser ID: ${newActivity.user.id}\nUser Name: ${newActivity.user.name}\nAction: ${newActivity.action}\nTarget: ${newActivity.target}\nImportance: ${newActivity.importance}\nProject ID: ${newActivity.projectId || 'N/A'}\nProject Name: ${newActivity.projectName || 'N/A'}`;
-        
-        const textBlob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        
-        const base64String = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.readAsDataURL(textBlob);
-            reader.onloadend = () => {
-                if (reader.result) {
-                    resolve((reader.result as string).split(',')[1]);
-                } else {
-                    reject(new Error("Failed to read blob as Base64."));
-                }
-            };
-            reader.onerror = (error) => reject(error);
-        });
-        
-        const now = new Date();
-        const date = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-        const time = `${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}-${now.getSeconds().toString().padStart(2, '0')}`;
-        const fileName = `Notificacion_${date}_${time}.txt`;
+  const unreadCount = useMemo(() => {
+    return activities.filter(a => !readNotificationIds.has(a.id)).length;
+  }, [activities, readNotificationIds]);
 
-        const uploadUrl = 'https://script.google.com/macros/s/AKfycbzCdJDu6zoxwKVKNUNL_-Fj6rM6dc6C1o_gYIUjLwUULolGD8Y1Paq1VWf1S67XPYu2/exec';
-        
-        const response = await fetch(uploadUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({
-                file: base64String,
-                fileName: fileName,
-                mimeType: 'text/plain'
-            })
-        });
+  const markAsRead = (id: string) => {
+    setReadNotificationIds(prev => {
+        const newSet = new Set(prev);
+        newSet.add(id);
+        localStorage.setItem('readNotificationIds', JSON.stringify(Array.from(newSet)));
+        return newSet;
+    });
+  };
 
-        if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
-
-        const result = await response.json();
-        if (result.status !== 'success') {
-            throw new Error(result.error || 'Error desconocido en el servidor durante la subida.');
-        }
-        
-    } catch (err) {
-        console.error("Failed to upload notification:", err);
-        addToast(
-            'Error de Sincronización',
-            'No se pudo guardar la notificación en Drive. Será visible solo en esta sesión.',
-            'error'
-        );
-    }
+  const markAllAsRead = () => {
+      const allIds = activities.map(a => a.id);
+      const newSet = new Set(readNotificationIds);
+      allIds.forEach(id => newSet.add(id));
+      localStorage.setItem('readNotificationIds', JSON.stringify(Array.from(newSet)));
+      setReadNotificationIds(newSet);
   };
 
   // --- Project Handlers ---
@@ -1311,8 +1355,9 @@ const App: React.FC = () => {
     setActiveView(view);
   };
 
-  if (isDoomMode) {
-    return <DoomPlayer onExit={handleDoomExit} />;
+  if (activeGame) {
+    const game = games[activeGame];
+    return <GamePlayer onExit={handleGameExit} gameTitle={game.title} gameUrl={game.url} />;
   }
 
   if (authLoading) {
@@ -1427,9 +1472,14 @@ const App: React.FC = () => {
                 /></>;
       case 'Notificaciones':
         return <>{globalErrorDisplay}<NotificationsView 
-                  notifications={activities} 
+                  notifications={activities}
+                  readNotificationIds={readNotificationIds}
+                  onMarkAsRead={markAsRead}
+                  onMarkAllAsRead={markAllAsRead}
                   onNavigate={changeView} 
                 /></>;
+      case 'Juegos':
+          return <>{globalErrorDisplay}<GamesView onEnterGame={handleGameEnter} /></>;
       case 'Administrador':
         if (user?.username !== 'darienperez695@gmail.com') {
           // If a non-admin somehow gets here, redirect to dashboard.
@@ -1463,6 +1513,8 @@ const App: React.FC = () => {
         currentTheme={theme}
         onThemeChange={handleThemeChange}
         onSecretTrigger={handleSecretTrigger}
+        onSecretSequenceStep={handleSecretSequenceStep}
+        isGamesSectionUnlocked={isGamesSectionUnlocked}
         recordingStatus={recordingStatus}
         recordingTime={recordingTime}
         uploadStatus={uploadStatus}
@@ -1479,8 +1531,9 @@ const App: React.FC = () => {
           onUpdateAvatar={handleUpdateAvatar}
           isAvatarLoading={isAvatarLoading}
           onLogout={handleLogout}
-          notifications={activities}
+          unreadCount={unreadCount}
           onNavigate={changeView}
+          onMarkAllAsRead={markAllAsRead}
           recordingStatus={recordingStatus}
           recordingTime={recordingTime}
           isEditor={true}
@@ -1491,6 +1544,16 @@ const App: React.FC = () => {
           </div>
         </main>
       </div>
+
+      {isCodeModalVisible && (
+          <SecretCodeModal
+              onClose={() => {
+                  setIsCodeModalVisible(false);
+                  setSecretSequence([]);
+              }}
+              onSubmit={handleCodeSubmit}
+          />
+      )}
 
       {isLinkModalOpen && (
         <LinkModal 

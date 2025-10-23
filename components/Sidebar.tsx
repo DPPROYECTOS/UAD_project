@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon, CheckCircleIcon, XCircleIcon } from './Icons';
+import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon, CheckCircleIcon, XCircleIcon, GameControllerIcon } from './Icons';
 import Spinner from './Spinner';
 import { User, UserPermissions } from '../types';
 
@@ -13,6 +13,8 @@ interface SidebarProps {
     currentTheme: string;
     onThemeChange: (themeName: string, customColors?: Record<string, string> | null) => void;
     onSecretTrigger: () => void;
+    onSecretSequenceStep: (step: string) => void;
+    isGamesSectionUnlocked: boolean;
     recordingStatus: RecordingStatus;
     recordingTime: number;
     uploadStatus: UploadStatus;
@@ -44,6 +46,7 @@ const NavLink: React.FC<{
 
 const Sidebar: React.FC<SidebarProps> = ({ 
     isOpen, activeView, setActiveView, currentTheme, onThemeChange, onSecretTrigger,
+    onSecretSequenceStep, isGamesSectionUnlocked,
     recordingStatus, recordingTime, uploadStatus, uploadMessage,
     onStartRecording, onTogglePauseResume, onStopRecording,
     user, userPermissions
@@ -153,9 +156,23 @@ const Sidebar: React.FC<SidebarProps> = ({
                             text={item.name} 
                             isOpen={isOpen}
                             isActive={activeView === item.name}
-                            onClick={() => setActiveView(item.name)}
+                            onClick={() => {
+                                setActiveView(item.name);
+                                if (item.name === 'Pizarra') onSecretSequenceStep('pizarra');
+                                if (item.name === 'Notificaciones') onSecretSequenceStep('notificaciones');
+                            }}
                         />
                     ))}
+                    {isGamesSectionUnlocked && (
+                        <NavLink 
+                            key="Juegos"
+                            icon={<GameControllerIcon className="h-6 w-6"/>}
+                            text="Juegos"
+                            isOpen={isOpen}
+                            isActive={activeView === 'Juegos'}
+                            onClick={() => setActiveView('Juegos')}
+                        />
+                    )}
                     {user.username === 'darienperez695@gmail.com' && (
                         <NavLink 
                             key="Administrador"
@@ -227,7 +244,10 @@ const Sidebar: React.FC<SidebarProps> = ({
                 </div>
 
                 <div className="p-4 flex-shrink-0">
-                    <p className={`text-xs text-center text-white/70 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                    <p 
+                      onClick={() => onSecretSequenceStep('footer')} 
+                      className={`text-xs text-center text-white/70 transition-opacity duration-300 cursor-pointer ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+                    >
                         SUAVE Y FACIL S.A. de C.V.
                     </p>
                 </div>
