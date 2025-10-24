@@ -381,7 +381,15 @@ export const getAudits = async (): Promise<AuditItem[]> => {
 export const addAudit = async (audit: Omit<AuditItem, 'id'>): Promise<AuditItem> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
-    const { data, error } = await supabase.from('audits').insert({ user_id: user.id, ...audit, time_of_audit: audit.timeOfAudit || null }).select().single();
+    
+    const { timeOfAudit, ...restOfAudit } = audit;
+
+    const { data, error } = await supabase.from('audits').insert({ 
+        user_id: user.id, 
+        ...restOfAudit, 
+        time_of_audit: timeOfAudit || null 
+    }).select().single();
+    
     if (error) throw error;
     return {
         id: data.id, title: data.title, date: data.date, color: data.color, recurrence: data.recurrence || { type: 'none' },
@@ -390,8 +398,13 @@ export const addAudit = async (audit: Omit<AuditItem, 'id'>): Promise<AuditItem>
 };
 
 export const updateAudit = async (audit: AuditItem): Promise<AuditItem> => {
-    const { id, ...auditData } = audit;
-    const { data, error } = await supabase.from('audits').update({ ...auditData, time_of_audit: auditData.timeOfAudit || null }).eq('id', id).select().single();
+    const { id, timeOfAudit, ...auditData } = audit;
+    
+    const { data, error } = await supabase.from('audits').update({ 
+        ...auditData, 
+        time_of_audit: timeOfAudit || null 
+    }).eq('id', id).select().single();
+    
     if (error) throw error;
     return {
         id: data.id, title: data.title, date: data.date, color: data.color, recurrence: data.recurrence || { type: 'none' },

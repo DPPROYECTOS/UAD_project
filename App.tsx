@@ -207,6 +207,7 @@ const App: React.FC = () => {
   const [secretSequence, setSecretSequence] = useState<string[]>([]);
   const [isCodeModalVisible, setIsCodeModalVisible] = useState(false);
   const [isGamesSectionUnlocked, setIsGamesSectionUnlocked] = useState(false);
+  const [hideGamesClickCount, setHideGamesClickCount] = useState(0);
 
 
   // --- Theme State ---
@@ -288,6 +289,18 @@ const App: React.FC = () => {
   const handleGameExit = () => {
     setActiveGame(null);
   };
+
+  const handleHideGamesTrigger = () => {
+    if (isGamesSectionUnlocked) {
+      const newCount = hideGamesClickCount + 1;
+      setHideGamesClickCount(newCount);
+      if (newCount >= 3) {
+        setIsGamesSectionUnlocked(false);
+        setHideGamesClickCount(0); // Reset the count
+        addToast("Secreto", "Sala de juegos oculta.", "info");
+      }
+    }
+  };
   
   // --- New Secret Section Handlers ---
   const handleSecretSequenceStep = (step: string) => {
@@ -315,6 +328,7 @@ const App: React.FC = () => {
   const handleCodeSubmit = (code: string): boolean => {
     if (code === '4815162342') {
         setIsGamesSectionUnlocked(true);
+        setHideGamesClickCount(0);
         setIsCodeModalVisible(false);
         setSecretSequence([]);
         addToast("Éxito", "Sala de juegos desbloqueada.", "success");
@@ -482,6 +496,8 @@ const App: React.FC = () => {
         setGeminiApiKey(null);
         setApiKeyError(null);
         setUserPermissions(null); // Clear permissions on logout
+        setIsGamesSectionUnlocked(false);
+        setHideGamesClickCount(0);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]); // This effect runs whenever the user object changes.
@@ -1514,6 +1530,7 @@ const App: React.FC = () => {
         onThemeChange={handleThemeChange}
         onSecretTrigger={handleSecretTrigger}
         onSecretSequenceStep={handleSecretSequenceStep}
+        onHideGamesTrigger={handleHideGamesTrigger}
         isGamesSectionUnlocked={isGamesSectionUnlocked}
         recordingStatus={recordingStatus}
         recordingTime={recordingTime}

@@ -14,6 +14,7 @@ interface SidebarProps {
     onThemeChange: (themeName: string, customColors?: Record<string, string> | null) => void;
     onSecretTrigger: () => void;
     onSecretSequenceStep: (step: string) => void;
+    onHideGamesTrigger: () => void;
     isGamesSectionUnlocked: boolean;
     recordingStatus: RecordingStatus;
     recordingTime: number;
@@ -46,7 +47,7 @@ const NavLink: React.FC<{
 
 const Sidebar: React.FC<SidebarProps> = ({ 
     isOpen, activeView, setActiveView, currentTheme, onThemeChange, onSecretTrigger,
-    onSecretSequenceStep, isGamesSectionUnlocked,
+    onSecretSequenceStep, onHideGamesTrigger, isGamesSectionUnlocked,
     recordingStatus, recordingTime, uploadStatus, uploadMessage,
     onStartRecording, onTogglePauseResume, onStopRecording,
     user, userPermissions
@@ -245,7 +246,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                 <div className="p-4 flex-shrink-0">
                     <p 
-                      onClick={() => onSecretSequenceStep('footer')} 
+                      onClick={() => {
+                        onSecretSequenceStep('footer');
+                        onHideGamesTrigger();
+                      }} 
                       className={`text-xs text-center text-white/70 transition-opacity duration-300 cursor-pointer ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
                     >
                         SUAVE Y FACIL S.A. de C.V.
