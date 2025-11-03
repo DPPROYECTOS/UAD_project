@@ -223,7 +223,7 @@ const StickyNoteComponent: React.FC<StickyNoteComponentProps> = ({
     const startRotation = note.rotation || 0;
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
-      const currentAngle = Math.atan2(moveEvent.clientY - centerY, moveEvent.clientX - centerX);
+      const currentAngle = Math.atan2(moveEvent.clientY - centerY, e.clientX - centerX);
       const angleDiff = currentAngle - startAngle;
       
       const newRotationDegrees = startRotation + (angleDiff * 180 / Math.PI);

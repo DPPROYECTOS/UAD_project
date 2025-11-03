@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon, CheckCircleIcon, XCircleIcon, GameControllerIcon } from './Icons';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon, CheckCircleIcon, XCircleIcon, GameControllerIcon, KeyIcon } from './Icons';
 import Spinner from './Spinner';
 import { User, UserPermissions } from '../types';
 
@@ -25,6 +25,7 @@ interface SidebarProps {
     onStopRecording: () => void;
     user: User;
     userPermissions: UserPermissions | null;
+    setIsMasterBypassActive: (isActive: boolean) => void;
 }
 
 const NavLink: React.FC<{ 
@@ -33,12 +34,17 @@ const NavLink: React.FC<{
     isOpen: boolean; 
     isActive: boolean;
     onClick: () => void;
-}> = ({ icon, text, isOpen, isActive, onClick }) => (
+    onMouseDown?: () => void;
+    onMouseUp?: () => void;
+    onTouchStart?: () => void;
+    onTouchEnd?: () => void;
+}> = ({ icon, text, isOpen, isActive, onClick, ...longPressProps }) => (
     <a 
       href="#" 
       onClick={(e) => { e.preventDefault(); onClick(); }}
       className={`flex items-center p-3 my-1 rounded-lg transition-colors duration-200 text-white ${isActive ? 'bg-[var(--color-brand-secondary)] font-semibold' : 'hover:bg-[var(--color-brand-secondary)]/50'}`}
       title={text}
+      {...longPressProps}
     >
         {icon}
         <span className={`ml-4 whitespace-nowrap transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>{text}</span>
@@ -50,19 +56,47 @@ const Sidebar: React.FC<SidebarProps> = ({
     onSecretSequenceStep, onHideGamesTrigger, isGamesSectionUnlocked,
     recordingStatus, recordingTime, uploadStatus, uploadMessage,
     onStartRecording, onTogglePauseResume, onStopRecording,
-    user, userPermissions
+    user, userPermissions, setIsMasterBypassActive
 }) => {
     const [isCustomizerOpen, setCustomizerOpen] = useState(false);
+    const longPressTimer = useRef<number>();
+
+    const handlePasswordLongPressStart = () => {
+        longPressTimer.current = window.setTimeout(() => {
+            setIsMasterBypassActive(true);
+            setActiveView('Contraseñas');
+        }, 6000); // 6 seconds
+    };
+
+    const handlePasswordLongPressEnd = () => {
+        clearTimeout(longPressTimer.current);
+    };
+
 
     const defaultCustomColors = {
+        // Interface Colors
         '--color-brand-primary': '#4a90e2',
         '--color-brand-secondary': '#357abd',
         '--color-light-bg': '#f0f2f5',
         '--color-dark-bg': '#1c1c1e',
         '--color-light-card': '#ffffff',
         '--color-dark-card': '#2c2c2e',
+        // Text Colors
+        '--color-light-text': '#111827',
+        '--color-light-text-secondary': '#6b7280',
+        '--color-dark-text': '#c9d1d9',
+        '--color-dark-text-secondary': '#8b949e',
     };
     const [customColors, setCustomColors] = useState(defaultCustomColors);
+
+    const interfaceColorKeys = [
+        '--color-brand-primary', '--color-brand-secondary', '--color-light-bg', 
+        '--color-dark-bg', '--color-light-card', '--color-dark-card'
+    ];
+    const textColorKeys = [
+        '--color-light-text', '--color-light-text-secondary', 
+        '--color-dark-text', '--color-dark-text-secondary'
+    ];
 
     const handleColorChange = (key: string, value: string) => {
         const newColors = { ...customColors, [key]: value };
@@ -127,6 +161,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { name: 'Auditorias', icon: <ClipboardListIcon className="h-6 w-6"/>, id: 'auditorias' },
         { name: 'Pizarra', icon: <PencilAltIcon className="h-6 w-6"/>, id: 'pizarra' },
         { name: 'Notificaciones', icon: <BellIcon className="h-6 w-6"/>, id: 'notificaciones' },
+        { name: 'Contraseñas', icon: <KeyIcon className="h-6 w-6"/>, id: 'contraseñas' },
     ];
     
     const visibleNavItems = useMemo(() => {
@@ -134,8 +169,8 @@ const Sidebar: React.FC<SidebarProps> = ({
         if (!sidebarPermissions) {
             return navItems; // Fallback to show all if permissions are not loaded
         }
-        return navItems.filter(item => sidebarPermissions[item.id]);
-    }, [userPermissions]);
+        return navItems.filter(item => sidebarPermissions[item.id as keyof typeof sidebarPermissions]);
+    }, [userPermissions, navItems]);
 
 
     return (
@@ -150,20 +185,28 @@ const Sidebar: React.FC<SidebarProps> = ({
                     </div>
                 </div>
                 <nav className="flex-1 p-3 overflow-y-auto">
-                    {visibleNavItems.map(item => (
-                        <NavLink 
-                            key={item.name}
-                            icon={item.icon} 
-                            text={item.name} 
-                            isOpen={isOpen}
-                            isActive={activeView === item.name}
-                            onClick={() => {
-                                setActiveView(item.name);
-                                if (item.name === 'Pizarra') onSecretSequenceStep('pizarra');
-                                if (item.name === 'Notificaciones') onSecretSequenceStep('notificaciones');
-                            }}
-                        />
-                    ))}
+                    {visibleNavItems.map(item => {
+                        const isPasswords = item.name === 'Contraseñas';
+                        return (
+                            <NavLink 
+                                key={item.name}
+                                icon={item.icon} 
+                                text={item.name} 
+                                isOpen={isOpen}
+                                isActive={activeView === item.name}
+                                onClick={() => {
+                                    setActiveView(item.name);
+                                    if (item.name === 'Pizarra') onSecretSequenceStep('pizarra');
+                                    if (item.name === 'Notificaciones') onSecretSequenceStep('notificaciones');
+                                }}
+                                onMouseDown={isPasswords ? handlePasswordLongPressStart : undefined}
+                                onMouseUp={isPasswords ? handlePasswordLongPressEnd : undefined}
+                                onMouseLeave={isPasswords ? handlePasswordLongPressEnd : undefined}
+                                onTouchStart={isPasswords ? handlePasswordLongPressStart : undefined}
+                                onTouchEnd={isPasswords ? handlePasswordLongPressEnd : undefined}
+                            />
+                        );
+                    })}
                     {isGamesSectionUnlocked && (
                         <NavLink 
                             key="Juegos"
@@ -221,22 +264,47 @@ const Sidebar: React.FC<SidebarProps> = ({
                         </button>
                     </div>
                     {isCustomizerOpen && (
-                        <div className={`absolute bottom-full mb-2 p-4 bg-light-card dark:bg-dark-card rounded-lg shadow-2xl border border-light-border dark:border-dark-border ${isOpen ? 'left-4 right-4' : 'left-full ml-2 w-64'}`}>
+                        <div className={`absolute bottom-full mb-2 p-4 bg-light-card dark:bg-dark-card rounded-lg shadow-2xl border border-light-border dark:border-dark-border ${isOpen ? 'left-4 right-4' : 'left-full ml-2 w-72'}`}>
                             <h4 className="text-sm font-bold text-light-text dark:text-dark-text mb-3">Personalizar Tema</h4>
-                            <div className="space-y-2">
-                                {Object.entries(customColors).map(([key, value]) => (
-                                    <div key={key} className="flex items-center justify-between text-xs text-light-text-secondary dark:text-dark-text-secondary">
-                                        <label htmlFor={key}>{key.replace('--color-', '').replace(/-/g, ' ')}</label>
-                                        <input
-                                            type="color"
-                                            id={key}
-                                            value={value}
-                                            onChange={(e) => handleColorChange(key, e.target.value)}
-                                            className="w-8 h-6 p-0 border-none rounded cursor-pointer bg-transparent"
-                                        />
+                            
+                            <div className="space-y-3">
+                                <div>
+                                    <p className="text-xs font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-2 uppercase tracking-wider">Colores de Interfaz</p>
+                                    <div className="space-y-2">
+                                        {interfaceColorKeys.map(key => (
+                                            <div key={key} className="flex items-center justify-between text-xs text-light-text-secondary dark:text-dark-text-secondary capitalize">
+                                                <label htmlFor={key}>{key.replace('--color-', '').replace(/-/g, ' ')}</label>
+                                                <input
+                                                    type="color"
+                                                    id={key}
+                                                    value={customColors[key as keyof typeof customColors]}
+                                                    onChange={(e) => handleColorChange(key, e.target.value)}
+                                                    className="w-8 h-6 p-0 border-none rounded cursor-pointer bg-transparent"
+                                                />
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                </div>
+
+                                <div>
+                                    <p className="text-xs font-semibold text-light-text-secondary dark:text-dark-text-secondary mb-2 uppercase tracking-wider">Colores de Texto</p>
+                                    <div className="space-y-2">
+                                        {textColorKeys.map(key => (
+                                            <div key={key} className="flex items-center justify-between text-xs text-light-text-secondary dark:text-dark-text-secondary capitalize">
+                                                <label htmlFor={key}>{key.replace('--color-', '').replace(/-/g, ' ')}</label>
+                                                <input
+                                                    type="color"
+                                                    id={key}
+                                                    value={customColors[key as keyof typeof customColors]}
+                                                    onChange={(e) => handleColorChange(key, e.target.value)}
+                                                    className="w-8 h-6 p-0 border-none rounded cursor-pointer bg-transparent"
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             </div>
+                            
                             <button onClick={handleSaveCustomTheme} className="w-full mt-4 px-3 py-1.5 text-xs font-semibold text-white bg-brand-primary rounded-md hover:bg-brand-secondary">
                                 Aplicar y Guardar
                             </button>

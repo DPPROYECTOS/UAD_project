@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { GoogleGenAI, LiveServerMessage, Modality, Blob as GenAI_Blob, LiveSession } from '@google/genai';
+// FIX: Removed non-exported 'LiveSession' type from import.
+import { GoogleGenAI, LiveServerMessage, Modality, Blob as GenAI_Blob } from '@google/genai';
 import { XIcon, MicrophoneIcon, SparklesIcon, UserCircleIcon } from './Icons';
 import Spinner from './Spinner';
 
@@ -65,7 +66,8 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ onClose, geminiApiKey }) 
   const [error, setError] = useState<string | null>(null);
   const [transcriptionHistory, setTranscriptionHistory] = useState<Transcription[]>([]);
 
-  const sessionPromiseRef = useRef<Promise<LiveSession> | null>(null);
+  // FIX: Changed 'LiveSession' to 'any' as it is not an exported type.
+  const sessionPromiseRef = useRef<Promise<any> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const inputAudioContextRef = useRef<AudioContext | null>(null);
   const outputAudioContextRef = useRef<AudioContext | null>(null);

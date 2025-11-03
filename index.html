@@ -2,184 +2,139 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Proyectos y Mejora</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS Configuration -->
     <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            colors: {
-              'brand-primary': 'var(--color-brand-primary)',
-              'brand-secondary': 'var(--color-brand-secondary)',
-              'brand-accent': 'var(--color-brand-accent)',
-              'brand-active-tab': 'var(--color-brand-active-tab)',
-              'status-completed': 'var(--color-status-completed)',
-              'status-in-progress': 'var(--color-status-in-progress)',
-              'status-on-hold': 'var(--color-status-on-hold)',
-              'status-not-started': 'var(--color-status-not-started)',
-              'light-bg': 'var(--color-light-bg)',
-              'dark-bg': 'var(--color-dark-bg)',
-              'light-card': 'var(--color-light-card)',
-              'dark-card': 'var(--color-dark-card)',
-              'light-text': 'var(--color-light-text)',
-              'dark-text': 'var(--color-dark-text)',
-              'light-text-secondary': 'var(--color-light-text-secondary)',
-              'dark-text-secondary': 'var(--color-dark-text-secondary)',
-              'light-border': 'var(--color-light-border)',
-              'dark-border': 'var(--color-dark-border)',
-            },
-            height: {
-              '16': '4rem',
-            },
-            width: {
-                '64': '16rem',
-            },
-            animation: {
-              'fade-in': 'fadeIn 0.5s ease-in-out',
-              'subtle-pulse': 'subtle-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            },
-            keyframes: {
-              fadeIn: {
-                '0%': { opacity: '0' },
-                '100%': { opacity: '1' },
-              },
-              'subtle-pulse': {
-                '0%, 100%': { opacity: '1' },
-                '50%': { opacity: '0.6' },
-              },
-            },
-          }
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        'brand-primary': 'var(--color-brand-primary)',
+                        'brand-secondary': 'var(--color-brand-secondary)',
+                        'light-bg': 'var(--color-light-bg)',
+                        'dark-bg': 'var(--color-dark-bg)',
+                        'light-card': 'var(--color-light-card)',
+                        'dark-card': 'var(--color-dark-card)',
+                        'light-border': 'var(--color-light-border)',
+                        'dark-border': 'var(--color-dark-border)',
+                        'light-text': 'var(--color-light-text)',
+                        'dark-text': 'var(--color-dark-text)',
+                        'light-text-secondary': 'var(--color-light-text-secondary)',
+                        'dark-text-secondary': 'var(--color-dark-text-secondary)',
+                        'brand-accent': 'var(--color-brand-primary)',
+                        'status-not-started': 'var(--color-status-not-started)',
+                        'status-in-progress': 'var(--color-status-in-progress)',
+                        'status-on-hold': 'var(--color-status-on-hold)',
+                        'status-completed': 'var(--color-status-completed)',
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.3s ease-out',
+                        'subtle-pulse': 'subtlePulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'shake': 'shake 0.82s cubic-bezier(.36,.07,.19,.97) both',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0', transform: 'translateY(-10px)' },
+                            '100%': { opacity: '1', transform: 'translateY(0)' },
+                        },
+                        subtlePulse: {
+                            '0%, 100%': { opacity: '0.75' },
+                            '50%': { opacity: '1' },
+                        },
+                        shake: {
+                          '10%, 90%': { transform: 'translate3d(-1px, 0, 0)' },
+                          '20%, 80%': { transform: 'translate3d(2px, 0, 0)' },
+                          '30%, 50%, 70%': { transform: 'translate3d(-4px, 0, 0)' },
+                          '40%, 60%': { transform: 'translate3d(4px, 0, 0)' },
+                        }
+                    }
+                }
+            }
         }
-      }
     </script>
-<style>
-  /* Base CSS variables for themes */
-  :root, html.theme-light {
-    --color-brand-primary: #007BFF; /* A more standard blue for light theme */
-    --color-brand-secondary: #0056b3;
-    --color-brand-accent: #3395ff;
-    --color-brand-active-tab: #0056b3;
-    
-    --color-status-completed: #28a745;
-    --color-status-in-progress: #17a2b8;
-    --color-status-on-hold: #ffc107;
-    --color-status-not-started: #6c757d;
+    <!-- Global Styles & Theme Variables -->
+    <style>
+      :root {
+        --color-brand-primary: #4A90E2;
+        --color-brand-secondary: #357ABD;
+        --color-light-bg: #f0f2f5;
+        --color-light-card: #ffffff;
+        --color-light-border: #e5e7eb;
+        --color-light-text: #111827;
+        --color-light-text-secondary: #6b7280;
+        
+        /* Dark colors are defined here but primarily activated by html.dark */
+        --color-dark-bg: #0d1117;
+        --color-dark-card: #161b22;
+        --color-dark-border: #30363d;
+        --color-dark-text: #c9d1d9;
+        --color-dark-text-secondary: #8b949e;
 
-    --color-light-bg: #F8F9FA;
-    --color-dark-bg: #343A40; /* Not used in light theme, but defined */
-    --color-light-card: #FFFFFF;
-    --color-dark-card: #495057; /* Not used in light theme */
-    
-    --color-light-text: #212529;
-    --color-dark-text: #F8F9FA; /* Not used in light theme */
-    --color-light-text-secondary: #6c757d;
-    --color-dark-text-secondary: #CED4DA; /* Not used in light theme */
-    
-    --color-light-border: #DEE2E6;
-    --color-dark-border: #495057; /* Not used in light theme */
-  }
-
-  html.theme-dark {
-    --color-brand-primary: #D44C00;
-    --color-brand-secondary: #B34000;
-    --color-brand-accent: #E76F33;
-    --color-brand-active-tab: #0086D4;
-
-    --color-status-completed: #10B981;
-    --color-status-in-progress: #3B82F6;
-    --color-status-on-hold: #F59E0B;
-    --color-status-not-started: #6B7280;
-
-    --color-light-bg: #F3F4F6; /* Mapped to dark theme body */
-    --color-dark-bg: #111827; /* Mapped to dark theme body */
-
-    --color-light-card: #FFFFFF; /* Mapped to dark theme cards */
-    --color-dark-card: #1F2937; /* Mapped to dark theme cards */
-
-    --color-light-text: #1F2937; /* Mapped to dark theme text */
-    --color-dark-text: #F9FAFB; /* Mapped to dark theme text */
-
-    --color-light-text-secondary: #6B7280;
-    --color-dark-text-secondary: #9CA3AF;
-    
-    --color-light-border: #E5E7EB;
-    --color-dark-border: #374151;
-  }
-
-  /* Simple scrollbar styling for a better UX */
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #9CA3AF; border-radius: 10px; border: 2px solid transparent; background-clip: content-box; }
-  html.theme-dark ::-webkit-scrollbar-thumb { background: #4B5563; }
-  ::-webkit-scrollbar-thumb:hover { background: #6B7280; }
-  html.theme-dark ::-webkit-scrollbar-thumb:hover { background: #374151; }
-
-  /* Custom dark scrollbar for Gantt chart */
-  .gantt-scrollbar::-webkit-scrollbar { height: 14px; }
-  .gantt-scrollbar::-webkit-scrollbar-track { background: #e0e0e0; border-radius: 10px; }
-  .gantt-scrollbar::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 10px; border: 2px solid #e0e0e0; }
-  .gantt-scrollbar::-webkit-scrollbar-thumb:hover { background: #1a202c; }
-  html.theme-dark .gantt-scrollbar::-webkit-scrollbar-track { background: #2d3748; }
-  html.theme-dark .gantt-scrollbar::-webkit-scrollbar-thumb { background: #4a5568; border-color: #2d3748;}
-  html.theme-dark .gantt-scrollbar::-webkit-scrollbar-thumb:hover { background: #718096; }
-
-  /* Style for weekend cells in Gantt chart - VISIBLE HATCHING */
-  .weekend-cell {
-    background-image: repeating-linear-gradient(
-      45deg,
-      var(--color-light-border),
-      var(--color-light-border) 1px,
-      transparent 1px,
-      transparent 5px
-    );
-  }
-  html.theme-dark .weekend-cell {
-    background-image: repeating-linear-gradient(
-      45deg,
-      var(--color-dark-border),
-      var(--color-dark-border) 1px,
-      transparent 1px,
-      transparent 5px
-    );
-  }
-
-  /* Style for holiday cells - transparent red background */
-  .holiday-cell {
-    background-color: rgba(239, 68, 68, 0.15); /* bg-red-500/15 */
-  }
-  html.theme-dark .holiday-cell {
-    background-color: rgba(239, 68, 68, 0.25); /* bg-red-500/25 for better contrast */
-  }
-
-  /* Body background color is now controlled by CSS variables */
-  body {
-    background-color: var(--color-light-bg);
-  }
-  html.theme-dark body {
-    background-color: var(--color-dark-bg);
-  }
-</style>
-<script type="importmap">
-{
-  "imports": {
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "@supabase/supabase-js": "https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.22.0",
-    "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
-    "jspdf": "https://aistudiocdn.com/jspdf@^2.5.1",
-    "pptxgenjs": "https://aistudiocdn.com/pptxgenjs@^3.12.0"
-  }
-}
-</script>
-<script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.0/lame.min.js"></script>
+        --color-status-not-started: #3b82f6;
+        --color-status-in-progress: #f59e0b;
+        --color-status-on-hold: #8b5cf6;
+        --color-status-completed: #22c55e;
+      }
+      html.dark {
+        --color-brand-primary: #58a6ff;
+        --color-brand-secondary: #478cde;
+      }
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+          'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar { width: 8px; height: 8px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background-color: rgba(156, 163, 175, 0.5); border-radius: 4px; }
+      ::-webkit-scrollbar-thumb:hover { background-color: rgba(156, 163, 175, 0.7); }
+      html.dark ::-webkit-scrollbar-thumb { background-color: rgba(107, 114, 128, 0.5); }
+      html.dark ::-webkit-scrollbar-thumb:hover { background-color: rgba(107, 114, 128, 0.7); }
+      /* Gantt Chart Helpers */
+      .weekend-cell { background-color: #f9fafb; }
+      html.dark .weekend-cell { background-color: rgba(255, 255, 255, 0.03); }
+      .holiday-cell { background-color: #fee2e2; }
+      html.dark .holiday-cell { background-color: rgba(153, 27, 27, 0.3); }
+      .gantt-scrollbar::-webkit-scrollbar { height: 12px; }
+      .gantt-scrollbar::-webkit-scrollbar-thumb { background-color: #a0aec0; border-radius: 6px; }
+      html.dark .gantt-scrollbar::-webkit-scrollbar-thumb { background-color: #4a5568; }
+      /* Prose styles for Gemini chat */
+      .prose { max-width: 65ch; color: inherit; }
+      .prose code { color: var(--color-dark-text); background-color: var(--color-dark-bg); padding: 0.2em 0.4em; margin: 0; font-size: 85%; border-radius: 6px; }
+      html.dark .prose code { color: var(--color-light-text); background-color: var(--color-light-bg); }
+    </style>
 <link rel="stylesheet" href="/index.css">
 </head>
 <body>
+    <noscript>Necesitas habilitar JavaScript para ejecutar esta aplicación.</noscript>
     <div id="root"></div>
-    <script type="module" src="/index.tsx"></script>
+    <script type="importmap">
+    {
+      "imports": {
+        "uuid": "https://aistudiocdn.com/uuid@^13.0.0",
+        "react/": "https://aistudiocdn.com/react@^19.2.0/",
+        "react": "https://aistudiocdn.com/react@^19.2.0",
+        "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+        "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@^2.78.0",
+        "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.0",
+        "path": "https://aistudiocdn.com/path@^0.12.7",
+        "vite": "https://aistudiocdn.com/vite@^7.1.12",
+        "@google/genai": "https://aistudiocdn.com/@google/genai@^1.28.0",
+        "pptxgenjs": "https://aistudiocdn.com/pptxgenjs@^4.0.1",
+        "jspdf": "https://aistudiocdn.com/jspdf@^3.0.3"
+      }
+    }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
+    <script type="module" src="./index.tsx"></script>
+<script type="module" src="/index.tsx"></script>
 </body>
 </html>

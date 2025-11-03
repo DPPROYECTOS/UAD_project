@@ -189,8 +189,10 @@ const GeminiView: React.FC<GeminiViewProps> = ({ geminiApiKey, isApiKeyLoading, 
 
         const result = await currentChat.sendMessage({ message: query });
         
-        const sources = result.response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((c: any) => c.web) || [];
-        setSearchHistory(prev => [...prev, { role: 'model', content: { text: result.response.text, sources } }]);
+        // FIX: `result` is the `GenerateContentResponse`, so access properties directly.
+        const sources = result.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((c: any) => c.web) || [];
+        // FIX: `result` is the `GenerateContentResponse`, so access properties directly.
+        setSearchHistory(prev => [...prev, { role: 'model', content: { text: result.text, sources } }]);
     } catch (err) {
         setError(err instanceof Error ? err.message : 'Error al realizar la búsqueda.');
     } finally {

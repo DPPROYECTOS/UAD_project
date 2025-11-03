@@ -6,7 +6,8 @@ import {
   LinkIcon,
   PencilAltIcon,
   SparklesIcon,
-  GameControllerIcon
+  GameControllerIcon,
+  KeyIcon
 } from '../components/Icons';
 // Fix: Import UserPermissions from ../types
 import { getAdminData, savePermissionsForUser } from '../services/supabaseService';
@@ -61,6 +62,10 @@ const juegosPermissions = [
     { id: 'canUnlock', label: 'Puede Desbloquear' },
 ];
 
+const contraseñasPermissions = [
+    { id: 'canManage', label: 'Puede Gestionar' },
+];
+
 
 const AdminView: React.FC = () => {
   const [activeTab, setActiveTab] = useState('proyectos');
@@ -71,7 +76,7 @@ const AdminView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const defaultPermissions: UserPermissions = useMemo(() => ({
-      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, gemini: true, auditorias: true, pizarra: true, notificaciones: true },
+      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, gemini: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true },
       proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
       proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
       documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
@@ -80,6 +85,7 @@ const AdminView: React.FC = () => {
       pizarra: { canEdit: true },
       gemini: { canUse: true },
       juegos: { canUnlock: false },
+      contraseñas: { canManage: true },
   }), []);
 
   useEffect(() => {
@@ -112,6 +118,7 @@ const AdminView: React.FC = () => {
                     pizarra: { ...defaultPermissions.pizarra, ...(user.permissions?.pizarra || {}) },
                     gemini: { ...defaultPermissions.gemini, ...(user.permissions?.gemini || {}) },
                     juegos: { ...defaultPermissions.juegos, ...(user.permissions?.juegos || {}) },
+                    contraseñas: { ...defaultPermissions.contraseñas, ...(user.permissions?.contraseñas || {}) },
                 };
             });
             setAllUserPermissions(populatedPermissions);
@@ -262,6 +269,17 @@ const AdminView: React.FC = () => {
                             <div className="flex items-center p-2 text-sm rounded-md bg-light-bg dark:bg-dark-bg sticky left-0"><span title={perm.label}>{perm.label}</span></div>
                             {users.map(user => (
                                 <div key={`${perm.id}-${user.id}`} className="flex justify-center"><input type="checkbox" className="h-4 w-4 rounded border-light-border dark:border-dark-border text-brand-primary focus:ring-brand-primary" checked={allUserPermissions[user.id]?.juegos?.[perm.id as keyof UserPermissions['juegos']] ?? false} onChange={(e) => handlePermissionChange(user.id, 'juegos', perm.id, e.target.checked)} /></div>
+                            ))}
+                        </React.Fragment>
+                    ))}
+
+                    {/* Contraseñas Permissions */}
+                    <div className="col-span-full font-bold text-brand-primary pt-4 pb-2 flex items-center gap-2"><KeyIcon className="h-5 w-5"/>Contraseñas</div>
+                    {contraseñasPermissions.map(perm => (
+                        <React.Fragment key={`contraseñas-${perm.id}`}>
+                            <div className="flex items-center p-2 text-sm rounded-md bg-light-bg dark:bg-dark-bg sticky left-0"><span title={perm.label}>{perm.label}</span></div>
+                            {users.map(user => (
+                                <div key={`${perm.id}-${user.id}`} className="flex justify-center"><input type="checkbox" className="h-4 w-4 rounded border-light-border dark:border-dark-border text-brand-primary focus:ring-brand-primary" checked={allUserPermissions[user.id]?.contraseñas?.[perm.id as keyof UserPermissions['contraseñas']] ?? false} onChange={(e) => handlePermissionChange(user.id, 'contraseñas', perm.id, e.target.checked)} /></div>
                             ))}
                         </React.Fragment>
                     ))}

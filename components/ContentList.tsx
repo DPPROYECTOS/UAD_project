@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Content, ContentType } from '../types';
 import { DocumentTextIcon, PhotographIcon, LinkIcon, TrashIcon, CollectionIcon } from './Icons';

@@ -21,7 +21,17 @@ export interface ThemePreferences {
 }
 
 export interface UserPermissions {
-  sidebar: { [key: string]: boolean };
+  sidebar: {
+    dashboard: boolean;
+    proyectos: boolean;
+    documentos: boolean;
+    enlaces: boolean;
+    gemini: boolean;
+    auditorias: boolean;
+    pizarra: boolean;
+    notificaciones: boolean;
+    contraseñas: boolean;
+  };
   proyectos: {
     canCreate: boolean;
     canEdit: boolean;
@@ -55,6 +65,9 @@ export interface UserPermissions {
   };
   juegos: {
     canUnlock: boolean;
+  };
+  contraseñas: {
+    canManage: boolean;
   };
 }
 
@@ -128,11 +141,27 @@ export interface LinkItem {
     url: string;
 }
 
+// --- Passwords ---
+export interface PasswordItem {
+  id: string;
+  user_id: string;
+  service: string;
+  username: string;
+  password_ct: string; // Ciphertext
+}
+
+
 // --- Audits ---
 export interface RecurrenceRule {
   type: 'none' | 'weekly' | 'monthly' | 'custom';
   interval?: number; // for custom
   unit?: 'days' | 'weeks' | 'months'; // for custom
+}
+
+export interface ChecklistItem {
+  id: string;
+  text: string;
+  completed: boolean;
 }
 
 export interface AuditItem {
@@ -142,6 +171,9 @@ export interface AuditItem {
     timeOfAudit?: string; // HH:MM
     color: string;
     recurrence: RecurrenceRule;
+    audit_type: 'text' | 'checklist';
+    content_text: string | null;
+    content_checklist: ChecklistItem[] | null;
 }
 
 // --- Notifications / Activity ---
@@ -309,3 +341,19 @@ export interface OldTask {
   priority: TaskPriority;
   status: OldTaskStatus;
 }
+
+// --- AI Studio for Video Generation ---
+// FIX: Resolve module scope conflict by defining AIStudio in the global scope
+// and then exporting it as a type for use in other modules.
+declare global {
+    interface AIStudio {
+        hasSelectedApiKey: () => Promise<boolean>;
+        openSelectKey: () => Promise<void>;
+    }
+    interface Window {
+        aistudio?: AIStudio;
+    }
+}
+
+// FIX: Removed export of global type 'AIStudio' which was causing a TypeScript error.
+// The type is available globally via the `declare global` block above.

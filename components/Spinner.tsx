@@ -1,9 +1,23 @@
 import React from 'react';
 
-const Spinner: React.FC = () => {
+// FIX: Add props interface to accept a 'size' prop.
+interface SpinnerProps {
+  size?: 'sm' | 'md' | 'lg';
+}
+
+// FIX: Update component signature to accept props and provide a default value.
+const Spinner: React.FC<SpinnerProps> = ({ size = 'md' }) => {
+  // FIX: Define size classes to dynamically change spinner size.
+  const sizeClasses = {
+    sm: 'h-4 w-4',
+    md: 'h-5 w-5',
+    lg: 'h-8 w-8',
+  };
+
   return (
     <svg
-      className="animate-spin h-5 w-5"
+      // FIX: Use a dynamic className based on the 'size' prop.
+      className={`animate-spin ${sizeClasses[size]}`}
       xmlns="http://www.w3.org/2000/svg"
       fill="none"
       viewBox="0 0 24 24"

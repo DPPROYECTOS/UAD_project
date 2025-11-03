@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { ContentType } from '../types';
@@ -20,7 +19,7 @@ const CreateContentModal: React.FC<CreateContentModalProps> = ({ onClose, onCont
     const [error, setError] = useState<string | null>(null);
     const [generatedData, setGeneratedData] = useState<string | null>(null);
 
-    const apiKey = localStorage.getItem('gemini-api-key');
+    const apiKey = process.env.API_KEY;
     const isApiKeyMissing = !apiKey;
 
     const handleGenerate = async () => {

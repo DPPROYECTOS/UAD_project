@@ -18,6 +18,7 @@ import WhiteboardView from './views/WhiteboardView';
 import AdminView from './views/AdminView';
 import GamesView from './views/GamesView';
 import SecretCodeModal from './components/SecretCodeModal';
+import PasswordsView from './views/PasswordsView';
 import { User, Project, ProjectTask, ProjectStatus, Activity, Folder, Document, LinkItem, AuditItem, RecurrenceRule, ToastNotification, UserPermissions } from './types';
 import { 
   signIn, 
@@ -110,7 +111,7 @@ const generateOccurrences = (
   const results: { date: Date; audit: AuditItem }[] = [];
   const startDate = new Date(audit.date + 'T00:00:00Z');
 
-  if (audit.recurrence.type === 'none') {
+  if (!audit.recurrence || audit.recurrence.type === 'none') {
     if (startDate >= viewStart && startDate <= viewEnd) {
       results.push({ date: startDate, audit });
     }
@@ -197,9 +198,7 @@ const App: React.FC = () => {
   const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
   const [isApiKeyLoading, setIsApiKeyLoading] = useState<boolean>(true);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
-
-
-  // --- Game & Easter Egg State ---
+ // --- Game & Easter Egg State ---
   const [activeGame, setActiveGame] = useState<keyof typeof games | null>(null);
   const [secretClickCount, setSecretClickCount] = useState(0);
 
@@ -256,6 +255,9 @@ const App: React.FC = () => {
   
   // --- Toast Notification State ---
   const [toastNotifications, setToastNotifications] = useState<ToastNotification[]>([]);
+  
+  // --- Password Bypass State ---
+  const [isMasterBypassActive, setIsMasterBypassActive] = useState(false);
 
   const addToast = (title: string, message: string, type: ToastNotification['type'] = 'warning') => {
       const id = uuidv4();
@@ -343,10 +345,15 @@ const App: React.FC = () => {
   // Effect to apply the current theme to the document
   useEffect(() => {
     const root = document.documentElement;
-    root.classList.remove('theme-light', 'theme-dark', 'theme-custom');
-    root.classList.add(`theme-${theme}`);
+
+    // 1. Set dark/light mode for Tailwind
+    if (theme === 'dark') {
+      root.classList.add('dark');
+    } else {
+      root.classList.remove('dark');
+    }
     
-    // Manage custom theme style tag
+    // 2. Manage custom theme colors by injecting/removing a style tag
     const customStyleTagId = 'custom-theme-style';
     let styleTag = document.getElementById(customStyleTagId);
 
@@ -356,15 +363,18 @@ const App: React.FC = () => {
         styleTag.id = customStyleTagId;
         document.head.appendChild(styleTag);
       }
+      // Override CSS variables on the root. This works for both light/dark contexts.
       const customCss = `
-        html.theme-custom {
+        :root {
           ${Object.entries(customThemeColors).map(([key, value]) => `${key}: ${value};`).join('\n')}
         }
       `;
       styleTag.innerHTML = customCss;
-    } else if (styleTag) {
-      // Clean up if not in custom theme
-      styleTag.innerHTML = '';
+    } else {
+      // If not in custom theme, remove the injected style tag to revert to defaults.
+      if (styleTag) {
+        styleTag.remove();
+      }
     }
     
   }, [theme, customThemeColors]);
@@ -422,7 +432,6 @@ const App: React.FC = () => {
                     setCustomThemeColors(themePrefs.custom_theme_colors as Record<string, string>);
                 }
             }
-            
             // Fetch avatar
             let finalAvatarUrl: string | null = null;
             const avatarPath = supabaseUser.user_metadata?.avatar_path;
@@ -606,8 +615,7 @@ const App: React.FC = () => {
                                 return;
                             }
                         }
-
-                        const notificationId = `audit_notification_${a.id}_${occurrenceDateTime.toISOString()}_${interval.id}`;
+           const notificationId = `audit_notification_${a.id}_${occurrenceDateTime.toISOString()}_${interval.id}`;
                         if (!localStorage.getItem(notificationId)) {
                             const timeText = interval.id === '1d' ? 'mañana' : `en ${interval.minutes} minutos`;
                             
@@ -830,8 +838,7 @@ const App: React.FC = () => {
         localStorage.setItem('genericRecordingCounter', String(counter));
         fileName = `GrabacionGenerica_${counter}_${date}_${time}.mp3`;
       }
-
-      const response = await fetch(uploadUrl, {
+   const response = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({
@@ -1028,8 +1035,7 @@ const App: React.FC = () => {
       handleDatabaseError(err, 'Failed to add task.');
     }
   };
-
-  const handleToggleTask = async (taskId: string) => {
+ const handleToggleTask = async (taskId: string) => {
     const originalTasks = tasks;
     const taskToToggle = tasks.find(t => t.id === taskId);
     if (!taskToToggle) return;
@@ -1212,8 +1218,7 @@ const App: React.FC = () => {
       handleDatabaseError(err, 'Failed to save link.');
     }
   };
-
-  const handleDeleteLink = (linkId: string) => {
+ const handleDeleteLink = (linkId: string) => {
     const link = links.find(l => l.id === linkId);
     if (link) {
       setLinkToDelete(link);
@@ -1252,31 +1257,15 @@ const App: React.FC = () => {
     setSelectedAuditDate(null);
   };
 
-  const handleSaveAudit = async (auditData: { title: string; color: string; recurrence: RecurrenceRule; timeOfAudit: string }) => {
+  const handleSaveAudit = async (auditData: Omit<AuditItem, 'id'>) => {
     try {
         setError(null);
         if (editingAudit) {
-          // Editing existing audit
-          const updatedAuditData = { 
-              ...editingAudit, 
-              title: auditData.title,
-              color: auditData.color,
-              recurrence: auditData.recurrence,
-              timeOfAudit: auditData.timeOfAudit,
-          };
-          const savedAudit = await updateAudit(updatedAuditData);
+          const savedAudit = await updateAudit({ id: editingAudit.id, ...auditData });
           setAudits(audits.map(a => a.id === savedAudit.id ? savedAudit : a));
           await addActivity('actualizó la auditoría', `"${savedAudit.title}"`, 'low');
         } else {
-          // Creating new audit
-          const newAuditData: Omit<AuditItem, 'id'> = {
-            date: selectedAuditDate!,
-            title: auditData.title,
-            color: auditData.color,
-            recurrence: auditData.recurrence,
-            timeOfAudit: auditData.timeOfAudit,
-          };
-          const savedAudit = await addAudit(newAuditData);
+          const savedAudit = await addAudit(auditData);
           setAudits(prev => [savedAudit, ...prev]);
           await addActivity('programó una nueva auditoría', `"${savedAudit.title}"`, 'medium');
         }
@@ -1369,6 +1358,9 @@ const App: React.FC = () => {
   const changeView = (view: string) => {
     setSelectedProject(null);
     setActiveView(view);
+    if (view !== 'Contraseñas') {
+        setIsMasterBypassActive(false);
+    }
   };
 
   if (activeGame) {
@@ -1401,8 +1393,7 @@ const App: React.FC = () => {
       </>
     );
   }
-  
-  const renderActiveView = () => {
+ const renderActiveView = () => {
     const globalErrorDisplay = error ? (
         <div className="p-4 mb-4 bg-red-100 border border-red-400 text-red-700 rounded-lg animate-fade-in">
             <h3 className="font-bold">Ocurrió un error</h3>
@@ -1432,6 +1423,7 @@ const App: React.FC = () => {
                     onSaveProject={handleSaveProject}
                     onAddTask={handleAddTask}
                     onToggleTask={handleToggleTask}
+                    // FIX: Pass the correct 'handleUpdateTask' function to the 'onUpdateTask' prop.
                     onUpdateTask={handleUpdateTask}
                     onDeleteTask={handleDeleteTask}
                     onAddDocument={handleAddDocument}
@@ -1494,6 +1486,8 @@ const App: React.FC = () => {
                   onMarkAllAsRead={markAllAsRead}
                   onNavigate={changeView} 
                 /></>;
+      case 'Contraseñas':
+        return <>{globalErrorDisplay}<PasswordsView userPermissions={userPermissions} isMasterBypassActive={isMasterBypassActive} /></>;
       case 'Juegos':
           return <>{globalErrorDisplay}<GamesView onEnterGame={handleGameEnter} /></>;
       case 'Administrador':
@@ -1520,7 +1514,7 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-light-bg dark:bg-dark-bg text-light-text dark:text-dark-text font-sans">
+    <div className="flex h-screen bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text font-sans">
       <ToastContainer notifications={toastNotifications} onDismiss={removeToast} />
       <Sidebar 
         isOpen={true} 
@@ -1541,6 +1535,7 @@ const App: React.FC = () => {
         onStopRecording={stopRecording}
         user={user}
         userPermissions={userPermissions}
+        setIsMasterBypassActive={setIsMasterBypassActive}
       />
       <div className={`flex-1 flex flex-col transition-all duration-300 ml-64 overflow-x-hidden`}>
         <Header 
@@ -1593,7 +1588,7 @@ const App: React.FC = () => {
             audit={editingAudit}
             date={selectedAuditDate}
             onClose={handleCloseAuditModal}
-            onSave={handleSaveAudit}
+            onSave={handleSaveAudit as any}
             onDelete={handleDeleteAudit}
             isReadOnly={!userPermissions?.auditorias.canManage}
         />

@@ -302,7 +302,8 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
   
   const updateItemState = (itemUpdate: Partial<WhiteboardItem> & { id: string }) => {
     if (!canEdit) return;
-    setItems(prev => prev.map(item => item.id === itemUpdate.id ? { ...item, ...itemUpdate } : item));
+    // FIX: Explicitly type the return value of the map callback to `WhiteboardItem` to resolve discriminated union inference issues.
+    setItems(prev => prev.map((item): WhiteboardItem => (item.id === itemUpdate.id ? { ...item, ...itemUpdate } : item)));
     setHasUnsavedChanges(true);
   };
   
@@ -467,7 +468,8 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
     const currentListStyle = selectedItem.style.listStyle;
     const newListStyle = currentListStyle === listType ? 'none' : listType;
 
-    const newItems = items.map(i =>
+    // FIX: Explicitly type the return value of the map callback to `WhiteboardItem` to resolve discriminated union inference issues.
+    const newItems = items.map((i): WhiteboardItem =>
         i.id === selectedItem.id
             ? { ...i, style: { ...i.style, listStyle: newListStyle } }
             : i

@@ -1,8 +1,7 @@
-
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 // Fix: Added 'Content' to import list to support addContentItem.
-import { WhiteboardItem, Project, ProjectStatus, ProjectTask, ContentType, Folder, Document, LinkItem, AuditItem, WhiteboardItemOld, WhiteboardState, SavedWhiteboard, Connector, TextStyle, ThemePreferences, User, Content, UserPermissions } from '../types';
+import { WhiteboardItem, Project, ProjectStatus, ProjectTask, ContentType, Folder, Document, LinkItem, AuditItem, WhiteboardItemOld, WhiteboardState, SavedWhiteboard, Connector, TextStyle, ThemePreferences, User, Content, UserPermissions, PasswordItem } from '../types';
 
 // These credentials are intentionally public for this project.
 // In a production environment, they should be stored securely in environment variables.
@@ -89,9 +88,8 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
     const { data, error } = await supabase.from('user_ui_settings').select('permissions').eq('user_id', user.id).single();
     if (error && error.code !== 'PGRST116') throw new Error(`Error fetching permissions: ${error.message}`);
 
-    // Fix: Added missing 'juegos' property to defaultPermissions.
     const defaultPermissions: UserPermissions = {
-      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, gemini: true, auditorias: true, pizarra: true, notificaciones: true },
+      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, gemini: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true },
       proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
       proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
       documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
@@ -100,9 +98,9 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
       pizarra: { canEdit: true },
       gemini: { canUse: true },
       juegos: { canUnlock: false },
+      contraseñas: { canManage: true },
     };
     if (!data || !data.permissions) return defaultPermissions;
-    // Fix: Added missing 'juegos' property to the returned permissions object.
     return {
         sidebar: { ...defaultPermissions.sidebar, ...(data.permissions.sidebar || {}) },
         proyectos: { ...defaultPermissions.proyectos, ...(data.permissions.proyectos || {}) },
@@ -113,6 +111,7 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
         pizarra: { ...defaultPermissions.pizarra, ...(data.permissions.pizarra || {}) },
         gemini: { ...defaultPermissions.gemini, ...(data.permissions.gemini || {}) },
         juegos: { ...defaultPermissions.juegos, ...(data.permissions.juegos || {}) },
+        contraseñas: { ...defaultPermissions.contraseñas, ...(data.permissions.contraseñas || {}) },
     };
 };
 
@@ -369,12 +368,18 @@ export const deleteLink = async (linkId: string): Promise<void> => {
 
 // --- Audit Functions ---
 export const getAudits = async (): Promise<AuditItem[]> => {
-    const { data, error } = await supabase.from('audits').select('id, title, date, color, recurrence, time_of_audit').order('date', { ascending: false });
+    const { data, error } = await supabase.from('audits').select('id, title, date, color, recurrence, time_of_audit, audit_type, content_text, content_checklist').order('date', { ascending: false });
     if (error) throw error;
     return data ? data.map(item => ({
-        id: item.id, title: item.title, date: item.date, color: item.color,
+        id: item.id,
+        title: item.title,
+        date: item.date,
+        color: item.color,
         recurrence: item.recurrence || { type: 'none' },
         timeOfAudit: item.time_of_audit ? item.time_of_audit.substring(0, 5) : undefined,
+        audit_type: item.audit_type || 'text',
+        content_text: item.content_text,
+        content_checklist: item.content_checklist || [],
     })) : [];
 };
 
@@ -382,33 +387,57 @@ export const addAudit = async (audit: Omit<AuditItem, 'id'>): Promise<AuditItem>
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
     
-    const { timeOfAudit, ...restOfAudit } = audit;
-
     const { data, error } = await supabase.from('audits').insert({ 
         user_id: user.id, 
-        ...restOfAudit, 
-        time_of_audit: timeOfAudit || null 
+        title: audit.title,
+        date: audit.date,
+        color: audit.color,
+        recurrence: audit.recurrence,
+        time_of_audit: audit.timeOfAudit || null,
+        audit_type: audit.audit_type,
+        content_text: audit.content_text,
+        content_checklist: audit.content_checklist,
     }).select().single();
     
     if (error) throw error;
     return {
-        id: data.id, title: data.title, date: data.date, color: data.color, recurrence: data.recurrence || { type: 'none' },
+        id: data.id,
+        title: data.title,
+        date: data.date,
+        color: data.color,
+        recurrence: data.recurrence || { type: 'none' },
         timeOfAudit: data.time_of_audit ? data.time_of_audit.substring(0, 5) : undefined,
+        audit_type: data.audit_type,
+        content_text: data.content_text,
+        content_checklist: data.content_checklist || [],
     };
 };
 
 export const updateAudit = async (audit: AuditItem): Promise<AuditItem> => {
-    const { id, timeOfAudit, ...auditData } = audit;
+    const { id, ...auditData } = audit;
     
     const { data, error } = await supabase.from('audits').update({ 
-        ...auditData, 
-        time_of_audit: timeOfAudit || null 
+        title: auditData.title,
+        date: auditData.date,
+        color: auditData.color,
+        recurrence: auditData.recurrence,
+        time_of_audit: auditData.timeOfAudit || null,
+        audit_type: auditData.audit_type,
+        content_text: auditData.content_text,
+        content_checklist: auditData.content_checklist,
     }).eq('id', id).select().single();
     
     if (error) throw error;
     return {
-        id: data.id, title: data.title, date: data.date, color: data.color, recurrence: data.recurrence || { type: 'none' },
+        id: data.id,
+        title: data.title,
+        date: data.date,
+        color: data.color,
+        recurrence: data.recurrence || { type: 'none' },
         timeOfAudit: data.time_of_audit ? data.time_of_audit.substring(0, 5) : undefined,
+        audit_type: data.audit_type,
+        content_text: data.content_text,
+        content_checklist: data.content_checklist || [],
     };
 };
 
@@ -452,6 +481,49 @@ export const deleteWhiteboard = async (id: string): Promise<void> => {
     const { error } = await supabase.from('whiteboards').delete().eq('id', id);
     if (error) throw error;
 };
+
+// --- Passwords Functions ---
+export const getPasswords = async (): Promise<PasswordItem[]> => {
+    const { data, error } = await supabase.from('passwords').select('*').order('service', { ascending: true });
+    if (error) throw error;
+    return data || [];
+};
+
+export const addPassword = async (password: Omit<PasswordItem, 'id' | 'user_id'>): Promise<PasswordItem> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+    const { data, error } = await supabase.from('passwords').insert({ ...password, user_id: user.id }).select().single();
+    if (error) throw error;
+    return data;
+};
+
+export const updatePassword = async (password: Omit<PasswordItem, 'user_id'>): Promise<PasswordItem> => {
+    const { id, ...passwordData } = password;
+    const { data, error } = await supabase.from('passwords').update(passwordData).eq('id', id).select().single();
+    if (error) throw error;
+    return data;
+};
+
+export const deletePassword = async (passwordId: string): Promise<void> => {
+    const { error } = await supabase.from('passwords').delete().eq('id', passwordId);
+    if (error) throw error;
+};
+
+export const getMasterPasswordHash = async (): Promise<string | null> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return null;
+    const { data, error } = await supabase.from('master_passwords').select('password_hash').eq('user_id', user.id).single();
+    if (error && error.code !== 'PGRST116') throw error;
+    return data?.password_hash || null;
+};
+
+export const setMasterPasswordHash = async (hash: string): Promise<void> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+    const { error } = await supabase.from('master_passwords').upsert({ user_id: user.id, password_hash: hash }, { onConflict: 'user_id' });
+    if (error) throw error;
+};
+
 
 // --- FIXES START HERE ---
 
@@ -539,34 +611,4 @@ export const uploadFile = async (file: File): Promise<void> => {
     const filePath = `${user.id}/UPLOADS/${uuidv4()}-${sanitizedName}`; // A generic folder
     const { error: uploadError } = await supabase.storage.from('user_files').upload(filePath, file);
     if (uploadError) throw uploadError;
-};
-
-// Fixes for FileList.tsx
-export const getSignedFileUrl = async (fileName: string): Promise<string> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-    
-    // This logic is based on what was in FileList.tsx component
-    const filePath = `${user.id}/${fileName}`;
-    
-    const { data, error } = await supabase.storage.from('user_files').createSignedUrl(filePath, 3600);
-    if (error) throw error;
-    return data.signedUrl;
-};
-
-export const deleteFile = async (fileName: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-    
-    // This logic is based on what was in FileList.tsx component
-    const filePath = `${user.id}/${fileName}`;
-
-    const { data, error } = await supabase.storage.from('user_files').remove([filePath]);
-    if (error) throw error;
-
-    if (!data || data.length === 0) {
-        // This can happen with RLS policies if the user doesn't have permission,
-        // as Supabase storage remove doesn't throw an error in that case.
-        throw new Error('Permiso denegado o el archivo no existe.');
-    }
 };

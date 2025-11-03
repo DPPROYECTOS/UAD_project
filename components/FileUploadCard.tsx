@@ -1,13 +1,17 @@
 import React, { useState } from 'react';
-import { uploadFile } from '../services/supabaseService';
 import { UploadIcon } from './Icons';
 import Spinner from './Spinner';
+import { uploadDocument as uploadFile } from '../services/supabaseService';
+
 
 interface FileUploadCardProps {
     onUploadSuccess: () => void;
+    folderId: string;
+    projectId: string | null;
+    userPermissions: any;
 }
 
-const FileUploadCard: React.FC<FileUploadCardProps> = ({ onUploadSuccess }) => {
+const FileUploadCard: React.FC<FileUploadCardProps> = ({ onUploadSuccess, folderId, projectId, userPermissions }) => {
     const [file, setFile] = useState<File | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -36,7 +40,7 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({ onUploadSuccess }) => {
     const handleDragEnter = (e: React.DragEvent<HTMLDivElement>) => {
         e.preventDefault();
         e.stopPropagation();
-        setIsDragging(true);
+        if (userPermissions?.canUpload) setIsDragging(true);
     };
 
     const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
@@ -54,7 +58,7 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({ onUploadSuccess }) => {
         e.preventDefault();
         e.stopPropagation();
         setIsDragging(false);
-        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        if (userPermissions?.canUpload && e.dataTransfer.files && e.dataTransfer.files[0]) {
             handleFileChange(e.dataTransfer.files[0]);
         }
     };
@@ -64,7 +68,7 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({ onUploadSuccess }) => {
         setIsUploading(true);
         setError(null);
         try {
-            await uploadFile(file);
+            await uploadFile(file, folderId, projectId);
             onUploadSuccess();
             setFile(null);
         } catch (err) {
@@ -75,39 +79,56 @@ const FileUploadCard: React.FC<FileUploadCardProps> = ({ onUploadSuccess }) => {
         }
     };
 
+    if (!userPermissions?.canUpload) {
+         return (
+            <div className="bg-light-card dark:bg-dark-card p-6 rounded-lg border border-dashed border-gray-300 dark:border-gray-600">
+                <div className="text-center text-gray-500 dark:text-gray-400">
+                    <p>No tienes permiso para subir archivos.</p>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className="bg-card-bg dark:bg-dark-card-bg p-6 rounded-xl shadow-md h-full">
-            <h2 className="text-xl font-bold mb-4">Upload Files</h2>
+        <div className="bg-light-card dark:bg-dark-card p-6 rounded-lg border border-light-border dark:border-dark-border">
             <div
                 onDragEnter={handleDragEnter}
                 onDragLeave={handleDragLeave}
                 onDragOver={handleDragOver}
                 onDrop={handleDrop}
                 className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                    isDragging ? 'border-primary bg-primary/10' : 'border-gray-300 dark:border-gray-600'
+                    isDragging ? 'border-brand-primary bg-brand-primary/10' : 'border-gray-300 dark:border-gray-600'
                 }`}
             >
                 <UploadIcon className="mx-auto h-12 w-12 text-gray-400" />
                 <label htmlFor="file-upload" className="relative cursor-pointer">
-                    <span className="text-primary font-semibold">Upload a file</span>
+                    <span className="text-brand-primary font-semibold">Sube un archivo</span>
                     <input id="file-upload" name="file-upload" type="file" className="sr-only" onChange={(e) => handleFileChange(e.target.files ? e.target.files[0] : null)} accept=".pdf,.doc,.docx,.xls,.xlsx" />
                 </label>
-                <p className="text-sm text-text-secondary dark:text-dark-text-secondary mt-1">or drag and drop</p>
-                <p className="text-xs text-text-secondary dark:text-dark-text-secondary mt-2">PDF, DOC, DOCX, XLS, XLSX</p>
+                <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">o arrastra y suelta</p>
+                <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary mt-2">PDF, DOC, DOCX, XLS, XLSX</p>
             </div>
             {file && (
-                <div className="mt-4 flex items-center justify-between bg-light-bg dark:bg-dark-bg p-3 rounded-lg">
-                    <p className="text-sm font-medium truncate">{file.name}</p>
-                    <button
-                        onClick={handleUpload}
-                        disabled={isUploading}
-                        className="bg-primary hover:bg-primary/90 text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:bg-primary/50"
+                <div className="mt-4">
+                    <div className="flex items-center justify-between bg-light-bg dark:bg-dark-bg p-3 rounded-lg border border-light-border dark:border-dark-border">
+                        <p className="text-sm font-medium truncate flex-1 mr-4">{file.name}</p>
+                        <button
+                            onClick={handleUpload}
+                            disabled={isUploading}
+                            className="flex-shrink-0 bg-brand-primary hover:bg-brand-secondary text-white font-bold py-2 px-4 rounded-md transition-colors disabled:bg-brand-primary/50"
+                        >
+                            {isUploading ? <Spinner size="sm" /> : 'Subir'}
+                        </button>
+                    </div>
+                     <button
+                        onClick={() => setFile(null)}
+                        className="w-full mt-2 text-center text-xs text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
                     >
-                        {isUploading ? <Spinner /> : 'Upload'}
+                        Cancelar
                     </button>
                 </div>
             )}
-            {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
+            {error && <p className="text-sm text-red-500 mt-2 text-center">{error}</p>}
         </div>
     );
 };
