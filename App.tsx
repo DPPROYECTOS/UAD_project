@@ -520,6 +520,11 @@ const App: React.FC = () => {
     const projectsToUpdate: { project: Project; newStatus: ProjectStatus }[] = [];
 
     projects.forEach(project => {
+      // If project is already "Completo", don't change it.
+      if (project.status === ProjectStatus.COMPLETO) {
+        return;
+      }
+
       const projectTasks = tasks.filter(t => t.projectId === project.id);
       const totalTasks = projectTasks.length;
       const completedTasks = projectTasks.filter(t => t.completed).length;
@@ -531,12 +536,10 @@ const App: React.FC = () => {
       let computedStatus: ProjectStatus;
 
       if (allTasksCompleted) {
-        if (project.status !== ProjectStatus.COMPLETO) {
-            computedStatus = ProjectStatus.EN_REVISION;
-        } else {
-            computedStatus = project.status;
-        }
+          // If all tasks are done, but project is not yet complete, move it to "En Revisión".
+          computedStatus = ProjectStatus.EN_REVISION;
       } else {
+          // If it's not all completed, it's either "Nuevo" or "En Progreso".
           if (completedTasks === 0 && timeSinceStart < oneWeekInMs) {
               computedStatus = ProjectStatus.NUEVO;
           } else {
@@ -1276,6 +1279,33 @@ const App: React.FC = () => {
     }
   };
   
+  const handleCloneAudit = async (auditData: Omit<AuditItem, 'id' | 'date'>, dates: string[]) => {
+    try {
+        setError(null);
+        
+        const clonePromises = dates.map(date => {
+            const newAuditData: Omit<AuditItem, 'id'> = {
+                ...auditData,
+                date: date, // Set the new date for each clone
+                // Ensure recurrence is set to 'none' for clones as they are distinct audits
+                recurrence: { type: 'none' } 
+            };
+            return addAudit(newAuditData);
+        });
+
+        await Promise.all(clonePromises);
+        
+        addToast("Éxito", `Se clonó la auditoría en ${dates.length} fecha(s).`, "success");
+        await fetchAudits(); // Refresh the audit list
+    } catch (err) {
+        handleDatabaseError(err, 'Failed to clone audit.');
+        addToast("Error", "No se pudo clonar la auditoría.", "error");
+    } finally {
+        handleCloseAuditModal();
+    }
+  };
+
+
   const handleDeleteAudit = (auditId: string) => {
     const audit = audits.find(a => a.id === auditId);
     if(audit) {
@@ -1544,6 +1574,9 @@ const App: React.FC = () => {
           isAvatarLoading={isAvatarLoading}
           onLogout={handleLogout}
           unreadCount={unreadCount}
+          notifications={activities}
+          readNotificationIds={readNotificationIds}
+          onMarkAsRead={markAsRead}
           onNavigate={changeView}
           onMarkAllAsRead={markAllAsRead}
           recordingStatus={recordingStatus}
@@ -1590,6 +1623,7 @@ const App: React.FC = () => {
             onClose={handleCloseAuditModal}
             onSave={handleSaveAudit as any}
             onDelete={handleDeleteAudit}
+            onClone={handleCloneAudit}
             isReadOnly={!userPermissions?.auditorias.canManage}
         />
       )}

@@ -22,6 +22,7 @@ import {
   DocumentTextIcon, RectangleIcon, OvalIcon, DiamondIcon, LinkIcon,
   BoldIcon, ItalicIcon, TrashIcon, ParallelogramIcon, PredefinedProcessIcon,
   FlowchartDocumentIcon, DatabaseIcon, CircleIcon, DocumentDownloadIcon, SaveIcon, FolderOpenIcon, DocumentAddIcon, XIcon, RefreshIcon, TextIcon, UndoIcon, RedoIcon, ListBulletIcon, ListNumberIcon,
+  ArrowsExpandIcon, ArrowsShrinkIcon
 } from '../components/Icons';
 
 const FONT_FAMILIES: TextStyle['fontFamily'][] = ['Arial', 'Verdana', 'Courier New'];
@@ -91,6 +92,24 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
 
   const canvasRef = useRef<HTMLDivElement>(null);
   const zIndexCounter = useRef(0);
+  
+  // Fullscreen state and ref
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const whiteboardContainerRef = useRef<HTMLDivElement>(null);
+  
+  // Refs for touch interactions
+  const touchStateRef = useRef<{
+    panStartPoint?: Point;
+    pinchDist?: number;
+    itemManipulationStart?: {
+      initialPinchDist: number;
+      initialAngle: number;
+      initialWidth: number;
+      initialHeight: number;
+      initialRotation: number;
+    };
+  }>({});
+  const gestureStartRef = useRef<{ time: number; point: Point; item: WhiteboardItem | null; itemStartPosition: Point | null; isDragging: boolean; } | null>(null);
 
   // --- PERMISSIONS ---
   const canEdit = userPermissions?.pizarra?.canEdit ?? false;
@@ -105,6 +124,21 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
 
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
+
+  // Fullscreen handler function
+  const handleToggleFullscreen = () => {
+    const elem = whiteboardContainerRef.current;
+    if (!elem) return;
+
+    if (!document.fullscreenElement) {
+        elem.requestFullscreen().catch(err => {
+            alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+        });
+    } else {
+        document.exitFullscreen();
+    }
+  };
+
 
   // --- History Management ---
   const saveState = useCallback((newItems: WhiteboardItem[], newConnectors: Connector[]) => {
@@ -181,32 +215,88 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
     }
   }, [toast]);
 
+  const updateItemState = (itemUpdate: Partial<WhiteboardItem> & { id: string }) => {
+    if (!canEdit) return;
+    // FIX: Explicitly type the return value of the map callback to `WhiteboardItem` to resolve discriminated union inference issues.
+    setItems(prev => prev.map((item): WhiteboardItem => (item.id === itemUpdate.id ? { ...item, ...itemUpdate } : item)));
+    setHasUnsavedChanges(true);
+  };
+    
+  const onInteractionStart = (id: string) => {
+    if (!canEdit) return;
+    zIndexCounter.current = items.length > 0 ? Math.max(...items.map(i => i.zIndex)) + 1 : 1;
+    // FIX: Added explicit return type to map callback to satisfy discriminated union.
+    const newItems = items.map((item): WhiteboardItem => item.id === id ? { ...item, zIndex: zIndexCounter.current } : item);
+    // Directly set items without saving to history yet. The move itself will be saved.
+    setItems(newItems);
+    setHasUnsavedChanges(true);
 
-  // --- Zoom and Pan Effects ---
+    setSelectedItemId(id);
+    setSelectedConnectorId(null);
+    setEditingItemId(null);
+    setEditingConnectorId(null);
+  };
+
+  // --- Zoom, Pan and Touch Effects ---
+  const getItemAtPoint = useCallback((point: Point): WhiteboardItem | null => {
+    const worldPoint = {
+        x: (point.x - pan.x) / scale,
+        y: (point.y - pan.y) / scale
+    };
+
+    const isPointInItem = (p: Point, item: WhiteboardItem): boolean => {
+      const { position, width, height, rotation = 0 } = item;
+      if (!rotation) {
+          return (p.x >= position.x && p.x <= position.x + width && p.y >= position.y && p.y <= position.y + height);
+      }
+      const cx = position.x + width / 2;
+      const cy = position.y + height / 2;
+      const translatedX = p.x - cx;
+      const translatedY = p.y - cy;
+      const rad = -rotation * Math.PI / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const rotatedX = translatedX * cos - translatedY * sin;
+      const rotatedY = translatedX * sin + translatedY * cos;
+      return (rotatedX >= -width / 2 && rotatedX <= width / 2 && rotatedY >= -height / 2 && rotatedY <= height / 2);
+    };
+
+    const sortedItems = [...items].sort((a, b) => b.zIndex - a.zIndex);
+    for (const item of sortedItems) {
+        if (isPointInItem(worldPoint, item)) {
+            return item;
+        }
+    }
+    return null;
+  }, [items, pan, scale]);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
+    
     const handleWheel = (e: WheelEvent) => {
         e.preventDefault();
         
         const zoomIntensity = 0.1;
         const delta = e.deltaY > 0 ? -1 : 1;
-        const newScale = scale * (1 + delta * zoomIntensity);
-        const clampedScale = Math.max(0.2, Math.min(4, newScale));
-
-        const rect = canvas.getBoundingClientRect();
-        const mouseX = e.clientX - rect.left;
-        const mouseY = e.clientY - rect.top;
-
-        const worldX = (mouseX - pan.x) / scale;
-        const worldY = (mouseY - pan.y) / scale;
         
-        const newPanX = mouseX - worldX * clampedScale;
-        const newPanY = mouseY - worldY * clampedScale;
-        
-        setScale(clampedScale);
-        setPan({ x: newPanX, y: newPanY });
+        setScale(prevScale => {
+            const newScale = prevScale * (1 + delta * zoomIntensity);
+            const clampedScale = Math.max(0.2, Math.min(4, newScale));
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            setPan(prevPan => {
+                const worldX = (mouseX - prevPan.x) / prevScale;
+                const worldY = (mouseY - prevPan.y) / prevScale;
+                const newPanX = mouseX - worldX * clampedScale;
+                const newPanY = mouseY - worldY * clampedScale;
+                return { x: newPanX, y: newPanY };
+            });
+            
+            return clampedScale;
+        });
     };
 
     const handleMouseDown = (e: MouseEvent) => {
@@ -234,15 +324,211 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
     };
+    
+    // --- Touch Handlers ---
+    const handleTouchStart = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 1) { // Single finger
+          touchStateRef.current.pinchDist = undefined;
+          touchStateRef.current.itemManipulationStart = undefined;
+
+          const touch = e.touches[0];
+          const touchPoint = { x: touch.clientX, y: touch.clientY };
+          const rect = canvasRef.current!.getBoundingClientRect();
+          const relativePoint = { x: touchPoint.x - rect.left, y: touchPoint.y - rect.top };
+          const item = getItemAtPoint(relativePoint);
+
+          gestureStartRef.current = {
+              time: Date.now(),
+              point: touchPoint,
+              item: item,
+              itemStartPosition: item ? item.position : null,
+              isDragging: false,
+          };
+          touchStateRef.current.panStartPoint = touchPoint;
+
+      } else if (e.touches.length === 2) { // Two fingers
+          gestureStartRef.current = null; // Prevent single-touch logic
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          const dx = t1.clientX - t2.clientX;
+          const dy = t1.clientY - t2.clientY;
+
+          if (selectedItemId && canEdit) {
+              const item = items.find(i => i.id === selectedItemId);
+              if (item) {
+                  const rect = canvasRef.current!.getBoundingClientRect();
+                  const p1 = { x: t1.clientX - rect.left, y: t1.clientY - rect.top };
+                  const itemAtP1 = getItemAtPoint(p1);
+
+                  if (itemAtP1?.id === selectedItemId) {
+                      // Start item manipulation
+                      const initialPinchDist = Math.sqrt(dx * dx + dy * dy);
+                      const initialAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+                      touchStateRef.current.itemManipulationStart = {
+                          initialPinchDist,
+                          initialAngle,
+                          initialWidth: item.width,
+                          initialHeight: item.height,
+                          initialRotation: item.rotation || 0,
+                      };
+                      touchStateRef.current.pinchDist = undefined; // Prevent canvas zoom
+                      return;
+                  }
+              }
+          }
+          // Fallback to canvas zoom
+          touchStateRef.current.pinchDist = Math.sqrt(dx * dx + dy * dy);
+          touchStateRef.current.panStartPoint = undefined;
+      }
+    };
+
+    const handleTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      if (e.touches.length === 2) { // Two fingers logic
+          const t1 = e.touches[0];
+          const t2 = e.touches[1];
+          const dx = t1.clientX - t2.clientX;
+          const dy = t1.clientY - t2.clientY;
+          const newDist = Math.sqrt(dx * dx + dy * dy);
+
+          if (touchStateRef.current.itemManipulationStart && selectedItemId && canEdit) {
+              const { initialPinchDist, initialAngle, initialWidth, initialHeight, initialRotation } = touchStateRef.current.itemManipulationStart;
+              
+              const scaleFactor = newDist / initialPinchDist;
+              const newWidth = Math.max(50, initialWidth * scaleFactor);
+              const newHeight = Math.max(30, initialHeight * scaleFactor);
+
+              const newAngle = Math.atan2(dy, dx) * 180 / Math.PI;
+              const angleDiff = newAngle - initialAngle;
+              const newRotation = initialRotation + angleDiff;
+              const snappedRotation = Math.round(newRotation / 15) * 15;
+
+              updateItemState({
+                  id: selectedItemId,
+                  width: newWidth,
+                  height: newHeight,
+                  rotation: snappedRotation,
+              });
+
+          } else if (touchStateRef.current.pinchDist) { // Canvas Zoom
+              const scaleFactor = newDist / touchStateRef.current.pinchDist;
+              setScale(prevScale => {
+                  const newScale = prevScale * scaleFactor;
+                  const clampedScale = Math.max(0.2, Math.min(4, newScale));
+                  const rect = canvas.getBoundingClientRect();
+                  const midpointX = (t1.clientX + t2.clientX) / 2 - rect.left;
+                  const midpointY = (t1.clientY + t2.clientY) / 2 - rect.top;
+
+                  setPan(prevPan => {
+                      const worldX = (midpointX - prevPan.x) / prevScale;
+                      const worldY = (midpointY - prevPan.y) / prevScale;
+                      const newPanX = midpointX - worldX * clampedScale;
+                      const newPanY = midpointY - worldY * clampedScale;
+                      return { x: newPanX, y: newPanY };
+                  });
+                  return clampedScale;
+              });
+              touchStateRef.current.pinchDist = newDist;
+          }
+      } else if (e.touches.length === 1 && gestureStartRef.current) { // Single finger move
+          const touch = e.touches[0];
+          const currentPoint = { x: touch.clientX, y: touch.clientY };
+          
+          const dxFromStart = currentPoint.x - gestureStartRef.current.point.x;
+          const dyFromStart = currentPoint.y - gestureStartRef.current.point.y;
+          const distFromStart = Math.sqrt(dxFromStart * dxFromStart + dyFromStart * dyFromStart);
+          
+          const DRAG_THRESHOLD = 5;
+
+          if (!gestureStartRef.current.isDragging && distFromStart > DRAG_THRESHOLD && canEdit) {
+              gestureStartRef.current.isDragging = true;
+              if (gestureStartRef.current.item) {
+                  onInteractionStart(gestureStartRef.current.item.id);
+              }
+          }
+
+          if (gestureStartRef.current.isDragging && gestureStartRef.current.item && canEdit) {
+              const item = gestureStartRef.current.item;
+              const startPos = gestureStartRef.current.itemStartPosition!;
+              const worldDx = dxFromStart / scale;
+              const worldDy = dyFromStart / scale;
+              const newPosition = { x: startPos.x + worldDx, y: startPos.y + worldDy };
+              updateItemState({ id: item.id, position: newPosition });
+          } else if (touchStateRef.current.panStartPoint) {
+              const dx = currentPoint.x - touchStateRef.current.panStartPoint.x;
+              const dy = currentPoint.y - touchStateRef.current.panStartPoint.y;
+              setPan(prevPan => ({ x: prevPan.x + dx, y: prevPan.y + dy }));
+          }
+          touchStateRef.current.panStartPoint = currentPoint;
+      }
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+        if (touchStateRef.current.itemManipulationStart) {
+            handlePersistState();
+        }
+
+        if (gestureStartRef.current) {
+            const { time, point, item, isDragging } = gestureStartRef.current;
+            const duration = Date.now() - time;
+            const endPoint = e.changedTouches[0];
+            const dx = endPoint.clientX - point.x;
+            const dy = endPoint.clientY - point.y;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+            
+            const TAP_DURATION = 300;
+            const TAP_DISTANCE = 10;
+            
+            if (isDragging) {
+                if (item) {
+                    handlePersistState();
+                }
+            } else if (duration < TAP_DURATION && dist < TAP_DISTANCE) {
+                if (item) {
+                    setSelectedItemId(item.id);
+                    setSelectedConnectorId(null);
+                } else {
+                    setSelectedItemId(null);
+                    setSelectedConnectorId(null);
+                }
+            }
+        }
+        
+        gestureStartRef.current = null;
+        setGuideLines([]);
+        
+        if (e.touches.length === 1) {
+            touchStateRef.current.pinchDist = undefined;
+            touchStateRef.current.panStartPoint = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else if (e.touches.length === 0) {
+            touchStateRef.current = {};
+        }
+    };
+
 
     canvas.addEventListener('wheel', handleWheel, { passive: false });
     canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd);
     
+    // Fullscreen change listener
+    const handleFullscreenChange = () => {
+        setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+
     return () => {
       canvas.removeEventListener('wheel', handleWheel);
       canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('touchstart', handleTouchStart);
+      canvas.removeEventListener('touchmove', handleTouchMove);
+      canvas.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
-  }, [scale, pan, isSelectingArea]);
+  }, [isSelectingArea, pan, scale, items, connectors, handlePersistState, getItemAtPoint, onInteractionStart, canEdit, selectedItemId]);
 
   // --- Keyboard Navigation ---
   useEffect(() => {
@@ -299,13 +585,6 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [selectedItemId, editingItemId, items, handlePersistState, handleUndo, handleRedo, canEdit]);
-  
-  const updateItemState = (itemUpdate: Partial<WhiteboardItem> & { id: string }) => {
-    if (!canEdit) return;
-    // FIX: Explicitly type the return value of the map callback to `WhiteboardItem` to resolve discriminated union inference issues.
-    setItems(prev => prev.map((item): WhiteboardItem => (item.id === itemUpdate.id ? { ...item, ...itemUpdate } : item)));
-    setHasUnsavedChanges(true);
-  };
   
   const updateConnectorState = (connectorUpdate: Partial<Connector> & { id: string }) => {
       if (!canEdit) return;
@@ -384,17 +663,6 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
       setSelectedConnectorId(null);
     }
   };
-  
-  const handleInteractionStart = (id: string) => {
-    if (!canEdit) return;
-    zIndexCounter.current = items.length > 0 ? Math.max(...items.map(i => i.zIndex)) + 1 : 1;
-    const newItems = items.map(item => item.id === id ? { ...item, zIndex: zIndexCounter.current } : item);
-    saveState(newItems, connectors);
-    setSelectedItemId(id);
-    setSelectedConnectorId(null);
-    setEditingItemId(null);
-    setEditingConnectorId(null);
-  };
 
   const handleSetEditing = (id: string | null) => {
     if (!canEdit) return;
@@ -434,7 +702,8 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
   const updateStyle = (styleProp: Partial<TextStyle>) => {
     if (!canEdit) return;
     if (selectedItem) {
-        const newItems = items.map(i => i.id === selectedItem.id ? { ...i, style: { ...i.style, ...styleProp } } : i);
+        // FIX: Added explicit return type to map callback to satisfy discriminated union.
+        const newItems = items.map((i): WhiteboardItem => i.id === selectedItem.id ? { ...i, style: { ...i.style, ...styleProp } } : i);
         saveState(newItems, connectors);
     } else if (selectedConnector) {
         const newConnectors = connectors.map(c => c.id === selectedConnector.id ? { ...c, style: { ...c.style, ...styleProp } } : c);
@@ -454,7 +723,8 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
     const newStyle = { [prop]: currentStyle[prop] === active ? normal : active };
     
     if ('type' in item) { // It's a WhiteboardItem
-        const newItems = items.map(i => i.id === item.id ? { ...i, style: { ...i.style, ...newStyle } } : i);
+        // FIX: Added explicit return type to map callback to satisfy discriminated union.
+        const newItems = items.map((i): WhiteboardItem => i.id === item.id ? { ...i, style: { ...i.style, ...newStyle } } : i);
         saveState(newItems, connectors);
     } else { // It's a Connector
         const newConnectors = connectors.map(c => c.id === item.id ? { ...c, style: { ...c.style, ...newStyle } } : c);
@@ -469,6 +739,7 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
     const newListStyle = currentListStyle === listType ? 'none' : listType;
 
     // FIX: Explicitly type the return value of the map callback to `WhiteboardItem` to resolve discriminated union inference issues.
+    // FIX: Added explicit return type to map callback to satisfy discriminated union.
     const newItems = items.map((i): WhiteboardItem =>
         i.id === selectedItem.id
             ? { ...i, style: { ...i.style, listStyle: newListStyle } }
@@ -1155,8 +1426,8 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
   };
 
   return (
-    <div className="space-y-4">
-      <div className="sticky top-0 z-10 bg-light-bg dark:bg-dark-bg pt-1 pb-4">
+    <div ref={whiteboardContainerRef} className={`space-y-4 ${isFullscreen ? 'bg-light-bg dark:bg-dark-bg p-4 flex flex-col h-screen' : ''}`}>
+      <div className={`z-10 pt-1 pb-4 ${isFullscreen ? 'flex-shrink-0' : 'sticky top-0 bg-light-bg dark:bg-dark-bg'}`}>
         <h1 className="text-3xl font-bold">
           {currentWhiteboard?.name || 'Pizarra Nueva'}
           {hasUnsavedChanges && canEdit && <span className="text-brand-primary text-lg ml-2">*</span>}
@@ -1167,6 +1438,10 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
             <button onClick={handleSaveClick} title="Guardar Pizarra" disabled={!canEdit} className={`p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed ${hasUnsavedChanges && canEdit ? 'text-brand-primary' : ''}`}><SaveIcon /></button>
             <button onClick={handleRefresh} title="Refrescar Pizarra" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:text-gray-400 disabled:cursor-not-allowed" disabled={!currentWhiteboard}><RefreshIcon /></button>
             <button onClick={handleOpenExportModal} title="Exportar Pizarra" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg"><DocumentDownloadIcon /></button>
+            <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>
+            <button onClick={handleToggleFullscreen} title={isFullscreen ? "Salir de pantalla completa" : "Pantalla completa"} className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg">
+                {isFullscreen ? <ArrowsShrinkIcon className="h-5 w-5" /> : <ArrowsExpandIcon className="h-5 w-5" />}
+            </button>
             {canEdit && <div className="h-6 w-px bg-light-border dark:bg-dark-border"></div>}
             <button onClick={handleUndo} disabled={!canUndo || !canEdit} title="Deshacer (Ctrl+Z)" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed"><UndoIcon /></button>
             <button onClick={handleRedo} disabled={!canRedo || !canEdit} title="Rehacer (Ctrl+Y)" className="p-2 rounded hover:bg-light-bg dark:hover:bg-dark-bg disabled:opacity-50 disabled:cursor-not-allowed"><RedoIcon /></button>
@@ -1213,7 +1488,13 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
                 </>
             )}
             {selectedItem && selectedItem.type !== 'note' && selectedItem.type !== 'text' && canEdit && <label title="Color de Relleno" className="flex items-center gap-1 p-1 rounded hover:bg-light-bg dark:hover:bg-dark-bg"> <RectangleIcon className="h-4 w-4"/> <input type="color" value={(selectedItem as FlowchartShape).fillColor} onChange={e => {
-                const newItems = items.map(i => i.id === selectedItem.id ? { ...i, fillColor: e.target.value } as WhiteboardItem : i);
+                // FIX: Use a type-safe update with a guard to prevent adding properties to incorrect types.
+                const newItems = items.map((i): WhiteboardItem => {
+                    if (i.id === selectedItem.id && 'fillColor' in i) {
+                        return { ...i, fillColor: e.target.value };
+                    }
+                    return i;
+                });
                 saveState(newItems, connectors);
             }} className="w-6 h-6 border-none bg-transparent" /></label>}
             {(selectedItemId || selectedConnectorId) && canEdit && (
@@ -1224,7 +1505,7 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
       
       <div
         ref={canvasRef}
-        className="relative w-full h-[70vh] rounded-lg shadow-inner overflow-hidden border border-light-border dark:border-dark-border"
+        className={`relative w-full rounded-lg shadow-inner overflow-hidden border border-light-border dark:border-dark-border ${isFullscreen ? 'flex-grow' : 'h-[70vh]'}`}
         style={{...gridStyle, cursor: isSelectingArea ? 'crosshair' : 'grab' }}
         onClick={handleCanvasClick}
         onMouseMove={handleMouseMove}
@@ -1311,11 +1592,14 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
           {items.map(item => {
             const isReadOnly = !canEdit;
             if (item.type === 'note') {
-                return <StickyNoteComponent key={item.id} note={item} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={handleInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} isReadOnly={isReadOnly} />;
+                // FIX: Use the correct function name 'onInteractionStart' instead of the undefined 'handleInteractionStart'.
+                return <StickyNoteComponent key={item.id} note={item} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={onInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} isReadOnly={isReadOnly} />;
             } else if (item.type === 'text') {
-                return <TextItemComponent key={item.id} textItem={item as TextItem} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={handleInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} isReadOnly={isReadOnly} />;
+                // FIX: Use the correct function name 'onInteractionStart' instead of the undefined 'handleInteractionStart'.
+                return <TextItemComponent key={item.id} textItem={item as TextItem} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={onInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} isReadOnly={isReadOnly} />;
             } else {
-                return <FlowchartShapeComponent key={item.id} shape={item as FlowchartShape} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={handleInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} isReadOnly={isReadOnly} />;
+                // FIX: Use the correct function name 'onInteractionStart' instead of the undefined 'handleInteractionStart'.
+                return <FlowchartShapeComponent key={item.id} shape={item as FlowchartShape} allItems={items} onUpdateState={updateItemState} onPersist={handlePersistState} onDelete={deleteSelectedItem} onInteractionStart={onInteractionStart} isSelected={item.id === selectedItemId} isEditing={item.id === editingItemId} onSetEditing={handleSetEditing} isConnecting={isConnecting} connectionStartId={connectionPreview?.startItemId || null} onAnchorMouseDown={handleAnchorMouseDown} onAnchorMouseUp={handleAnchorMouseUp} scale={scale} setGuideLines={setGuideLines} isReadOnly={isReadOnly} />;
             }
           })}
 

@@ -368,7 +368,7 @@ export const deleteLink = async (linkId: string): Promise<void> => {
 
 // --- Audit Functions ---
 export const getAudits = async (): Promise<AuditItem[]> => {
-    const { data, error } = await supabase.from('audits').select('id, title, date, color, recurrence, time_of_audit, audit_type, content_text, content_checklist').order('date', { ascending: false });
+    const { data, error } = await supabase.from('audits').select('id, title, date, color, recurrence, time_of_audit, audit_type, content_text, content_checklist, note').order('date', { ascending: false });
     if (error) throw error;
     return data ? data.map(item => ({
         id: item.id,
@@ -380,6 +380,7 @@ export const getAudits = async (): Promise<AuditItem[]> => {
         audit_type: item.audit_type || 'text',
         content_text: item.content_text,
         content_checklist: item.content_checklist || [],
+        note: item.note,
     })) : [];
 };
 
@@ -397,6 +398,7 @@ export const addAudit = async (audit: Omit<AuditItem, 'id'>): Promise<AuditItem>
         audit_type: audit.audit_type,
         content_text: audit.content_text,
         content_checklist: audit.content_checklist,
+        note: audit.note,
     }).select().single();
     
     if (error) throw error;
@@ -410,6 +412,7 @@ export const addAudit = async (audit: Omit<AuditItem, 'id'>): Promise<AuditItem>
         audit_type: data.audit_type,
         content_text: data.content_text,
         content_checklist: data.content_checklist || [],
+        note: data.note,
     };
 };
 
@@ -425,6 +428,7 @@ export const updateAudit = async (audit: AuditItem): Promise<AuditItem> => {
         audit_type: auditData.audit_type,
         content_text: auditData.content_text,
         content_checklist: auditData.content_checklist,
+        note: auditData.note,
     }).eq('id', id).select().single();
     
     if (error) throw error;
@@ -438,6 +442,7 @@ export const updateAudit = async (audit: AuditItem): Promise<AuditItem> => {
         audit_type: data.audit_type,
         content_text: data.content_text,
         content_checklist: data.content_checklist || [],
+        note: data.note,
     };
 };
 

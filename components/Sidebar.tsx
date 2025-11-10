@@ -36,6 +36,7 @@ const NavLink: React.FC<{
     onClick: () => void;
     onMouseDown?: () => void;
     onMouseUp?: () => void;
+    onMouseLeave?: () => void;
     onTouchStart?: () => void;
     onTouchEnd?: () => void;
 }> = ({ icon, text, isOpen, isActive, onClick, ...longPressProps }) => (
@@ -59,7 +60,8 @@ const Sidebar: React.FC<SidebarProps> = ({
     user, userPermissions, setIsMasterBypassActive
 }) => {
     const [isCustomizerOpen, setCustomizerOpen] = useState(false);
-    const longPressTimer = useRef<number>();
+    // FIX: Use a more robust type for the timer reference, which resolves the misleading error on setIsMasterBypassActive.
+    const longPressTimer = useRef<ReturnType<typeof setTimeout>>();
 
     const handlePasswordLongPressStart = () => {
         longPressTimer.current = window.setTimeout(() => {

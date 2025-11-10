@@ -478,3 +478,15 @@ export const GameControllerIcon: React.FC<{ className?: string }> = ({ className
         <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5C4.5 3.358 7.858 1.5 12 1.5s7.5 1.858 7.5 9z" />
     </Icon>
 );
+
+export const ArrowsExpandIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25-6l5.25 5.25m0 0v-4.5m0 4.5h-4.5M20.25 3.75l-5.25 5.25m0 0h4.5m-4.5 0v-4.5" />
+    </Icon>
+);
+
+export const ArrowsShrinkIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" />
+    </Icon>
+);

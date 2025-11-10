@@ -10,6 +10,9 @@ interface HeaderProps {
     isAvatarLoading?: boolean;
     onLogout: () => void;
     unreadCount: number;
+    notifications: Activity[];
+    readNotificationIds: Set<string>;
+    onMarkAsRead: (id: string) => void;
     onNavigate: (view: string) => void;
     onMarkAllAsRead: () => void;
     recordingStatus: 'idle' | 'recording' | 'paused';
@@ -38,6 +41,7 @@ const toRoman = (num: number): string => {
 
 const Header: React.FC<HeaderProps> = ({ 
     user, onUpdateAvatar, isAvatarLoading, onLogout, unreadCount,
+    notifications, readNotificationIds, onMarkAsRead,
     onNavigate, onMarkAllAsRead,
     recordingStatus, recordingTime, isEditor
 }) => {
@@ -102,6 +106,9 @@ const Header: React.FC<HeaderProps> = ({
                     </button>
                     {isNotificationsOpen && (
                         <NotificationsPanel
+                            notifications={notifications}
+                            readNotificationIds={readNotificationIds}
+                            onMarkAsRead={onMarkAsRead}
                             onClose={() => setNotificationsOpen(false)}
                             onNavigate={handleNavigateToNotifications}
                             onMarkAllAsRead={onMarkAllAsRead}

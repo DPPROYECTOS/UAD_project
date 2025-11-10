@@ -174,6 +174,7 @@ export interface AuditItem {
     audit_type: 'text' | 'checklist';
     content_text: string | null;
     content_checklist: ChecklistItem[] | null;
+    note?: string | null;
 }
 
 // --- Notifications / Activity ---
@@ -356,4 +357,4 @@ declare global {
 }
 
 // FIX: Removed export of global type 'AIStudio' which was causing a TypeScript error.
-// The type is available globally via the `declare global` block above.
+// The type is available globally via the `declare global` block above।
