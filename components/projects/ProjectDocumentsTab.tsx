@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Project, Document, Folder, UserPermissions } from '../../types';
+import { Project, Document, Folder, UserPermissions, User } from '../../types';
 import { getSignedUrlForDocument } from '../../services/supabaseService';
 import { UploadIcon, TrashIcon, CollectionIcon, InformationCircleIcon, EyeIcon, DocumentDownloadIcon, DocumentTextIcon } from '../Icons';
 import Spinner from '../Spinner';
@@ -13,17 +13,17 @@ interface ProjectDocumentsTabProps {
   onAddDocument: (file: File, folderId: string, projectId: string | null) => Promise<void>;
   onDeleteDocument: (doc: Document) => Promise<void>;
   userPermissions: UserPermissions | null;
+  user: User;
 }
 
-const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, documents, folders, onAddDocument, onDeleteDocument, userPermissions }) => {
+const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, documents, folders, onAddDocument, onDeleteDocument, userPermissions, user }) => {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [selectedFolderId, setSelectedFolderId] = useState<string>('');
     const [isUploading, setIsUploading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [docToDelete, setDocToDelete] = useState<Document | null>(null);
     
-    // State for the new modal viewer
-    const [viewerFile, setViewerFile] = useState<{ url: string; name: string; mimeType: string; } | null>(null);
+    const [viewerFile, setViewerFile] = useState<{ id: string; url: string; name: string; mimeType: string; } | null>(null);
     const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
     
     useEffect(() => {
@@ -90,6 +90,7 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
         try {
             const signedUrl = await getSignedUrlForDocument(doc.storagePath);
             setViewerFile({
+                id: doc.id,
                 url: signedUrl,
                 name: doc.name,
                 mimeType: doc.mimeType,
@@ -223,7 +224,8 @@ const ProjectDocumentsTab: React.FC<ProjectDocumentsTabProps> = ({ project, docu
 
             {viewerFile && (
                 <FileViewerModal
-                    file={viewerFile}
+                    document={viewerFile}
+                    user={user}
                     onClose={() => setViewerFile(null)}
                 />
             )}

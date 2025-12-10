@@ -15,21 +15,22 @@ const getNthDayOfMonth = (year: number, month: number, dayOfWeek: number, n: num
     return d;
 };
 
-const getMexicanHolidays = (year: number): Set<string> => {
-    const holidays = new Set<string>();
+// Modified to return a Map of date -> holiday name
+const getMexicanHolidays = (year: number): Map<string, string> => {
+    const holidays = new Map<string, string>();
     const toUTCString = (date: Date) => date.toISOString().split('T')[0];
 
-    holidays.add(`${year}-01-01`); // Año Nuevo
-    holidays.add(`${year}-05-01`); // Día del Trabajo
-    holidays.add(`${year}-09-16`); // Día de la Independencia
-    holidays.add(`${year}-12-25`); // Navidad
+    holidays.set(`${year}-01-01`, "Año Nuevo");
+    holidays.set(`${year}-05-01`, "Día del Trabajo");
+    holidays.set(`${year}-09-16`, "Independencia");
+    holidays.set(`${year}-12-25`, "Navidad");
     
-    holidays.add(toUTCString(getNthDayOfMonth(year, 1, 1, 1))); // Constitución: 1er lunes de Feb
-    holidays.add(toUTCString(getNthDayOfMonth(year, 2, 1, 3))); // B. Juárez: 3er lunes de Mar
-    holidays.add(toUTCString(getNthDayOfMonth(year, 10, 1, 3)));// Revolución: 3er lunes de Nov
+    holidays.set(toUTCString(getNthDayOfMonth(year, 1, 1, 1)), "Constitución");
+    holidays.set(toUTCString(getNthDayOfMonth(year, 2, 1, 3)), "Benito Juárez");
+    holidays.set(toUTCString(getNthDayOfMonth(year, 10, 1, 3)), "Revolución");
 
     if ((year - 2024) % 6 === 0 && year >= 2024) {
-        holidays.add(`${year}-10-01`); // Transmisión del Poder Ejecutivo
+        holidays.set(`${year}-10-01`, "Transmisión Poder");
     }
 
     return holidays;
@@ -162,8 +163,9 @@ const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal, userPermis
     return getMexicanHolidays(currentDate.getFullYear());
   }, [currentDate]);
 
+  // Calculate local today string for highlighting
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const localTodayString = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
 
   const handlePrevMonth = () => {
     setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
@@ -182,7 +184,7 @@ const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal, userPermis
     <div>
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Calendario de Auditorías</h1>
+          <h1 className="text-3xl font-bold text-light-text dark:text-dark-text">Calendario de Auditorías</h1>
           <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1">
             Programa, visualiza y gestiona todas tus auditorías.
           </p>
@@ -198,30 +200,31 @@ const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal, userPermis
         )}
       </div>
       
-      <div className="bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border shadow-md p-4 sm:p-6">
+      {/* Forced Dark Theme Container */}
+      <div className="bg-gray-900 rounded-lg border border-gray-700 shadow-md p-4 sm:p-6 text-gray-100">
         {/* Calendar Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-2">
-            <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-light-bg dark:hover:bg-dark-bg">
+            <button onClick={handlePrevMonth} className="p-2 rounded-full hover:bg-gray-800 text-gray-300">
               <ChevronLeftIcon className="h-5 w-5" />
             </button>
-            <button onClick={handleNextMonth} className="p-2 rounded-full hover:bg-light-bg dark:hover:bg-dark-bg">
+            <button onClick={handleNextMonth} className="p-2 rounded-full hover:bg-gray-800 text-gray-300">
               <ChevronRightIcon className="h-5 w-5" />
             </button>
-             <button onClick={handleGoToToday} className="px-3 py-1.5 text-sm font-medium rounded-md border border-light-border dark:border-dark-border hover:bg-light-bg dark:hover:bg-dark-bg">
+             <button onClick={handleGoToToday} className="px-3 py-1.5 text-sm font-medium rounded-md border border-gray-600 hover:bg-gray-800 text-gray-300">
                 Hoy
             </button>
           </div>
-          <h2 className="text-lg sm:text-xl font-bold text-center capitalize">
+          <h2 className="text-lg sm:text-xl font-bold text-center capitalize text-white">
             {currentDate.toLocaleString('es-ES', { month: 'long', year: 'numeric' })}
           </h2>
           <div className="w-24"></div> {/* Spacer to balance header */}
         </div>
 
         {/* Calendar Grid */}
-        <div className="grid grid-cols-7 gap-px bg-light-border dark:bg-dark-border border-t border-l border-light-border dark:border-dark-border">
+        <div className="grid grid-cols-7 gap-px bg-gray-800 border-t border-l border-gray-800">
           {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-            <div key={day} className="text-center text-xs font-bold py-2 bg-light-bg dark:bg-dark-bg/50 text-light-text-secondary dark:text-dark-text-secondary">
+            <div key={day} className="text-center text-xs font-bold py-2 bg-gray-900 text-gray-400">
               {day}
             </div>
           ))}
@@ -232,27 +235,38 @@ const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal, userPermis
             const isCurrentMonth = day.getUTCMonth() === currentDate.getUTCMonth();
             
             const dayString = toYMDString(day);
-            const isToday = day.getTime() === today.getTime();
+            // Use string comparison for accurate "Today" check regardless of UTC/Local time offsets
+            const isToday = dayString === localTodayString;
             const dayAudits = monthlyAudits.get(dayString) || [];
-            const isHoliday = holidays.has(dayString);
+            const holidayName = holidays.get(dayString);
+            const isHoliday = !!holidayName;
 
             return (
               <div 
                 key={day.toISOString()} 
-                className={`relative p-2 min-h-[120px] flex flex-col transition-colors 
-                  ${canManage ? 'cursor-pointer hover:bg-light-bg dark:hover:bg-dark-bg' : 'cursor-default'}
-                  ${isCurrentMonth ? 'bg-light-card dark:bg-dark-card' : 'bg-light-bg/50 dark:bg-dark-bg/20'}
-                  ${isWeekend ? 'weekend-cell' : ''} 
-                  ${isHoliday ? 'holiday-cell' : ''}`}
+                className={`relative p-2 min-h-[120px] flex flex-col transition-all
+                  ${canManage ? 'cursor-pointer hover:bg-gray-800' : 'cursor-default'}
+                  ${isCurrentMonth ? 'bg-gray-900' : 'bg-gray-900/50'}
+                  ${isWeekend ? 'bg-gray-900/30' : ''} 
+                  ${isHoliday ? 'bg-red-900/10' : ''}
+                  ${isToday ? '!bg-brand-primary/10 ring-2 ring-inset ring-brand-primary shadow-[inset_0_0_15px_rgba(59,130,246,0.15)] z-10' : ''}`}
                 onClick={() => canManage && onOpenModal(dayString, null)}
               >
-                <div className={`flex items-center justify-center h-7 w-7 text-sm font-semibold rounded-full 
-                  ${isToday ? 'bg-brand-primary text-white' : ''}
-                  ${isHoliday ? 'text-red-500 dark:text-red-400' : ''}
-                  ${!isCurrentMonth ? 'text-light-text-secondary/50 dark:text-dark-text-secondary/50' : ''}`}
-                >
-                  {day.getUTCDate()}
+                <div className="flex items-center justify-between">
+                    <div className={`flex items-center justify-center h-7 w-7 text-sm font-semibold rounded-full 
+                      ${isToday ? 'bg-brand-primary text-white' : ''}
+                      ${isHoliday && !isToday ? 'text-red-400' : 'text-gray-300'}
+                      ${!isCurrentMonth ? 'text-gray-600' : ''}`}
+                    >
+                      {day.getUTCDate()}
+                    </div>
+                    {isHoliday && (
+                        <span className="text-[10px] font-medium text-yellow-500 uppercase tracking-wide ml-1 truncate" title={holidayName}>
+                            {holidayName}
+                        </span>
+                    )}
                 </div>
+
                 <div className="mt-1 space-y-1 overflow-y-auto flex-grow">
                     {dayAudits.map(audit => (
                         <div
@@ -261,7 +275,7 @@ const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal, userPermis
                                 e.stopPropagation();
                                 onOpenModal(dayString, audit);
                             }}
-                            className={`p-1.5 text-xs font-medium rounded-md text-white cursor-pointer ${audit.color || 'bg-gray-500'}`}
+                            className={`p-1.5 text-xs font-medium rounded-md text-white cursor-pointer ${audit.color || 'bg-gray-500'} hover:brightness-110 transition-all`}
                             title={audit.title}
                         >
                             <div className="flex justify-between items-center">

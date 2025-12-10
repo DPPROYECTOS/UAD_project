@@ -1,10 +1,12 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
-import { Project, ProjectTask, ProjectStatus, Document, Folder, UserPermissions } from '../../types';
+import { Project, ProjectTask, ProjectStatus, Document, Folder, UserPermissions, User } from '../../types';
 import { ArrowLeftIcon, TrashIcon, PencilAltIcon } from '../Icons';
 import ConfirmationModal from './ConfirmationModal';
 import ProjectTasksTab from './ProjectTasksTab';
 import ProjectDocumentsTab from './ProjectDocumentsTab';
 import GanttChart from './GanttChart';
+import IshikawaDiagram from './IshikawaDiagram';
 
 interface ProjectDetailViewProps {
   project: Project;
@@ -21,13 +23,14 @@ interface ProjectDetailViewProps {
   onAddDocument: (file: File, folderId: string, projectId: string | null) => Promise<void>;
   onDeleteDocument: (doc: Document) => Promise<void>;
   userPermissions: UserPermissions | null;
+  user: User;
 }
 
 const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
   const { 
       project, tasks, documents, folders, onBackToList, onDeleteProject, 
       onSaveProject, onAddTask, onToggleTask, onUpdateTask, onDeleteTask,
-      onAddDocument, onDeleteDocument, userPermissions
+      onAddDocument, onDeleteDocument, userPermissions, user
   } = props;
   const [activeTab, setActiveTab] = useState('Resumen');
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -41,7 +44,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
     setIsEditing(false); // Close edit mode if project changes
   }, [project]);
   
-  const tabs = ['Resumen', 'Tareas', 'Documentos', 'Gantt'];
+  const tabs = ['Resumen', 'Tareas', 'Documentos', 'Gantt', 'Ishikawa'];
 
   const projectDocuments = useMemo(() => documents.filter(doc => doc.projectId === project.id), [documents, project.id]);
 
@@ -194,6 +197,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
                         onAddDocument={onAddDocument} 
                         onDeleteDocument={onDeleteDocument}
                         userPermissions={userPermissions}
+                        user={user}
                     />;
       case 'Gantt':
              return (
@@ -204,6 +208,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
                  </div>
                </div>
              );
+      case 'Ishikawa':
+            return <IshikawaDiagram project={project} />;
       default:
         return null;
     }

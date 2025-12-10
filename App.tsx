@@ -1,3 +1,6 @@
+
+
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import LoginView from './components/Login';
@@ -11,12 +14,14 @@ import LinksView from './views/LinksView';
 import LinkModal from './components/LinkModal';
 import ConfirmationModal from './components/projects/ConfirmationModal';
 import NotificationsView from './views/NotificationsView';
-import GeminiView from './views/GeminiView';
 import AuditsView from './views/AuditsView';
 import AuditModal from './components/AuditModal';
 import WhiteboardView from './views/WhiteboardView';
 import AdminView from './views/AdminView';
 import GamesView from './views/GamesView';
+import AppsView from './views/AppsView';
+import NexusView from './views/NexusView';
+import VoiceLogView from './components/VoiceLogView';
 import SecretCodeModal from './components/SecretCodeModal';
 import PasswordsView from './views/PasswordsView';
 import { User, Project, ProjectTask, ProjectStatus, Activity, Folder, Document, LinkItem, AuditItem, RecurrenceRule, ToastNotification, UserPermissions } from './types';
@@ -51,6 +56,12 @@ import {
   upsertUserThemePreferences,
   getGeminiApiKey,
   getUserPermissions,
+  getExternalFolders,
+  getExternalDocuments,
+  addExternalFolder,
+  deleteExternalFolder,
+  uploadExternalDocument,
+  deleteExternalDocument
 } from './services/supabaseService';
 import Spinner from './components/Spinner';
 import { GamePlayer } from './components/GamePlayer';
@@ -63,6 +74,8 @@ declare const lamejs: any;
 type RecordingStatus = 'idle' | 'recording' | 'paused';
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
+// ... (Rest of helper functions remain the same)
+// ... convertWebMToMp3 function ...
 /**
  * Converts a WebM audio Blob to MP3 format using lamejs.
  * @param {Blob} webmBlob - The recorded audio Blob in WebM format.
@@ -98,7 +111,7 @@ const convertWebMToMp3 = async (webmBlob: Blob): Promise<Blob> => {
   return new Blob(mp3Data, { type: 'audio/mpeg' });
 };
 
-// --- Audit Notification Helpers ---
+// ... Audit Helpers ...
 const toYMDString = (date: Date) => {
   return date.toISOString().split('T')[0];
 };
@@ -224,6 +237,11 @@ const App: React.FC = () => {
   const [documentsLoading, setDocumentsLoading] = useState(true);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   
+  // --- External Data State (Second Database) ---
+  const [externalFolders, setExternalFolders] = useState<Folder[]>([]);
+  const [externalDocuments, setExternalDocuments] = useState<Document[]>([]);
+  const [externalDataLoaded, setExternalDataLoaded] = useState(false);
+
   // --- Links State ---
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [linksLoading, setLinksLoading] = useState(true);
@@ -395,7 +413,7 @@ const App: React.FC = () => {
             });
         } else {
             setUser(null);
-            setAuthLoading(false); 
+            setAuthLoading(false); // Only set loading false if no user found initially
         }
     });
 
@@ -460,6 +478,7 @@ const App: React.FC = () => {
         // User is logged in, fetch all data in parallel.
         const fetchData = async () => {
             try {
+              // Note: fetchExternalData() is intentionally removed from here to prevent login blocking.
               await Promise.all([
                   fetchProjects(),
                   fetchTasks(),
@@ -486,6 +505,7 @@ const App: React.FC = () => {
             }
         };
 
+        // Ensure authLoading is false after initial data fetch attempts, regardless of success
         Promise.all([fetchData(), fetchApiKey()]).finally(() => {
             setAuthLoading(false);
         });
@@ -507,12 +527,51 @@ const App: React.FC = () => {
         setUserPermissions(null); // Clear permissions on logout
         setIsGamesSectionUnlocked(false);
         setHideGamesClickCount(0);
+        // Clear external data state
+        setExternalFolders([]);
+        setExternalDocuments([]);
+        setExternalDataLoaded(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]); // This effect runs whenever the user object changes.
   
+  // --- Lazy Loading for External Data ---
+  useEffect(() => {
+      if ((activeView === 'Documentos' || activeView === 'NEXUS') && !externalDataLoaded) {
+          const loadExternal = async () => {
+              try {
+                  // Fetch folders first to check for General
+                  let extFolders = await getExternalFolders();
+                  
+                  // Ensure 'General' folder exists, similar to local logic
+                  if (!extFolders.some(f => f.name === 'General')) {
+                      try {
+                          const general = await addExternalFolder('General', null);
+                          extFolders = [general, ...extFolders];
+                      } catch (err) {
+                          console.error("Error creating default General folder in external DB:", err);
+                      }
+                  }
+
+                  const extDocs = await getExternalDocuments();
+                  
+                  setExternalFolders(extFolders);
+                  setExternalDocuments(extDocs);
+                  setExternalDataLoaded(true);
+              } catch (e) {
+                  console.error("Error loading external database content:", e);
+                  // We don't block the UI, just log the error. The sections will be empty.
+                  addToast("Conexión Externa", "No se pudo conectar con el repositorio externo.", "warning");
+              }
+          };
+          loadExternal();
+      }
+  }, [activeView, externalDataLoaded]);
+
+
   // This effect synchronizes project status based on task progress and start date.
   useEffect(() => {
+    // ... existing logic ...
     const oneWeekInMs = 7 * 24 * 60 * 60 * 1000;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -520,7 +579,6 @@ const App: React.FC = () => {
     const projectsToUpdate: { project: Project; newStatus: ProjectStatus }[] = [];
 
     projects.forEach(project => {
-      // If project is already "Completo", don't change it.
       if (project.status === ProjectStatus.COMPLETO) {
         return;
       }
@@ -536,10 +594,8 @@ const App: React.FC = () => {
       let computedStatus: ProjectStatus;
 
       if (allTasksCompleted) {
-          // If all tasks are done, but project is not yet complete, move it to "En Revisión".
           computedStatus = ProjectStatus.EN_REVISION;
       } else {
-          // If it's not all completed, it's either "Nuevo" or "En Progreso".
           if (completedTasks === 0 && timeSinceStart < oneWeekInMs) {
               computedStatus = ProjectStatus.NUEVO;
           } else {
@@ -585,6 +641,7 @@ const App: React.FC = () => {
 
   // --- NEW: Effect for audit notifications ---
   useEffect(() => {
+    // ... existing logic ...
     if (!user || audits.length === 0) {
         return;
     }
@@ -605,7 +662,6 @@ const App: React.FC = () => {
             const occurrences = generateOccurrences(audit, viewStart, viewEnd);
 
             occurrences.forEach(({ date: occurrenceDate, audit: a }) => {
-                // Combine date with time for precise calculation
                 const occurrenceDateTime = new Date(`${toYMDString(occurrenceDate)}T${a.timeOfAudit || '00:00:00'}`);
 
                 const diffMinutes = (occurrenceDateTime.getTime() - now.getTime()) / (1000 * 60);
@@ -644,6 +700,7 @@ const App: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, audits]);
   
+  // ... (Recorder Effects remain the same)
   // --- Start of Recorder Effects ---
   // Effect to manage recording timer
   useEffect(() => {
@@ -686,6 +743,7 @@ const App: React.FC = () => {
   }, [uploadStatus]);
   // --- End of Recorder Effects ---
 
+  // ... (Fetch functions remain the same: fetchProjects, fetchTasks, etc.)
   const fetchProjects = async () => {
     try {
         setError(null);
@@ -768,15 +826,82 @@ const App: React.FC = () => {
     }
   };
   
+  // --- External Data Handlers ---
+  const handleAddExternalFolder = async (name: string, parentId: string | null): Promise<Folder> => {
+      try {
+          const newFolder = await addExternalFolder(name, parentId);
+          setExternalFolders(prev => [...prev, newFolder]);
+          return newFolder;
+      } catch (err) {
+          console.error("Failed to add external folder:", err);
+          addToast("Error", "No se pudo crear la carpeta externa.", "error");
+          throw err;
+      }
+  };
+
+  const handleDeleteExternalFolder = async (id: string): Promise<void> => {
+      try {
+          await deleteExternalFolder(id);
+          // Optimistically update
+          setExternalFolders(prev => prev.filter(f => f.id !== id));
+          // Refetch documents to clean up if needed
+          const docs = await getExternalDocuments();
+          setExternalDocuments(docs);
+      } catch (err) {
+          console.error("Failed to delete external folder:", err);
+          addToast("Error", "No se pudo eliminar la carpeta externa.", "error");
+          throw err;
+      }
+  };
+
+  const handleAddExternalDocument = async (file: File, folderId: string, projectId: string | null): Promise<void> => {
+      try {
+          const newDoc = await uploadExternalDocument(file, folderId, projectId);
+          setExternalDocuments(prev => [newDoc, ...prev]);
+          addToast("Éxito", "Documento externo subido correctamente.", "success");
+      } catch (err) {
+          console.error("Failed to upload external document:", err);
+          addToast("Error", "No se pudo subir el documento externo.", "error");
+          throw err;
+      }
+  };
+
+  const handleDeleteExternalDocument = async (doc: Document): Promise<void> => {
+      try {
+          await deleteExternalDocument(doc);
+          setExternalDocuments(prev => prev.filter(d => d.id !== doc.id));
+      } catch (err) {
+          console.error("Failed to delete external document:", err);
+          addToast("Error", "No se pudo eliminar el documento externo.", "error");
+          throw err;
+      }
+  };
+
 
   const handleDatabaseError = (err: unknown, defaultMessage: string) => {
     console.error("A database operation failed. Raw error object:", err);
-    let finalMessage = defaultMessage;
-    // ... (error handling logic remains the same)
-    setError(finalMessage);
+    
+    // Improved error parsing
+    let message = defaultMessage;
+    if (err instanceof Error) {
+        message = err.message;
+    } else if (typeof err === 'object' && err !== null && 'message' in err) {
+        message = String((err as any).message);
+    } else if (typeof err === 'string') {
+        message = err;
+    }
+
+    // Friendly error messages mapping
+    if (message.includes('Invalid login credentials')) {
+        message = 'Correo o contraseña incorrectos.';
+    } else if (message.includes('Network request failed')) {
+        message = 'Error de conexión. Verifica tu internet.';
+    }
+
+    setError(message);
   }
 
-  // --- Theme Handler ---
+  // ... (Theme Handler remain same)
   const handleThemeChange = async (newTheme: string, customColors?: Record<string, string> | null) => {
       if (!user) return;
       try {
@@ -797,7 +922,7 @@ const App: React.FC = () => {
       }
   };
 
-  // --- Recorder Logic (Centralized) ---
+  // ... (Recorder Logic remains the same: handleUpload, startRecording, togglePauseResume)
   const handleUpload = async () => {
     if (audioChunksRef.current.length === 0) {
       console.warn("No audio chunks to upload.");
@@ -903,7 +1028,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Notification Handlers ---
+  // ... (Notification Handlers remain the same)
   const addActivity = async (
     action: string, 
     target: string, 
@@ -960,7 +1085,7 @@ const App: React.FC = () => {
       setReadNotificationIds(newSet);
   };
 
-  // --- Project Handlers ---
+  // ... (Project Handlers remain the same: handleSaveProject, handleDeleteProject, handleUpdateProjectStatus)
   const handleSaveProject = async (projectToSave: Omit<Project, 'id'> | Project) => {
     try {
         setError(null);
@@ -1017,7 +1142,7 @@ const App: React.FC = () => {
      }
   };
 
-  // --- Task Handlers ---
+  // ... (Task Handlers remain the same)
   const handleAddTask = async (projectId: string, taskDetails: { title: string; startDate: string; duration: number }, parentId: string | null = null) => {
     if (!taskDetails.title.trim()) return;
     const newTaskData: Omit<ProjectTask, 'id'> = {
@@ -1133,7 +1258,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Document Handlers ---
+  // ... (Document Handlers remain the same)
   const handleAddDocument = async (file: File, folderId: string, projectId: string | null): Promise<void> => {
     try {
       setError(null);
@@ -1158,7 +1283,7 @@ const App: React.FC = () => {
     }
   };
 
-  // --- Folder Handlers ---
+  // ... (Folder Handlers remain the same)
   const handleAddFolder = async (folderName: string, parentId: string | null): Promise<Folder> => {
     try {
       setError(null);
@@ -1187,7 +1312,7 @@ const App: React.FC = () => {
     }
   };
   
-  // --- Link Handlers ---
+  // ... (Link Handlers remain the same)
   const handleOpenLinkModal = () => {
     setLinkToEdit(null);
     setIsLinkModalOpen(true);
@@ -1247,7 +1372,7 @@ const App: React.FC = () => {
     setLinkToDelete(null);
   };
 
-  // --- Audit Handlers ---
+  // ... (Audit Handlers remain the same)
   const handleOpenAuditModal = (date: string, audit: AuditItem | null) => {
     setSelectedAuditDate(date);
     setEditingAudit(audit);
@@ -1329,7 +1454,7 @@ const App: React.FC = () => {
     }
   };
 
- // --- Navigation ---
+ // ... (Navigation & Login Handlers remain the same)
   const handleSelectProject = (project: Project) => {
     setSelectedProject(project);
   };
@@ -1453,12 +1578,12 @@ const App: React.FC = () => {
                     onSaveProject={handleSaveProject}
                     onAddTask={handleAddTask}
                     onToggleTask={handleToggleTask}
-                    // FIX: Pass the correct 'handleUpdateTask' function to the 'onUpdateTask' prop.
                     onUpdateTask={handleUpdateTask}
                     onDeleteTask={handleDeleteTask}
                     onAddDocument={handleAddDocument}
                     onDeleteDocument={handleDeleteDocument}
                     userPermissions={userPermissions}
+                    user={user!}
                  /></>;
         }
         return <>{globalErrorDisplay}<ProjectsListView 
@@ -1477,12 +1602,21 @@ const App: React.FC = () => {
                   projects={projects}
                   folders={folders}
                   documents={documents}
+                  externalFolders={externalFolders}
+                  externalDocuments={externalDocuments}
                   isLoading={foldersLoading || documentsLoading}
                   onAddFolder={handleAddFolder}
                   onDeleteFolder={handleDeleteFolder}
                   onAddDocument={handleAddDocument}
                   onDeleteDocument={handleDeleteDocument}
+                  // External handlers passed to view
+                  onAddExternalFolder={handleAddExternalFolder}
+                  onDeleteExternalFolder={handleDeleteExternalFolder}
+                  onAddExternalDocument={handleAddExternalDocument}
+                  onDeleteExternalDocument={handleDeleteExternalDocument}
+                  
                   userPermissions={userPermissions}
+                  user={user!}
                 /></>;
       case 'Enlaces':
         return <>{globalErrorDisplay}<LinksView 
@@ -1493,6 +1627,15 @@ const App: React.FC = () => {
                   onDeleteLink={handleDeleteLink}
                   userPermissions={userPermissions}
                 /></>;
+      case 'Apps':
+        return <>{globalErrorDisplay}<AppsView /></>;
+      case 'NEXUS':
+        return <>{globalErrorDisplay}<NexusView 
+                  documents={documents} 
+                  folders={folders} 
+                  externalDocuments={externalDocuments}
+                  externalFolders={externalFolders}
+               /></>;
       case 'Auditorias':
           return <>{globalErrorDisplay}<AuditsView 
                     audits={audits}
@@ -1501,13 +1644,8 @@ const App: React.FC = () => {
                  /></>;
       case 'Pizarra':
         return <>{globalErrorDisplay}<WhiteboardView userPermissions={userPermissions} />;</>;
-      case 'Gemini 2.5':
-        return <>{globalErrorDisplay}<GeminiView 
-                  geminiApiKey={geminiApiKey}
-                  isApiKeyLoading={isApiKeyLoading}
-                  apiKeyError={apiKeyError}
-                  userPermissions={userPermissions}
-                /></>;
+      case 'Bitácora':
+        return <>{globalErrorDisplay}<VoiceLogView /></>;
       case 'Notificaciones':
         return <>{globalErrorDisplay}<NotificationsView 
                   notifications={activities}
@@ -1521,7 +1659,8 @@ const App: React.FC = () => {
       case 'Juegos':
           return <>{globalErrorDisplay}<GamesView onEnterGame={handleGameEnter} /></>;
       case 'Administrador':
-        if (user?.username !== 'darienperez695@gmail.com') {
+        const allowedAdmins = ['darienperez695@gmail.com', 'zerklucio@gmail.com'];
+        if (!user || !allowedAdmins.includes((user.username || '').toLowerCase().trim())) {
           // If a non-admin somehow gets here, redirect to dashboard.
           return <>{globalErrorDisplay}<DashboardView 
                       projects={projects}

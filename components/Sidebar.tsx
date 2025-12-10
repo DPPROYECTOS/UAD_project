@@ -1,5 +1,7 @@
+
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon, CheckCircleIcon, XCircleIcon, GameControllerIcon, KeyIcon } from './Icons';
+import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon, CheckCircleIcon, XCircleIcon, GameControllerIcon, KeyIcon, ViewGridIcon, AcademicCapIcon, MicrophoneIcon } from './Icons';
 import Spinner from './Spinner';
 import { User, UserPermissions } from '../types';
 
@@ -159,9 +161,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         { name: 'Proyectos', icon: <FolderOpenIcon className="h-6 w-6"/>, id: 'proyectos' },
         { name: 'Documentos', icon: <DocumentTextIcon className="h-6 w-6"/>, id: 'documentos' },
         { name: 'Enlaces', icon: <LinkIcon className="h-6 w-6"/>, id: 'enlaces' },
-        { name: 'Gemini 2.5', icon: <SparklesIcon className="h-6 w-6"/>, id: 'gemini' },
+        { name: 'Apps', icon: <ViewGridIcon className="h-6 w-6"/>, id: 'apps' },
+        { name: 'NEXUS', icon: <AcademicCapIcon className="h-6 w-6"/>, id: 'nexus' },
         { name: 'Auditorias', icon: <ClipboardListIcon className="h-6 w-6"/>, id: 'auditorias' },
         { name: 'Pizarra', icon: <PencilAltIcon className="h-6 w-6"/>, id: 'pizarra' },
+        { name: 'Bitácora', icon: <MicrophoneIcon className="h-6 w-6"/>, id: 'bitacora' },
         { name: 'Notificaciones', icon: <BellIcon className="h-6 w-6"/>, id: 'notificaciones' },
         { name: 'Contraseñas', icon: <KeyIcon className="h-6 w-6"/>, id: 'contraseñas' },
     ];
@@ -219,7 +223,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             onClick={() => setActiveView('Juegos')}
                         />
                     )}
-                    {user.username === 'darienperez695@gmail.com' && (
+                    {['darienperez695@gmail.com', 'zerklucio@gmail.com'].includes((user.username || '').toLowerCase().trim()) && (
                         <NavLink 
                             key="Administrador"
                             icon={<CogIcon className="h-6 w-6"/>}

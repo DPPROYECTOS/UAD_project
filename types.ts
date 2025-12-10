@@ -1,3 +1,5 @@
+
+
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 // --- User & Auth ---
@@ -26,11 +28,13 @@ export interface UserPermissions {
     proyectos: boolean;
     documentos: boolean;
     enlaces: boolean;
-    gemini: boolean;
     auditorias: boolean;
     pizarra: boolean;
     notificaciones: boolean;
     contraseñas: boolean;
+    apps: boolean;
+    nexus: boolean;
+    bitacora: boolean; // NEW: Permission for Voice Log
   };
   proyectos: {
     canCreate: boolean;
@@ -60,14 +64,20 @@ export interface UserPermissions {
   pizarra: {
     canEdit: boolean;
   };
-  gemini: {
-    canUse: boolean;
-  };
   juegos: {
     canUnlock: boolean;
   };
   contraseñas: {
     canManage: boolean;
+  };
+  apps: {
+    canView: boolean;
+  };
+  nexus: {
+    canView: boolean;
+  };
+  gemini: {
+    canUse: boolean;
   };
 }
 
@@ -102,6 +112,28 @@ export interface ProjectTask {
   parentId: string | null;
 }
 
+// --- Ishikawa Diagram ---
+export interface IshikawaDiagramData {
+  id: string;
+  project_id: string;
+  causes: { [category: string]: string[] };
+  created_at?: string;
+  updated_at?: string;
+}
+
+// --- Apps / Modules ---
+export interface AppModule {
+    id: string;
+    label: string;
+    subLabel: string;
+    x: number; // Percentage 0-100
+    y: number; // Percentage 0-100
+    status: 'active' | 'standby' | 'offline';
+    connectionSide: 'top' | 'right' | 'bottom' | 'left';
+    laneOffset: number; // Pixel offset
+    url?: string;
+}
+
 // --- Documents & Folders ---
 export interface Folder {
     id: string;
@@ -119,6 +151,25 @@ export interface Document {
     mimeType: string;
     storagePath: string;
     projectId: string | null;
+}
+
+// --- Nexus Publishing ---
+export interface PublishedProcedure {
+    id: string; // ID in External DB
+    title: string;
+    code: string;
+    area: string;
+    version: string;
+    status: string;
+    file_url: string;
+    uad_origin_id: string; // Link to Document.id in Local DB
+}
+
+export interface PublishedFolder {
+    id: string;
+    origin_folder_id: string;
+    area: string;
+    created_at: string;
 }
 
 // Supabase Storage file type
@@ -148,6 +199,12 @@ export interface PasswordItem {
   service: string;
   username: string;
   password_ct: string; // Ciphertext
+  category: string;
+}
+
+export interface PasswordCategory {
+  id: string;
+  name: string;
 }
 
 
@@ -189,6 +246,20 @@ export interface Activity {
   projectName?: string;
   isRead: boolean;
 }
+
+// --- Comments ---
+export interface Comment {
+  id: string;
+  created_at: string;
+  content: string;
+  user_id: string;
+  document_id: string;
+}
+
+export interface CommentWithAuthor extends Comment {
+  author: DisplayUser;
+}
+
 
 // --- UI Components ---
 export interface ToastNotification {
@@ -344,8 +415,6 @@ export interface OldTask {
 }
 
 // --- AI Studio for Video Generation ---
-// FIX: Resolve module scope conflict by defining AIStudio in the global scope
-// and then exporting it as a type for use in other modules.
 declare global {
     interface AIStudio {
         hasSelectedApiKey: () => Promise<boolean>;
@@ -355,6 +424,3 @@ declare global {
         aistudio?: AIStudio;
     }
 }
-
-// FIX: Removed export of global type 'AIStudio' which was causing a TypeScript error.
-// The type is available globally via the `declare global` block above।

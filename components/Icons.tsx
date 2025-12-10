@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 // Using a generic Icon component to avoid repeating SVG props
@@ -221,6 +222,12 @@ export const ArrowLeftIcon: React.FC<{ className?: string }> = ({ className }) =
     </Icon>
 );
 
+export const ArrowRightIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+    </Icon>
+);
+
 export const CalendarIcon: React.FC<{ className?: string }> = ({ className }) => (
     <Icon className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0h18" />
@@ -248,6 +255,12 @@ export const ChevronLeftIcon: React.FC<{ className?: string }> = ({ className })
 export const ChevronRightIcon: React.FC<{ className?: string }> = ({ className }) => (
     <Icon className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+    </Icon>
+);
+
+export const ChevronDownIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
     </Icon>
 );
 
@@ -481,12 +494,43 @@ export const GameControllerIcon: React.FC<{ className?: string }> = ({ className
 
 export const ArrowsExpandIcon: React.FC<{ className?: string }> = ({ className }) => (
     <Icon className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15m11.25-6l5.25 5.25m0 0v-4.5m0 4.5h-4.5M20.25 3.75l-5.25 5.25m0 0h4.5m-4.5 0v-4.5" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h-4.5m-4.5 0L9 15m11.25-6l5.25 5.25m0 0v-4.5m0 4.5h-4.5M20.25 3.75l-5.25 5.25m0 0h4.5m-4.5 0v-4.5" />
     </Icon>
 );
 
 export const ArrowsShrinkIcon: React.FC<{ className?: string }> = ({ className }) => (
     <Icon className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 9V4.5M9 9H4.5M9 9 3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9V4.5M15 9h4.5M15 9l5.25-5.25M15 15v4.5M15 15h4.5M15 15l5.25 5.25" />
+    </Icon>
+);
+
+export const ViewGridIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+    </Icon>
+);
+
+export const PowerIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M5.636 5.636a9 9 0 1012.728 0M12 3v9" />
+    </Icon>
+);
+
+export const AcademicCapIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.499 5.221 69.17 69.17 0 01-1.924.977M3.32 6.141a.902.902 0 00-.753 1.654l2.043 1.023m11.818-1.023a.902.902 0 01.753-1.654l2.043-1.023" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M12 2.25v15.75" />
+    </Icon>
+);
+
+export const ServerIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 17.25v-.375a3 3 0 00-3-3h-13.5a3 3 0 00-3 3v.375M21.75 17.25a3 3 0 01-3 3h-13.5a3 3 0 01-3-3M21.75 17.25V13.5m-18 3.75V13.5m18 0V13.125a3 3 0 00-3-3h-13.5a3 3 0 00-3 3V13.5m18 0v-3.75m-18 3.75v-3.75m18 0V6.375a3 3 0 00-3-3h-13.5a3 3 0 00-3 3V9.75m18 0V13.5m-18-3.75v3.75m3-3.75h13.5M6 17.25h.008v.008H6v-.008zM6 13.5h.008v.008H6v-.008zM6 9.75h.008v.008H6v-.008z" />
+    </Icon>
+);
+
+export const TerminalIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 7.5l3 2.25-3 2.25m4.5 0h3m-9 8.25h13.5A2.25 2.25 0 0021 18V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v12a2.25 2.25 0 002.25 2.25z" />
     </Icon>
 );

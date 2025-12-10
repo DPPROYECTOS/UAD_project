@@ -12,8 +12,6 @@ const UpcomingAudits: React.FC<UpcomingAuditsProps> = ({ audits }) => {
 
   const upcomingAudit = audits
     .map(audit => {
-      // Correctly parse the date string as local time to avoid timezone issues.
-      // YYYY-MM-DD strings are often parsed as UTC midnight, which can cause off-by-one errors.
       const parts = audit.date.split('-').map(Number);
       const dateObj = new Date(parts[0], parts[1] - 1, parts[2]);
       return { ...audit, dateObj };
@@ -23,9 +21,9 @@ const UpcomingAudits: React.FC<UpcomingAuditsProps> = ({ audits }) => {
 
   if (!upcomingAudit) {
     return (
-      <div className="bg-light-card dark:bg-dark-card p-4 rounded-lg border border-light-border dark:border-dark-border text-center">
-        <AuditIcon className="h-8 w-8 text-gray-400 mx-auto mb-2" />
-        <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary">No hay auditorías futuras programadas.</p>
+      <div className="bg-light-card/50 dark:bg-dark-card/50 backdrop-blur p-6 rounded-sm border border-dashed border-light-border dark:border-dark-border text-center flex flex-col items-center justify-center h-32">
+        <AuditIcon className="h-8 w-8 text-gray-400/50 mb-2" />
+        <p className="text-xs font-mono uppercase text-light-text-secondary dark:text-dark-text-secondary">Sin Eventos Próximos</p>
       </div>
     );
   }
@@ -34,23 +32,38 @@ const UpcomingAudits: React.FC<UpcomingAuditsProps> = ({ audits }) => {
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
   let daysRemainingText = '';
-  if (diffDays === 0) {
-    daysRemainingText = 'Hoy';
-  } else if (diffDays === 1) {
-    daysRemainingText = 'Mañana';
-  } else {
-    daysRemainingText = `en ${diffDays} días`;
-  }
+  if (diffDays === 0) daysRemainingText = 'HOY';
+  else if (diffDays === 1) daysRemainingText = 'MAÑANA';
+  else daysRemainingText = `EN ${diffDays} DÍAS`;
   
-  const auditColor = upcomingAudit.color || 'bg-blue-500';
+  // Mapping standard colors to Tailwind classes for the glow effect
+  // We use inline styles for dynamic colors to ensure compatibility
+  const auditColorClass = upcomingAudit.color || 'bg-blue-500';
 
   return (
-    <div className={`p-4 rounded-lg text-white ${auditColor}`}>
-      <h3 className="text-sm font-bold opacity-80 uppercase tracking-wider">Próxima Auditoría</h3>
-      <p className="text-lg font-semibold mt-2">{upcomingAudit.title}</p>
-      <div className="flex justify-between items-baseline mt-2 text-sm">
-        <span>{upcomingAudit.dateObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
-        <span className="font-bold">{daysRemainingText}</span>
+    <div className={`relative p-5 rounded-sm overflow-hidden text-white shadow-lg ${auditColorClass}`}>
+      {/* Background Pattern */}
+      <div className="absolute inset-0 opacity-20" 
+           style={{ backgroundImage: 'radial-gradient(circle, #fff 1px, transparent 1px)', backgroundSize: '10px 10px' }}>
+      </div>
+      
+      <div className="relative z-10">
+        <div className="flex justify-between items-start">
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80 border-b border-white/30 pb-1 mb-2">Próxima Auditoría</h3>
+            <AuditIcon className="h-5 w-5 opacity-80" />
+        </div>
+        
+        <p className="text-lg font-bold mt-1 leading-tight">{upcomingAudit.title}</p>
+        
+        <div className="flex justify-between items-end mt-4 pt-3 border-t border-white/20">
+            <div className="flex flex-col">
+                <span className="text-[10px] uppercase opacity-70">Fecha Objetivo</span>
+                <span className="font-mono text-sm font-bold">
+                    {upcomingAudit.dateObj.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' }).toUpperCase()}
+                </span>
+            </div>
+            <span className="font-mono text-xl font-bold tracking-tighter animate-pulse">{daysRemainingText}</span>
+        </div>
       </div>
     </div>
   );
