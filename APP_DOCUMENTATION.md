@@ -1,7 +1,7 @@
 # DOCUMENTACIÓN TÉCNICA MAESTRA: PROYECTOS Y MEJORA (UAD)
 
 > **PROPÓSITO DE ESTE ARCHIVO:**
-> Este documento sirve como "Semilla de Contexto" para reiniciar la Inteligencia Artificial. Contiene la arquitectura completa, decisiones de diseño, esquemas de base de datos y la lógica de integración crítica entre UAD y NEXUS.
+> Este documento sirve como "Semilla de Contexto" y "Fuente de Verdad" para cualquier instancia de Inteligencia Artificial que trabaje en el proyecto. Contiene la arquitectura completa, esquemas de base de datos actualizados y lógica de negocio crítica.
 
 ---
 
@@ -9,159 +9,170 @@
 
 **Tipo:** SPA (Single Page Application)
 **Stack:** React 19 + TypeScript + Vite + Tailwind CSS.
-**Backend:** Supabase (BaaS).
-**IA:** Google Gemini 2.5 (Flash/Pro) + Imagen 3 + Veo (Video) + Live API (Audio en tiempo real).
+**Estética:** Diseño "Neo-Nexus" (Cyberpunk/Glassmorphism) con soporte de temas claro/oscuro/personalizado.
+**Backend:** Supabase (BaaS) - Arquitectura Dual.
+**IA:** Google Gemini 2.5 (Flash/Pro), Imagen 3, Veo (Video), Live API (Audio).
+**Audio Nativo:** Web Speech API para transcripción gratuita sin consumo de tokens.
 
-### Funcionalidad Central
-La aplicación "Proyectos y Mejora" (UAD) actúa como un **ERP/Dashboard Administrativo** para gestionar:
-1.  **Proyectos:** Ciclo de vida (Nuevo -> En Progreso -> Revisión -> Completo), tareas jerárquicas, diagramas de Gantt y Ishikawa.
-2.  **Documentos:** Gestor de archivos con estructura de carpetas recursiva.
-3.  **Auditorías:** Calendario de eventos recurrentes con checklists.
-4.  **Apps (Launcher):** Interfaz visual tipo "Circuito Sci-Fi" para lanzar herramientas externas.
-5.  **NEXUS (Consola de Publicación):** Módulo crítico para controlar qué ven los empleados en la app satélite.
+### Módulos Principales
+1.  **Dashboard:** KPIs, actividad reciente y estado de proyectos con visualización futurista.
+2.  **Proyectos:** Gestión completa con Diagramas de Gantt (días hábiles/feriados MX) y Diagramas de Ishikawa (6M).
+3.  **Documentos:** Gestor de archivos con estructura recursiva y soporte para repositorios locales y externos.
+4.  **NEXUS (Consola de Enlace):** Módulo maestro para publicar documentos hacia la app satélite de empleados.
+5.  **Contraseñas:** Bóveda encriptada (Client-Side Vigenère XOR v2) con agrupación por categorías.
+6.  **Bitácora (Voice Log):** Transcripción de reuniones en tiempo real usando API nativa del navegador.
+7.  **Apps (Circuitos):** Lanzador visual basado en coordenadas SVG.
 
 ---
 
 ## 2. ARQUITECTURA DE DATOS (DOBLE BASE DE DATOS)
 
-El sistema utiliza una arquitectura híbrida con dos proyectos de Supabase distintos para separar datos operacionales de datos históricos/externos.
+El sistema utiliza una arquitectura híbrida con dos proyectos de Supabase para segregar datos operacionales de datos históricos/externos.
 
 ### A. Base de Datos 1 (LOCAL / PRIMARY)
 *   **Rol:** Base de datos principal de la UAD.
-*   **Contenido:** Usuarios, Proyectos activos, Tareas, Documentos actuales, Configuración.
-*   **Autenticación:** Maneja el Login de la UAD.
+*   **Contenido:** Usuarios, Proyectos activos, Tareas, Documentos operativos, Configuración de UI, Contraseñas, Pizarras.
+*   **Autenticación:** Maneja el Login principal.
 
 ### B. Base de Datos 2 (EXTERNAL / SECONDARY)
-*   **Rol:** Repositorio de "Procesos Antiguos" y datos históricos.
-*   **Conexión:** Se conecta mediante un cliente secundario (`supabaseExternal`) en `services/supabaseService.ts`.
-*   **Lógica de Carga:** Utiliza **Lazy Loading**. Solo se conecta cuando el usuario entra a las pestañas "Documentos" o "NEXUS".
+*   **Rol:** Repositorio de "Procesos Antiguos", datos históricos y configuración compartida con NEXUS (App Esclava).
+*   **Conexión:** Cliente secundario (`supabaseExternal`).
+*   **Tablas Clave Compartidas:** `departments` (Áreas), `procedures` (Docs Publicados).
 
 ---
 
 ## 3. INTEGRACIÓN UAD <-> NEXUS (MASTER/SLAVE)
 
-Esta es la parte más compleja y crítica del sistema.
+### Lógica de "Áreas Dinámicas"
+A diferencia de versiones anteriores con listas estáticas, ahora las áreas/departamentos se gestionan dinámicamente desde la base de datos externa para mantener sincronía total con la app satélite.
 
-### Concepto
-*   **UAD (Esta App):** Actúa como **MAESTRO (Publisher)**. Es la única que puede escribir, editar o borrar permisos.
-*   **NEXUS (La Otra App):** Actúa como **ESCLAVO (Viewer)**. Solo tiene permisos de lectura (`SELECT`) y muestra lo que UAD autoriza.
+*   **Tabla Fuente:** `departments` (en DB Externa).
+*   **Flujo:** Al publicar un documento, UAD consulta esta tabla para poblar el selector de áreas. Esto evita publicar documentos en áreas inexistentes o renombradas.
 
-### Estrategia de "Frontend Aggregation" & "Flat Mirror Tables"
-Para evitar problemas de seguridad con JOINs entre tablas con permisos restrictivos (RLS), implementamos una estrategia de **Tablas Espejo Planas**.
+### Estrategia de "Tablas Espejo Planas"
+Para publicar documentos protegidos sin exponer la estructura interna ni lidiar con RLS complejos en JOINs:
 
-#### Cómo funciona el "Interruptor":
-1.  En UAD (`NexusView`), el administrador ve un documento local o externo.
-2.  Activa el **Switch (Publicar)**.
-3.  UAD genera una **URL Firmada** (Signed URL) de larga duración (1 año) para el archivo PDF.
-4.  UAD realiza un `UPSERT` en la tabla pública `procedures` (en la DB correspondiente).
-5.  UAD inyecta metadatos redundantes (`folder_id`, `folder_name`, `area`) directamente en la fila para que NEXUS no tenga que consultar la tabla `folders` protegida.
+1.  **Acción:** Admin selecciona archivo en `NexusView` -> "INICIAR ENLACE".
+2.  **Proceso:**
+    *   Genera URL Firmada (Signed URL) de larga duración (aprox. 1 año).
+    *   Realiza `UPSERT` en la tabla `procedures` (Local o Externa según contexto).
+    *   Aplana los datos: Inyecta `folder_id` y `area` directamente en la fila del procedimiento.
 
 ---
 
-## 4. ESQUEMA DE BASE DE DATOS (SQL APLICADO)
+## 4. ESQUEMA DE BASE DE DATOS ACTUALIZADO (SQL)
 
-Estas tablas y políticas deben existir tanto en la **DB LOCAL** como en la **DB EXTERNA** para que la sincronización funcione.
+A continuación, las estructuras críticas creadas y modificadas recientemente.
 
-### A. Tabla: `procedures` (Lista Blanca de Documentos)
-Es la tabla que NEXUS consulta para saber qué documentos mostrar.
-
+### A. Tabla: `procedures` (Integración NEXUS)
+Existente en ambas BDs.
 ```sql
 CREATE TABLE IF NOT EXISTS public.procedures (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    title TEXT NOT NULL,          -- Nombre visual
-    code TEXT,                    -- Código (ej. IT-001)
-    area TEXT NOT NULL,           -- ETIQUETA CRÍTICA para el filtrado en NEXUS
+    title TEXT NOT NULL,
+    code TEXT,
+    area TEXT NOT NULL,           -- Crucial para filtrado en Nexus
     version TEXT DEFAULT '1.0',
     status TEXT DEFAULT 'Vigente',
-    file_url TEXT NOT NULL,       -- Enlace directo al PDF (Signed URL)
-    
-    -- REFERENCIAS INTERNAS (Para el Switch de UAD)
-    origin_document_id UUID,      -- ID en tabla 'documents' (DB Local)
-    uad_origin_id UUID,           -- ID en tabla 'documents' (DB Externa)
-    
-    -- DATOS PLANOS (Para Frontend Aggregation en NEXUS)
-    folder_id UUID,               -- ID de la carpeta visual
-    
-    -- RESTRICCIONES
-    CONSTRAINT unique_origin_id UNIQUE (origin_document_id), -- O uad_origin_id en externa
-    CONSTRAINT unique_uad_origin UNIQUE (uad_origin_id)
+    file_url TEXT NOT NULL,       -- Signed URL
+    origin_document_id UUID,      -- Link a documento local
+    uad_origin_id UUID,           -- Link a documento externo
+    folder_id UUID,               -- Agregación visual
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
-
--- PERMISOS (RLS)
-ALTER TABLE public.procedures ENABLE ROW LEVEL SECURITY;
--- Lectura pública para que NEXUS pueda ver
-CREATE POLICY "Public Read" ON public.procedures FOR SELECT TO anon USING (true);
-CREATE POLICY "Public Read Auth" ON public.procedures FOR SELECT TO authenticated USING (true);
--- Escritura solo para UAD (Authenticated)
-CREATE POLICY "UAD Write" ON public.procedures FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "UAD Update" ON public.procedures FOR UPDATE TO authenticated USING (true);
-CREATE POLICY "UAD Delete" ON public.procedures FOR DELETE TO authenticated USING (true);
 ```
 
-### B. Tabla: `published_folders` (Lista Blanca de Carpetas)
-Permite publicar carpetas completas y que NEXUS reconstruya la estructura.
-
+### B. Tabla: `departments` (Áreas Dinámicas - DB Externa)
+Fuente de verdad para las categorías organizacionales.
 ```sql
-CREATE TABLE IF NOT EXISTS public.published_folders (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    origin_folder_id UUID NOT NULL UNIQUE, -- ID real de la carpeta
-    folder_name TEXT,                      -- Nombre visual (Dato plano)
-    area TEXT NOT NULL,                    -- Etiqueta de filtrado
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+CREATE TABLE departments (
+    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
+    name TEXT UNIQUE NOT NULL, -- Valor usado en columna 'area' de procedures
+    max_users INTEGER DEFAULT 15,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
+```
 
--- PERMISOS (RLS)
-ALTER TABLE public.published_folders ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Read Folders" ON public.published_folders FOR SELECT TO anon USING (true);
--- Escritura restringida a UAD...
+### C. Tabla: `password_categories` (Gestor de Contraseñas)
+Permite agrupación dinámica de credenciales.
+```sql
+CREATE TABLE IF NOT EXISTS public.password_categories (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id, name)
+);
+-- Nota: La tabla 'passwords' tiene una columna 'category' text que se relaciona lógicamente aquí.
+```
+
+### D. Tabla: `ishikawa_diagrams` (Gestión de Calidad)
+Almacena la estructura JSON de las 6M para cada proyecto.
+```sql
+CREATE TABLE IF NOT EXISTS public.ishikawa_diagrams (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE UNIQUE,
+    causes JSONB DEFAULT '{}'::jsonb, -- Estructura: { method: [], machine: [], ... }
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+### E. Tabla: `user_ui_settings` (Permisos Granulares)
+Controla el acceso a módulos específicos (Sidebar, Botones de acción).
+```sql
+CREATE TABLE public.user_ui_settings (
+    user_id UUID NOT NULL PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    permissions JSONB NOT NULL DEFAULT '{}'::jsonb
+);
 ```
 
 ---
 
-## 5. GUÍA DE FUNCIONAMIENTO PARA NEXUS (Instrucciones para la otra IA)
+## 5. FUNCIONES RPC (Stored Procedures Críticos)
 
-Si necesitas re-instruir a la IA que desarrolla NEXUS, usa esta lógica:
+Para la gestión de administradores y permisos, se utilizan funciones seguras (`SECURITY DEFINER`) para saltarse RLS específicos cuando un Admin opera.
 
-1.  **No uses JOINs SQL:** No intentes unir `procedures` con `folders`. Fallará por permisos.
-2.  **Consulta Paralela:**
-    *   Haz un `GET` a `published_folders` filtrando por `area`.
-    *   Haz un `GET` a `procedures` filtrando por `area` y `status='Vigente'`.
-3.  **Cruce en Cliente (JS):**
-    *   Toma la lista de `procedures`.
-    *   Si `procedure.folder_id` coincide con un `folder.origin_folder_id`, mete el documento visualmente dentro de esa carpeta (acordeón).
-    *   Si no, muéstralo en la raíz.
-4.  **Archivos:** Para descargar, usa simplemente el campo `file_url`. Es un link pre-autorizado.
+**1. `get_all_users_and_permissions`**
+*   Obtiene lista de usuarios y sus objetos JSON de permisos.
+*   Contiene **Lista Blanca (Hardcoded en SQL)** de correos permitidos (`darienperez695@gmail.com`, `zerklucio@gmail.com`).
+
+**2. `update_user_permissions`**
+*   Permite a los super-admins escribir en `user_ui_settings` de otros usuarios.
 
 ---
 
-## 6. MÓDULOS ESPECÍFICOS DE UAD
+## 6. DETALLES DE IMPLEMENTACIÓN DE MÓDULOS
 
-### Apps View (Circuitos)
-*   Usa SVG para dibujar líneas.
-*   **Posicionamiento:** Absoluto basado en píxeles calculados dinámicamente (`ResizeObserver`).
-*   **Enrutamiento:** Algoritmo ortogonal que busca uno de los 3 puntos de anclaje por lado de cada módulo para evitar líneas diagonales.
+### Bitácora de Voz (Voice Log)
+*   **Tecnología:** `window.SpeechRecognition` (Web Speech API).
+*   **Costo:** $0 (No usa Gemini).
+*   **Lógica:** Reconstrucción total del transcript en cada evento `onresult` para evitar duplicación de palabras.
+*   **Persistencia:** Local temporal (se borra al recargar, diseñado para notas rápidas de reunión).
 
-### Passwords View (Seguridad)
-*   **Encriptación:** Cliente-lado únicamente.
-*   **Algoritmo:** Vigenère XOR Hexadecimal (`v3:`).
-*   **Key:** Usa una "Contraseña Maestra" que nunca se guarda en texto plano, solo su hash SHA-256 para validación.
+### Gestor de Contraseñas (Passwords)
+*   **Seguridad:** "Zero-Knowledge" parcial. La DB solo guarda el hash SHA-256 de la Master Password para validación.
+*   **Cifrado:** Las contraseñas se guardan como *ciphertext* en la DB usando un algoritmo Vigenère XOR modificado (v2) que soporta caracteres Unicode (4-char hex padding).
+*   **Bypass:** Mecanismo de "Acceso de Emergencia" (Bypass) activable mediante pulsación larga en el menú lateral (solo Admins).
 
-### Live Assistant
-*   Usa WebSockets para conectar con la API `gemini-2.5-flash-native-audio`.
-*   Maneja buffers de audio PCM (16kHz entrada / 24kHz salida).
+### Visor de Documentos (Universal Viewer)
+*   **Componente:** `FileViewerModal.tsx`.
+*   **Estrategia:** Renderizado condicional basado en MIME Type.
+    *   PDF: Google Docs Viewer (iframe).
+    *   Office: Microsoft Office Web Viewer (iframe).
+    *   Imágenes: Tag `<img>` directo.
+    *   Otros: Botón de descarga forzada.
 
 ---
 
 ## 7. RESOLUCIÓN DE PROBLEMAS COMUNES
 
-*   **Error "Policy ... already exists":** Al correr scripts SQL, siempre usa `DROP POLICY IF EXISTS` antes de crear.
-*   **Error "On Conflict constraint":** Asegúrate de que la columna usada en `ON CONFLICT` (ej. `origin_document_id`) tenga una restricción `UNIQUE` en la base de datos.
-*   **Autofix/Linter Loops:** En `useEffect`, evita declarar funciones complejas fuera del hook si no están memoizadas (`useCallback`). Esto causa re-renders infinitos.
-
----
-**ESTADO ACTUAL DEL SISTEMA:**
-*   Conexión DB Local: **ACTIVA**
-*   Conexión DB Externa: **ACTIVA**
-*   Sincronización NEXUS: **ACTIVA (Modo Switch)**
+*   **Error "Permission denied: Not an admin":**
+    *   *Causa:* El correo del usuario no está en la lista blanca dentro de la función SQL `get_all_users_and_permissions` en Supabase.
+    *   *Solución:* Editar la función en Supabase -> SQL Editor y añadir el correo al `IF`.
+*   **NEXUS no muestra documentos:**
+    *   *Causa:* El documento tiene un "Área" asignada que no coincide exactamente con un `name` en la tabla `departments` de la DB Externa.
+    *   *Solución:* Verificar ortografía en `departments` y republicar el documento seleccionando el área correcta del dropdown.
+*   **Bitácora repite texto:**
+    *   *Causa:* Mala gestión de eventos `interimResults`.
+    *   *Solución:* Usar la lógica de "Fuente de Verdad" (`transcriptRef`) implementada en `VoiceLogView.tsx`.

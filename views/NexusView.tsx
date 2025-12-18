@@ -2,19 +2,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
     ServerIcon, 
-    DatabaseIcon, 
     FolderIcon, 
     DocumentTextIcon, 
     SearchIcon, 
     ArrowLeftIcon, 
     GlobeAltIcon, 
-    CheckCircleIcon, 
     XCircleIcon, 
     InformationCircleIcon, 
     RefreshIcon,
-    TerminalIcon
+    TerminalIcon,
+    CogIcon // Added for folder settings
 } from '../components/Icons';
-import { Document as AppDocument, PublishedProcedure, Folder } from '../types';
+import { Document as AppDocument, PublishedProcedure, Folder, PublishedFolder } from '../types';
 import { 
     getLocalPublishedProcedures, 
     getExternalPublishedProcedures, 
@@ -22,14 +21,13 @@ import {
     publishExternalProcedure, 
     unpublishLocalProcedure, 
     unpublishExternalProcedure,
-    // Folder publishing imports
     getLocalPublishedFolders,
     getExternalPublishedFolders,
     publishLocalFolder,
     publishExternalFolder,
     unpublishLocalFolder,
     unpublishExternalFolder,
-    getDepartments // Import the new function
+    getDepartments
 } from '../services/supabaseService';
 
 interface NexusViewProps {
@@ -38,8 +36,6 @@ interface NexusViewProps {
     folders: Folder[];
     externalFolders: Folder[];
 }
-
-// REMOVED: const AREAS = [...] - Now fetching dynamically
 
 // --- STYLES & ASSETS ---
 const SCANLINE_BG = `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 20h40' stroke='%23ffffff' stroke-opacity='0.03' fill='none'/%3E%3C/svg%3E")`;
@@ -51,9 +47,11 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
     const [activeDb, setActiveDb] = useState<'local' | 'external'>('local');
     const [currentPath, setCurrentPath] = useState<Folder[]>([]); // Navigation Stack
     const [selectedItem, setSelectedItem] = useState<AppDocument | null>(null);
+    const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null); // NEW: Folder Selection
     
     // Async Data
     const [publishedList, setPublishedList] = useState<PublishedProcedure[]>([]);
+    const [publishedFoldersList, setPublishedFoldersList] = useState<PublishedFolder[]>([]); // NEW: Published Folders
     const [isLoading, setIsLoading] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     
@@ -63,7 +61,7 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
 
     // UI State
     const [searchTerm, setSearchTerm] = useState('');
-    const [publishForm, setPublishForm] = useState({ code: '', area: '', version: '1.0' });
+    const [publishForm, setPublishForm] = useState({ code: '', area: '', version: '1.0', status: 'Vigente' });
     const [statusMessage, setStatusMessage] = useState<{ text: string, type: 'success' | 'error' | 'info' } | null>(null);
 
     // Computed Properties based on Active DB
@@ -76,14 +74,20 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
     const refreshData = async () => {
         setIsLoading(true);
         try {
-            // Fetch both to have ready, but we display based on activeDb
-            const [localPubs, extPubs] = await Promise.all([
+            const [localPubs, extPubs, localFolders, extFolders] = await Promise.all([
                 getLocalPublishedProcedures(),
-                getExternalPublishedProcedures()
+                getExternalPublishedProcedures(),
+                getLocalPublishedFolders(),
+                getExternalPublishedFolders()
             ]);
-            // Merge or select based on active view. Ideally we keep them separate but for this view logic:
-            if (activeDb === 'local') setPublishedList(localPubs);
-            else setPublishedList(extPubs);
+            
+            if (activeDb === 'local') {
+                setPublishedList(localPubs);
+                setPublishedFoldersList(localFolders);
+            } else {
+                setPublishedList(extPubs);
+                setPublishedFoldersList(extFolders);
+            }
         } catch (err) {
             console.error("Nexus Sync Error:", err);
         } finally {
@@ -128,7 +132,8 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
 
     const handleNavigate = (folder: Folder) => {
         setCurrentPath([...currentPath, folder]);
-        setSelectedItem(null); // Deselect on nav
+        setSelectedItem(null); 
+        setSelectedFolder(null);
         setSearchTerm('');
     };
 
@@ -136,12 +141,14 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
         if (currentPath.length > 0) {
             setCurrentPath(currentPath.slice(0, -1));
             setSelectedItem(null);
+            setSelectedFolder(null);
         }
     };
 
     const handleBreadcrumbClick = (index: number) => {
         setCurrentPath(currentPath.slice(0, index + 1));
         setSelectedItem(null);
+        setSelectedFolder(null);
     };
 
     // --- FILTERING ---
@@ -150,18 +157,15 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
         let subFolders = activeFolders;
 
         if (searchTerm.trim()) {
-            // Search Mode: Flatten structure, show matching files
             return {
                 folders: [],
                 files: docs.filter(d => d.name.toLowerCase().includes(searchTerm.toLowerCase()))
             };
         } else {
-            // Navigation Mode
             if (currentFolderId) {
                 docs = docs.filter(d => d.folderId === currentFolderId);
                 subFolders = subFolders.filter(f => f.parentId === currentFolderId);
             } else {
-                // Root view (if not auto-navigated to General)
                 docs = docs.filter(d => !d.folderId);
                 subFolders = subFolders.filter(f => !f.parentId);
             }
@@ -172,52 +176,81 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
     // --- SELECTION & INSPECTOR ---
     const handleSelectItem = (doc: AppDocument) => {
         setSelectedItem(doc);
+        setSelectedFolder(null); // Deselect folder
+        
         const publishedInfo = publishedList.find(p => p.uad_origin_id === doc.id);
         
         if (publishedInfo) {
             setPublishForm({
                 code: publishedInfo.code,
                 area: publishedInfo.area,
-                version: publishedInfo.version
+                version: publishedInfo.version,
+                status: publishedInfo.status || 'Vigente'
             });
         } else {
-            // Reset for new publication
-            // Use first available area if list is loaded
             setPublishForm({
                 code: '',
                 area: areas.length > 0 ? areas[0] : '',
-                version: '1.0'
+                version: '1.0',
+                status: 'Vigente'
             });
+        }
+        setStatusMessage(null);
+    };
+
+    const handleSelectFolder = (e: React.MouseEvent, folder: Folder) => {
+        e.stopPropagation();
+        setSelectedFolder(folder);
+        setSelectedItem(null); // Deselect file
+
+        const publishedInfo = publishedFoldersList.find(p => p.origin_folder_id === folder.id);
+        
+        if (publishedInfo) {
+            setPublishForm(prev => ({
+                ...prev,
+                area: publishedInfo.area,
+                // Code, Version, Status not applicable to folders typically, but we keep state clean
+            }));
+        } else {
+             setPublishForm(prev => ({
+                ...prev,
+                area: areas.length > 0 ? areas[0] : '',
+            }));
         }
         setStatusMessage(null);
     };
 
     // --- ACTIONS ---
     const handlePublish = async () => {
-        if (!selectedItem) return;
         setIsProcessing(true);
-        setStatusMessage({ text: 'ESTABLECIENDO ENLACE...', type: 'info' });
-
+        
         try {
-            const payload = {
-                title: selectedItem.name,
-                code: publishForm.code,
-                area: publishForm.area,
-                version: publishForm.version,
-                status: 'Vigente',
-                origin_id: selectedItem.id,
-                storage_path: selectedItem.storagePath,
-                folder_id: selectedItem.folderId // Pass folder ID for flat aggregation
-            };
+            if (selectedItem) {
+                // Publish Document
+                setStatusMessage({ text: 'ENLAZANDO DOCUMENTO...', type: 'info' });
+                const payload = {
+                    title: selectedItem.name,
+                    code: publishForm.code,
+                    area: publishForm.area,
+                    version: publishForm.version,
+                    status: publishForm.status,
+                    origin_id: selectedItem.id,
+                    storage_path: selectedItem.storagePath,
+                    folder_id: selectedItem.folderId
+                };
 
-            if (activeDb === 'local') {
-                await publishLocalProcedure(payload);
-            } else {
-                await publishExternalProcedure(payload);
+                if (activeDb === 'local') await publishLocalProcedure(payload);
+                else await publishExternalProcedure(payload);
+
+            } else if (selectedFolder) {
+                // Publish Folder
+                setStatusMessage({ text: 'ENLAZANDO CARPETA...', type: 'info' });
+                if (activeDb === 'local') await publishLocalFolder(selectedFolder.id, selectedFolder.name, publishForm.area);
+                else await publishExternalFolder(selectedFolder.id, selectedFolder.name, publishForm.area);
             }
 
             await refreshData();
-            setStatusMessage({ text: 'ENLACE ESTABLECIDO EXITOSAMENTE', type: 'success' });
+            setStatusMessage({ text: 'ENLACE ESTABLECIDO', type: 'success' });
         } catch (err) {
             setStatusMessage({ text: 'FALLÓ LA TRANSMISIÓN', type: 'error' });
             console.error(err);
@@ -227,29 +260,37 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
     };
 
     const handleUnpublish = async () => {
-        if (!selectedItem) return;
-        const pubRecord = publishedList.find(p => p.uad_origin_id === selectedItem.id);
-        if (!pubRecord) return;
-
         setIsProcessing(true);
         setStatusMessage({ text: 'TERMINANDO CONEXIÓN...', type: 'info' });
 
         try {
-            if (activeDb === 'local') {
-                await unpublishLocalProcedure(pubRecord.id);
-            } else {
-                await unpublishExternalProcedure(pubRecord.id);
+            if (selectedItem) {
+                const pubRecord = publishedList.find(p => p.uad_origin_id === selectedItem.id);
+                if (pubRecord) {
+                    if (activeDb === 'local') await unpublishLocalProcedure(pubRecord.id);
+                    else await unpublishExternalProcedure(pubRecord.id);
+                }
+            } else if (selectedFolder) {
+                // Unpublish Folder logic (using origin_folder_id usually matches, service handles ID lookup or passed ID)
+                // The service unpublishLocalFolder takes 'folderId' which corresponds to 'origin_folder_id' in DB query
+                if (activeDb === 'local') await unpublishLocalFolder(selectedFolder.id);
+                else await unpublishExternalFolder(selectedFolder.id);
             }
+
             await refreshData();
-            setStatusMessage({ text: 'OBJETIVO ELIMINADO DE NEXUS', type: 'success' });
+            setStatusMessage({ text: 'OBJETIVO DESVINCULADO', type: 'success' });
             // Reset form
-            setPublishForm({ code: '', area: areas.length > 0 ? areas[0] : '', version: '1.0' });
+            setPublishForm(prev => ({ ...prev, code: '', version: '1.0', status: 'Vigente' }));
         } catch (err) {
             setStatusMessage({ text: 'FALLÓ LA TERMINACIÓN', type: 'error' });
         } finally {
             setIsProcessing(false);
         }
     };
+
+    const isFolderPublished = selectedFolder ? publishedFoldersList.some(p => p.origin_folder_id === selectedFolder.id) : false;
+    const isFilePublished = selectedItem ? publishedList.some(p => p.uad_origin_id === selectedItem.id) : false;
+    const isCurrentPublished = selectedFolder ? isFolderPublished : isFilePublished;
 
     return (
         <div className="flex flex-col h-[calc(100vh-6rem)] bg-[#050b14] text-slate-300 font-sans overflow-hidden rounded-xl border border-slate-800 shadow-2xl relative">
@@ -339,7 +380,7 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                             <div className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-wide"> Resultados de Búsqueda :: {displayedItems.files.length} encontrados</div>
                         ) : null}
 
-                        {/* Back Button (if not root and not search) */}
+                        {/* Back Button */}
                         {currentPath.length > 0 && !searchTerm && (
                             <div 
                                 onClick={handleNavigateUp}
@@ -352,22 +393,43 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
 
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                             {/* Folders */}
-                            {displayedItems.folders.map(folder => (
+                            {displayedItems.folders.map(folder => {
+                                const isPublished = publishedFoldersList.some(p => p.origin_folder_id === folder.id);
+                                const isSelected = selectedFolder?.id === folder.id;
+
+                                return (
                                 <div 
                                     key={folder.id}
                                     onClick={() => handleNavigate(folder)}
                                     className={`
-                                        group relative p-4 rounded bg-slate-800/40 border border-slate-700/50 
+                                        group relative p-4 rounded bg-slate-800/40 border 
+                                        ${isSelected ? `border-${currentThemeColor}-500 bg-${currentThemeColor}-900/20` : 'border-slate-700/50'}
                                         hover:border-${currentThemeColor}-500/50 hover:bg-${currentThemeColor}-500/10 hover:shadow-[0_0_15px_rgba(0,0,0,0.3)]
                                         cursor-pointer transition-all duration-200 flex flex-col items-center gap-3
                                     `}
                                 >
-                                    <FolderIcon className={`h-8 w-8 text-slate-500 group-hover:text-${currentThemeColor}-400 transition-colors`} />
-                                    <span className="text-xs font-bold text-slate-300 uppercase truncate w-full text-center tracking-wide">{folder.name}</span>
-                                    <div className={`absolute top-0 right-0 w-2 h-2 border-t border-r border-${currentThemeColor}-500 opacity-0 group-hover:opacity-100 transition-opacity`}></div>
+                                    <div className="relative">
+                                        <FolderIcon className={`h-8 w-8 ${isSelected ? `text-${currentThemeColor}-400` : 'text-slate-500'} group-hover:text-${currentThemeColor}-400 transition-colors`} />
+                                        {isPublished && (
+                                            <div className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                                                <span className={`animate-ping absolute inline-flex h-full w-full rounded-full bg-${currentThemeColor}-400 opacity-75`}></span>
+                                                <span className={`relative inline-flex rounded-full h-2.5 w-2.5 bg-${currentThemeColor}-500`}></span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <span className={`text-xs font-bold uppercase truncate w-full text-center tracking-wide ${isSelected ? 'text-white' : 'text-slate-300'}`}>{folder.name}</span>
+                                    
+                                    <button 
+                                        onClick={(e) => handleSelectFolder(e, folder)}
+                                        className={`absolute top-2 right-2 p-1 rounded-full hover:bg-black/50 text-slate-500 hover:text-${currentThemeColor}-400 transition-colors z-10`}
+                                        title="Configurar Carpeta"
+                                    >
+                                        <CogIcon className="h-4 w-4" />
+                                    </button>
+
                                     <div className={`absolute bottom-0 left-0 w-2 h-2 border-b border-l border-${currentThemeColor}-500 opacity-0 group-hover:opacity-100 transition-opacity`}></div>
                                 </div>
-                            ))}
+                            )})}
 
                             {/* Files */}
                             {displayedItems.files.map(doc => {
@@ -422,58 +484,61 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                 <aside className="w-96 bg-[#080f1e] border-l border-slate-800 flex flex-col shadow-2xl relative z-20">
                     <div className={`h-1 w-full bg-gradient-to-r from-transparent via-${currentThemeColor}-500 to-transparent opacity-50`}></div>
                     
-                    {selectedItem ? (
+                    {selectedItem || selectedFolder ? (
                         <div className="flex-1 flex flex-col p-6 animate-fade-in">
-                            {/* File Header */}
+                            {/* Header */}
                             <div className="flex items-start gap-4 mb-6">
                                 <div className={`p-3 rounded bg-${currentThemeColor}-900/20 border border-${currentThemeColor}-500/30`}>
-                                    <DocumentTextIcon className={`h-8 w-8 text-${currentThemeColor}-400`} />
+                                    {selectedItem ? <DocumentTextIcon className={`h-8 w-8 text-${currentThemeColor}-400`} /> : <FolderIcon className={`h-8 w-8 text-${currentThemeColor}-400`} />}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <h2 className="text-sm font-extrabold text-white uppercase break-words leading-tight tracking-wide">
-                                        {selectedItem.name}
+                                        {selectedItem ? selectedItem.name : selectedFolder?.name}
                                     </h2>
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">ID: {selectedItem.id.split('-')[0]}...</p>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase mt-1">
+                                        {selectedItem ? `ID: ${selectedItem.id.slice(0, 8)}...` : `TIPO: CONTENEDOR`}
+                                    </p>
                                 </div>
                             </div>
 
                             {/* Status Display */}
-                            {(() => {
-                                const isPublished = publishedList.find(p => p.uad_origin_id === selectedItem.id);
-                                return (
-                                    <div className={`
-                                        mb-6 p-4 rounded-lg border-2 border-dashed
-                                        ${isPublished ? `border-${currentThemeColor}-500/50 bg-${currentThemeColor}-500/5` : 'border-slate-700 bg-slate-900/50'}
-                                    `}>
-                                        <div className="flex justify-between items-center mb-2">
-                                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado de Conexión</span>
-                                            {isPublished ? (
-                                                <span className={`text-xs font-extrabold text-${currentThemeColor}-400 uppercase flex items-center gap-1`}>
-                                                    ● ACTIVO
-                                                </span>
-                                            ) : (
-                                                <span className="text-xs font-extrabold text-slate-500 uppercase">○ INACTIVO</span>
-                                            )}
+                            <div className={`
+                                mb-6 p-4 rounded-lg border-2 border-dashed
+                                ${isCurrentPublished ? `border-${currentThemeColor}-500/50 bg-${currentThemeColor}-500/5` : 'border-slate-700 bg-slate-900/50'}
+                            `}>
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Estado de Conexión</span>
+                                    {isCurrentPublished ? (
+                                        <span className={`text-xs font-extrabold text-${currentThemeColor}-400 uppercase flex items-center gap-1`}>
+                                            ● ACTIVO
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs font-extrabold text-slate-500 uppercase">○ INACTIVO</span>
+                                    )}
+                                </div>
+                                
+                                {selectedItem && isCurrentPublished && (() => {
+                                    const publishedInfo = publishedList.find(p => p.uad_origin_id === selectedItem.id);
+                                    return publishedInfo && (
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between text-[10px] font-bold uppercase border-b border-slate-700/50 pb-1"><span className="text-slate-500">CÓDIGO:</span><span className="text-white">{publishedInfo.code || 'N/A'}</span></div>
+                                            <div className="flex justify-between text-[10px] font-bold uppercase border-b border-slate-700/50 pb-1"><span className="text-slate-500">ÁREA:</span><span className="text-white truncate max-w-[150px]">{publishedInfo.area}</span></div>
+                                            <div className="flex justify-between text-[10px] font-bold uppercase border-b border-slate-700/50 pb-1"><span className="text-slate-500">VER:</span><span className="text-white">{publishedInfo.version}</span></div>
+                                            <div className="flex justify-between text-[10px] font-bold uppercase"><span className="text-slate-500">ESTADO:</span><span className={`text-${publishedInfo.status === 'Caduco' ? 'red-500' : 'white'}`}>{publishedInfo.status}</span></div>
                                         </div>
-                                        {isPublished && (
-                                            <div className="space-y-1">
-                                                <div className="flex justify-between text-[10px] font-bold uppercase border-b border-slate-700/50 pb-1">
-                                                    <span className="text-slate-500">CÓDIGO:</span>
-                                                    <span className="text-white">{isPublished.code || 'N/A'}</span>
-                                                </div>
-                                                <div className="flex justify-between text-[10px] font-bold uppercase border-b border-slate-700/50 pb-1">
-                                                    <span className="text-slate-500">ÁREA:</span>
-                                                    <span className="text-white truncate max-w-[150px]">{isPublished.area}</span>
-                                                </div>
-                                                <div className="flex justify-between text-[10px] font-bold uppercase">
-                                                    <span className="text-slate-500">VER:</span>
-                                                    <span className="text-white">{isPublished.version}</span>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })()}
+                                    );
+                                })()}
+
+                                {selectedFolder && isCurrentPublished && (() => {
+                                    const publishedInfo = publishedFoldersList.find(p => p.origin_folder_id === selectedFolder.id);
+                                    return publishedInfo && (
+                                        <div className="space-y-1">
+                                            <div className="flex justify-between text-[10px] font-bold uppercase border-b border-slate-700/50 pb-1"><span className="text-slate-500">TIPO:</span><span className="text-white">CARPETA PUBLICA</span></div>
+                                            <div className="flex justify-between text-[10px] font-bold uppercase"><span className="text-slate-500">ÁREA:</span><span className="text-white truncate max-w-[150px]">{publishedInfo.area}</span></div>
+                                        </div>
+                                    );
+                                })()}
+                            </div>
 
                             {/* Form Controls */}
                             <div className="space-y-4 mb-8 flex-1">
@@ -492,27 +557,28 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                                         {areas.map(area => <option key={area} value={area}>{area}</option>)}
                                     </select>
                                 </label>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <label className="block">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wide">Código Doc</span>
-                                        <input 
-                                            type="text" 
-                                            className="w-full bg-[#050b14] border border-slate-700 rounded text-slate-300 text-xs p-2 font-bold uppercase focus:border-white focus:outline-none"
-                                            placeholder="AUTO"
-                                            value={publishForm.code}
-                                            onChange={e => setPublishForm({...publishForm, code: e.target.value})}
-                                        />
-                                    </label>
-                                    <label className="block">
-                                        <span className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wide">Versión</span>
-                                        <input 
-                                            type="text" 
-                                            className="w-full bg-[#050b14] border border-slate-700 rounded text-slate-300 text-xs p-2 font-bold uppercase focus:border-white focus:outline-none"
-                                            value={publishForm.version}
-                                            onChange={e => setPublishForm({...publishForm, version: e.target.value})}
-                                        />
-                                    </label>
-                                </div>
+
+                                {selectedItem && (
+                                    <>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <label className="block">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wide">Código Doc</span>
+                                                <input type="text" className="w-full bg-[#050b14] border border-slate-700 rounded text-slate-300 text-xs p-2 font-bold uppercase focus:border-white focus:outline-none" placeholder="AUTO" value={publishForm.code} onChange={e => setPublishForm({...publishForm, code: e.target.value})} />
+                                            </label>
+                                            <label className="block">
+                                                <span className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wide">Versión</span>
+                                                <input type="text" className="w-full bg-[#050b14] border border-slate-700 rounded text-slate-300 text-xs p-2 font-bold uppercase focus:border-white focus:outline-none" value={publishForm.version} onChange={e => setPublishForm({...publishForm, version: e.target.value})} />
+                                            </label>
+                                        </div>
+                                        <label className="block">
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase mb-1 block tracking-wide">Estado Documento</span>
+                                            <select className="w-full bg-[#050b14] border border-slate-700 rounded text-slate-300 text-xs p-2 font-bold uppercase focus:border-white focus:outline-none" value={publishForm.status} onChange={e => setPublishForm({...publishForm, status: e.target.value})} >
+                                                <option value="Vigente">VIGENTE</option>
+                                                <option value="Caduco">CADUCO</option>
+                                            </select>
+                                        </label>
+                                    </>
+                                )}
                             </div>
 
                             {/* Status Toast */}
@@ -528,7 +594,7 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
 
                             {/* Actions */}
                             <div className="mt-auto">
-                                {publishedList.some(p => p.uad_origin_id === selectedItem.id) ? (
+                                {isCurrentPublished ? (
                                     <button 
                                         onClick={handleUnpublish}
                                         disabled={isProcessing}
@@ -557,7 +623,7 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                                 <InformationCircleIcon className="h-16 w-16 relative z-10" />
                             </div>
                             <h3 className="font-bold text-sm uppercase mb-2 tracking-widest">ESPERANDO ENTRADA</h3>
-                            <p className="text-xs font-bold uppercase max-w-[200px]">Seleccione un nodo de datos de la cuadrícula para configurar parámetros de enlace.</p>
+                            <p className="text-xs font-bold uppercase max-w-[200px]">Seleccione un archivo o use el icono de engranaje en una carpeta para configurar el enlace.</p>
                         </div>
                     )}
                 </aside>

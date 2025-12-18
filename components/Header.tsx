@@ -75,11 +75,14 @@ const Header: React.FC<HeaderProps> = ({
     };
 
     const getDisplayName = (username: string): string => {
-        const email = username.toLowerCase();
+        const email = (username || '').toLowerCase().trim();
         if (email === 'darienperez695@gmail.com') {
             return 'PHOBOS';
         }
         if (email === 'mejoraproyectos0@gmail.com') {
+            return 'Zerk Lucio';
+        }
+        if (email === 'zerklucio@gmail.com') {
             return 'Zerk Lucio';
         }
         return username.split('@')[0];

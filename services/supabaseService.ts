@@ -1,11 +1,4 @@
 
-
-
-
-
-
-
-
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 // FIX: Add Comment and CommentWithAuthor to type imports for comment functionality.
@@ -122,8 +115,22 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
     const { data, error } = await supabase.from('user_ui_settings').select('permissions').eq('user_id', user.id).single();
     if (error && error.code !== 'PGRST116') throw new Error(`Error fetching permissions: ${error.message}`);
 
+    // --- DEFAULT PERMISSIONS FOR ALL USERS ---
+    // Critical: These default to TRUE to ensure new features are accessible to everyone
     const defaultPermissions: UserPermissions = {
-      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, nexus: true, bitacora: true },
+      sidebar: { 
+          dashboard: true, 
+          proyectos: true, 
+          documentos: true, 
+          enlaces: true, 
+          auditorias: true, 
+          pizarra: true, 
+          notificaciones: true, 
+          contraseñas: true, 
+          apps: true, 
+          nexus: true, 
+          bitacora: true // Enable Voice Log by default
+      },
       proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
       proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
       documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
@@ -131,32 +138,35 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
       auditorias: { canManage: true },
       pizarra: { canEdit: true },
       juegos: { canUnlock: false },
-      contraseñas: { canManage: true },
-      apps: { canView: true },
-      nexus: { canView: true },
+      contraseñas: { canManage: true }, // Enable Passwords by default
+      apps: { canView: true }, // Enable Apps by default
+      nexus: { canView: true }, // Enable Nexus by default
       gemini: { canUse: false },
     };
+
     if (!data || !data.permissions) return defaultPermissions;
     
-    // Merge logic needs to handle nested 'bitacora' key if missing from DB response
-    const mergedSidebar = { ...defaultPermissions.sidebar, ...(data.permissions.sidebar || {}) };
+    // --- SMART MERGE LOGIC ---
+    // If the DB has permissions saved, merge them.
+    // IMPORTANT: If a new key (like 'bitacora') is missing in the DB record, 
+    // default it to TRUE (from defaultPermissions) instead of undefined/false.
     
-    // Fallback if 'bitacora' key is missing from old DB records
-    if(mergedSidebar.bitacora === undefined) mergedSidebar.bitacora = true;
-
+    const dbPerms = data.permissions;
+    
     return {
-        sidebar: mergedSidebar,
-        proyectos: { ...defaultPermissions.proyectos, ...(data.permissions.proyectos || {}) },
-        proyectos_documentos: { ...defaultPermissions.proyectos_documentos, ...(data.permissions.proyectos_documentos || {}) },
-        documentos: { ...defaultPermissions.documentos, ...(data.permissions.documentos || {}) },
-        enlaces: { ...defaultPermissions.enlaces, ...(data.permissions.enlaces || {}) },
-        auditorias: { ...defaultPermissions.auditorias, ...(data.permissions.auditorias || {}) },
-        pizarra: { ...defaultPermissions.pizarra, ...(data.permissions.pizarra || {}) },
-        juegos: { ...defaultPermissions.juegos, ...(data.permissions.juegos || {}) },
-        contraseñas: { ...defaultPermissions.contraseñas, ...(data.permissions.contraseñas || {}) },
-        apps: { ...defaultPermissions.apps, ...(data.permissions.apps || {}) },
-        nexus: { ...defaultPermissions.nexus, ...(data.permissions.nexus || {}) },
-        gemini: { ...defaultPermissions.gemini, ...(data.permissions.gemini || {}) },
+        sidebar: { ...defaultPermissions.sidebar, ...(dbPerms.sidebar || {}) },
+        proyectos: { ...defaultPermissions.proyectos, ...(dbPerms.proyectos || {}) },
+        proyectos_documentos: { ...defaultPermissions.proyectos_documentos, ...(dbPerms.proyectos_documentos || {}) },
+        documentos: { ...defaultPermissions.documentos, ...(dbPerms.documentos || {}) },
+        enlaces: { ...defaultPermissions.enlaces, ...(dbPerms.enlaces || {}) },
+        auditorias: { ...defaultPermissions.auditorias, ...(dbPerms.auditorias || {}) },
+        pizarra: { ...defaultPermissions.pizarra, ...(dbPerms.pizarra || {}) },
+        juegos: { ...defaultPermissions.juegos, ...(dbPerms.juegos || {}) },
+        // For these new modules, explicitly check if the key exists in DB. If not, use default (TRUE).
+        contraseñas: dbPerms.contraseñas ? { ...defaultPermissions.contraseñas, ...dbPerms.contraseñas } : defaultPermissions.contraseñas,
+        apps: dbPerms.apps ? { ...defaultPermissions.apps, ...dbPerms.apps } : defaultPermissions.apps,
+        nexus: dbPerms.nexus ? { ...defaultPermissions.nexus, ...dbPerms.nexus } : defaultPermissions.nexus,
+        gemini: { ...defaultPermissions.gemini, ...(dbPerms.gemini || {}) },
     };
 };
 
@@ -968,35 +978,75 @@ export const deleteWhiteboard = async (id: string): Promise<void> => {
     if (error) throw error;
 };
 
+// --- Password Vault Logic (SHARED MODE) ---
+
+// HELPER: Determine which User ID to use for Vault operations
+// If Zerk Lucio (or Darien) is logged in, use Darien's ID for all vault queries.
+const getVaultOwnerId = async (): Promise<string> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !user.email) throw new Error('User not authenticated');
+
+    const email = user.email.trim().toLowerCase();
+    const superAdmins = ['darienperez695@gmail.com', 'zerklucio@gmail.com'];
+    const targetEmail = 'darienperez695@gmail.com';
+
+    if (superAdmins.includes(email)) {
+        // If logged in as Darien, return his own ID
+        if (email === targetEmail) return user.id;
+
+        // If logged in as Zerk, find Darien's ID via RPC (which superAdmins can access)
+        const { data, error } = await supabase.rpc('get_all_users_and_permissions');
+        if (!error && data) {
+            // Find Darien in the returned list using rigorous normalization
+            const owner = data.find((u: any) => u.email && u.email.trim().toLowerCase() === targetEmail);
+            if (owner) {
+                return owner.id;
+            }
+        }
+        console.error("Critical: Could not find Shared Vault Owner ID via RPC. Check Supabase 'get_all_users_and_permissions' function.");
+        // Fallback: If we can't find Darien's ID, Zerk will see his own (empty) vault.
+        // This is fail-safe behavior to prevent app crashes, though not ideal for UX.
+    }
+
+    // Default: Use own ID for standard users
+    return user.id;
+};
+
 // --- Password Categories Functions ---
 export const getPasswordCategories = async (): Promise<PasswordCategory[]> => {
-    const { data, error } = await supabase.from('password_categories').select('id, name').order('name', { ascending: true });
+    const targetId = await getVaultOwnerId();
+    const { data, error } = await supabase.from('password_categories')
+        .select('id, name')
+        .eq('user_id', targetId)
+        .order('name', { ascending: true });
+    
     if (error) throw error;
     return data || [];
 };
 
 export const addPasswordCategory = async (name: string): Promise<PasswordCategory> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-    const { data, error } = await supabase.from('password_categories').insert({ user_id: user.id, name: name.trim() }).select().single();
+    const targetId = await getVaultOwnerId();
+    const { data, error } = await supabase.from('password_categories')
+        .insert({ user_id: targetId, name: name.trim() })
+        .select().single();
+    
     if (error) throw error;
     return data;
 };
 
 export const deletePasswordCategory = async (categoryName: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
+    const targetId = await getVaultOwnerId();
 
-    // 1. Reassign passwords in this category to 'General' to prevent data loss or hiding
+    // 1. Reassign passwords in this category to 'General'
     await supabase.from('passwords')
         .update({ category: 'General' })
-        .eq('user_id', user.id)
+        .eq('user_id', targetId)
         .eq('category', categoryName);
 
     // 2. Delete the category
     const { error } = await supabase.from('password_categories')
         .delete()
-        .eq('user_id', user.id)
+        .eq('user_id', targetId)
         .eq('name', categoryName);
     
     if (error) throw error;
@@ -1005,22 +1055,31 @@ export const deletePasswordCategory = async (categoryName: string): Promise<void
 
 // --- Passwords Functions ---
 export const getPasswords = async (): Promise<PasswordItem[]> => {
-    // FIX: Filter out the MASTER password entry so it doesn't show in the list
-    const { data, error } = await supabase.from('passwords').select('*').neq('service', 'MASTER').order('service', { ascending: true });
+    const targetId = await getVaultOwnerId();
+    // Filter out the MASTER password entry
+    const { data, error } = await supabase.from('passwords')
+        .select('*')
+        .eq('user_id', targetId)
+        .neq('service', 'MASTER')
+        .order('service', { ascending: true });
+        
     if (error) throw error;
     return data || [];
 };
 
 export const addPassword = async (password: Omit<PasswordItem, 'id' | 'user_id'>): Promise<PasswordItem> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-    const { data, error } = await supabase.from('passwords').insert({ ...password, user_id: user.id }).select().single();
+    const targetId = await getVaultOwnerId();
+    const { data, error } = await supabase.from('passwords')
+        .insert({ ...password, user_id: targetId })
+        .select().single();
+        
     if (error) throw error;
     return data;
 };
 
 export const updatePassword = async (password: Omit<PasswordItem, 'user_id'>): Promise<PasswordItem> => {
     const { id, ...passwordData } = password;
+    // Update by ID is safe because RLS will check ownership/permission based on current auth
     const { data, error } = await supabase.from('passwords').update(passwordData).eq('id', id).select().single();
     if (error) throw error;
     return data;
@@ -1032,51 +1091,43 @@ export const deletePassword = async (passwordId: string): Promise<void> => {
 };
 
 export const getMasterPasswordHash = async (): Promise<string | null> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    const targetId = await getVaultOwnerId();
     
-    // FIX: Query the passwords table for the entry with service 'MASTER'
     const { data, error } = await supabase
         .from('passwords')
         .select('password_ct')
-        .eq('user_id', user.id)
+        .eq('user_id', targetId)
         .eq('service', 'MASTER')
         .single();
 
     if (error) {
-        // If not found, return null (triggers creation flow)
         if (error.code === 'PGRST116') return null; 
         throw error;
     }
-    // Return the password_ct which holds the hash
     return data?.password_ct || null;
 };
 
 export const setMasterPasswordHash = async (hash: string): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
+    const targetId = await getVaultOwnerId();
 
-    // FIX: Check if MASTER entry exists in passwords table
     const { data: existing } = await supabase
         .from('passwords')
         .select('id')
-        .eq('user_id', user.id)
+        .eq('user_id', targetId)
         .eq('service', 'MASTER')
         .single();
 
     if (existing) {
-        // Update existing
         const { error } = await supabase
             .from('passwords')
             .update({ password_ct: hash })
             .eq('id', existing.id);
         if (error) throw error;
     } else {
-        // Create new
         const { error } = await supabase
             .from('passwords')
             .insert({ 
-                user_id: user.id, 
+                user_id: targetId, 
                 service: 'MASTER', 
                 username: 'SYSTEM', 
                 password_ct: hash 

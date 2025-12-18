@@ -1,10 +1,3 @@
-
-
-
-
-
-
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserPermissions, PasswordItem, PasswordCategory } from '../types';
 import { getPasswords, addPassword, updatePassword, deletePassword, getMasterPasswordHash, setMasterPasswordHash, getPasswordCategories, addPasswordCategory, deletePasswordCategory, supabase } from '../services/supabaseService';
@@ -113,8 +106,12 @@ const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMaster
           try {
               const [passData, catData] = await Promise.all([getPasswords(), getPasswordCategories()]);
               setPasswords(passData);
-              // Fallback: If no categories exist in DB, assume 'General' at least
-              setCategories(catData.length > 0 ? catData : [{ id: 'default', name: 'General' }]);
+              // Ensure default category exists visually even if DB is empty
+              if (catData.length === 0) {
+                  setCategories([{ id: 'default', name: 'General' }]);
+              } else {
+                  setCategories(catData);
+              }
           } catch(err) {
               setError(err instanceof Error ? err.message : 'Error loading data');
           } finally {
@@ -131,6 +128,8 @@ const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMaster
       // Ensure we don't miss categories that might only exist on passwords if migration failed
       const implicit = new Set(passwords.map(p => p.category || 'General'));
       const combined = new Set([...explicit, ...implicit]);
+      // Ensure 'General' is always present
+      combined.add('General');
       return Array.from(combined).sort();
   }, [categories, passwords]);
 
@@ -142,7 +141,12 @@ const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMaster
 
   const refreshCategories = async () => {
       const catData = await getPasswordCategories();
-      setCategories(catData);
+      // Ensure default category exists visually
+      if (catData.length === 0) {
+          setCategories([{ id: 'default', name: 'General' }]);
+      } else {
+          setCategories(catData);
+      }
   };
 
   // ... (handleUnlock, handleCreateMasterPassword, handleSavePassword, handleDelete, toggleVisibility remain the same)
@@ -307,20 +311,16 @@ const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMaster
 
         {isLoading ? (
             <div className="flex justify-center items-center py-16"><Spinner /><span className="ml-2">Cargando...</span></div>
-        ) : categoriesToShow.length === 0 ? (
-             <div className="text-center py-16 text-light-text-secondary dark:text-dark-text-secondary">
-                  <p>No tienes contraseñas guardadas.</p>
-              </div>
         ) : (
             <div className="space-y-8">
                 {categoriesToShow.map(cat => {
                     // Filter passwords for this specific block
                     const blockPasswords = passwords.filter(p => (p.category || 'General') === cat);
                     
-                    // Show block if it has passwords OR if it's an explicit empty category (not 'Todas')
-                    if (blockPasswords.length === 0 && selectedCategory === 'Todas' && cat !== 'General') {
-                        // In 'Todas' view, we might choose to hide empty categories or show them. 
-                        // Let's show them if they exist in the categories table to allow drag/drop in future or just visual confirmation.
+                    // Logic: If 'Todas' is selected, we might skip empty categories UNLESS they are explicitly defined by user.
+                    // But to ensure consistent UI for new users, we always show 'General' or non-empty blocks.
+                    if (selectedCategory === 'Todas' && blockPasswords.length === 0 && cat !== 'General' && !categories.some(c => c.name === cat)) {
+                       return null;
                     }
 
                     return (

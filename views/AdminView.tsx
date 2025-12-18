@@ -10,7 +10,8 @@ import {
   KeyIcon,
   ViewGridIcon,
   AcademicCapIcon,
-  SparklesIcon
+  SparklesIcon,
+  MicrophoneIcon
 } from '../components/Icons';
 // Fix: Import UserPermissions from ../types
 import { getAdminData, savePermissionsForUser } from '../services/supabaseService';
@@ -123,6 +124,15 @@ const PERMISSION_GROUPS = [
             { id: 'canManage', label: 'Puede Gestionar' },
         ]
     },
+    // Adding Bitacora group mapped to sidebar permission for visual management
+    {
+        id: 'sidebar',
+        title: 'Bitácora (Voz)',
+        icon: <MicrophoneIcon className="h-5 w-5"/>,
+        permissions: [
+            { id: 'bitacora', label: 'Acceso a Bitácora' },
+        ]
+    },
 ];
 
 const AdminView: React.FC = () => {
@@ -133,7 +143,7 @@ const AdminView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const defaultPermissions: UserPermissions = useMemo(() => ({
-      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, nexus: true },
+      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, nexus: true, bitacora: true },
       proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
       proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
       documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },

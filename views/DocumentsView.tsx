@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, Document, Folder, UserPermissions, User } from '../types';
 import { FolderIcon, DocumentTextIcon, UploadIcon, TrashIcon, CollectionIcon, InformationCircleIcon, PlusIcon, EyeIcon, DocumentDownloadIcon, SearchIcon, GlobeAltIcon, ServerIcon } from '../components/Icons';
@@ -406,7 +405,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
   const handleDeleteFolderExt = async () => {
     if (!folderToDeleteExt) return;
     try {
-        setErrorExt(null);
+        setError(null);
         await onDeleteExternalFolder(folderToDeleteExt.id);
         if (selectedFolderIdExt === folderToDeleteExt.id) {
             const generalExt = externalFolders.find(f => f.name === 'General');
@@ -478,10 +477,10 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
     
     return (
       <div>
-        <div className="group flex items-center justify-between rounded-md" style={{ paddingLeft: `${level * 1.5}rem` }}>
+        <div className="group flex items-center justify-between rounded-md min-w-0" style={{ paddingLeft: `${level * 1.5}rem` }}>
            <button
              onClick={() => handleFolderSelect(folder.id, hasChildren)}
-             className={`w-full text-left flex items-center p-2 rounded-md text-sm font-medium transition-colors ${selectedFolderId === folder.id && !searchQuery ? 'bg-brand-accent/20 text-brand-primary' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}
+             className={`flex-1 min-w-0 text-left flex items-center p-2 rounded-md text-sm font-medium transition-colors ${selectedFolderId === folder.id && !searchQuery ? 'bg-brand-accent/20 text-brand-primary' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}
            >
             {hasChildren && (
               <ChevronRightIcon className={`h-4 w-4 mr-1 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
@@ -490,7 +489,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
              <span className="truncate flex-1">{folder.name}</span>
            </button>
            {canManageFolders && (
-            <div className="flex items-center">
+            <div className="flex items-center flex-shrink-0">
               <button onClick={() => setAddingToParentId(folder.id)} className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-light-text-secondary hover:text-brand-primary" title="Añadir sub-carpeta">
                   <PlusIcon className="h-4 w-4" />
               </button>
@@ -531,10 +530,10 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
     
     return (
       <div>
-        <div className="group flex items-center justify-between rounded-md" style={{ paddingLeft: `${level * 1.5}rem` }}>
+        <div className="group flex items-center justify-between rounded-md min-w-0" style={{ paddingLeft: `${level * 1.5}rem` }}>
            <button
              onClick={() => handleFolderSelectExt(folder.id, hasChildren)}
-             className={`w-full text-left flex items-center p-2 rounded-md text-sm font-medium transition-colors ${selectedFolderIdExt === folder.id && !searchQueryExt ? 'bg-purple-500/20 text-purple-400' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}
+             className={`flex-1 min-w-0 text-left flex items-center p-2 rounded-md text-sm font-medium transition-colors ${selectedFolderIdExt === folder.id && !searchQueryExt ? 'bg-purple-500/20 text-purple-400' : 'hover:bg-light-bg dark:hover:bg-dark-bg'}`}
            >
             {hasChildren && (
               <ChevronRightIcon className={`h-4 w-4 mr-1 flex-shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
@@ -544,7 +543,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
            </button>
            {/* Enable Folder Management Buttons for External */}
            {canManageFolders && (
-            <div className="flex items-center">
+            <div className="flex items-center flex-shrink-0">
               <button onClick={() => setAddingToParentIdExt(folder.id)} className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-light-text-secondary hover:text-purple-400" title="Añadir sub-carpeta externa">
                   <PlusIcon className="h-4 w-4" />
               </button>
@@ -647,7 +646,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1">
+            <main className="flex-1 min-w-0">
             <div className="p-4 bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border">
                 {canUpload && (
                 <form onSubmit={handleAddDocumentSubmit} className="p-4 bg-light-bg dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border mb-4 space-y-4">
@@ -721,7 +720,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
                             </button>
                             )}
                             {canDelete && (
-                            <button onClick={() => setDocToDelete(doc)} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}>
+                            <button onClick={() => setDocToDelete(doc)} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}>
                                 <TrashIcon className="h-5 w-5" />
                             </button>
                             )}
@@ -805,7 +804,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
             </aside>
 
             {/* Main Content (External) */}
-            <main className="flex-1">
+            <main className="flex-1 min-w-0">
             <div className="p-4 bg-light-card dark:bg-dark-card rounded-lg border border-purple-500/20">
                 {/* Upload Form for External */}
                 {canUpload && (
@@ -867,7 +866,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
                             </button>
                             )}
                             {canDelete && (
-                            <button onClick={() => setDocToDeleteExt(doc)} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}>
+                            <button onClick={() => setDocToDeleteExt(doc)} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}>
                                 <TrashIcon className="h-5 w-5" />
                             </button>
                             )}
