@@ -1,5 +1,4 @@
 
-
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 // --- User & Auth ---
@@ -110,6 +109,7 @@ export interface ProjectTask {
   startDate: string; // YYYY-MM-DD
   duration: number; // in days
   parentId: string | null;
+  assignedTo?: string; // Nuevo: Responsables
 }
 
 // --- Ishikawa Diagram ---
