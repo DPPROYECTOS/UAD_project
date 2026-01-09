@@ -16,7 +16,8 @@ interface ProjectDetailViewProps {
   onBackToList: () => void;
   onDeleteProject: (id: string) => void;
   onSaveProject: (project: Project) => void;
-  onAddTask: (projectId: string, details: { title: string; startDate: string; duration: number }, parentId?: string | null) => void;
+  // FIX: assignedTo added to the details object in onAddTask
+  onAddTask: (projectId: string, details: { title: string; startDate: string; duration: number; assignedTo: string }, parentId?: string | null) => void;
   onToggleTask: (id: string) => void;
   onUpdateTask: (task: ProjectTask) => void;
   onDeleteTask: (id: string) => void;
@@ -49,7 +50,8 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
   const projectDocuments = useMemo(() => documents.filter(doc => doc.projectId === project.id), [documents, project.id]);
 
   const totalTasks = tasks.length;
-  const completedTasks = tasks.filter(t => t.completed).length;
+  // El progreso solo cuenta las tareas completadas exitosamente
+  const completedTasks = tasks.filter(t => t.status === 'completed').length;
   const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   const handleDeleteConfirm = () => {
@@ -185,6 +187,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
                 <h3 className="text-lg font-bold mb-2">Progreso ({progress}%)</h3>
                 <div className="w-full bg-light-bg dark:bg-dark-bg rounded-full h-4">
                   <div className="bg-brand-primary h-4 rounded-full" style={{ width: `${progress}%` }}></div>
+                </div>
+                <div className="mt-2 flex gap-4 text-xs font-bold uppercase tracking-tighter">
+                   <span className="text-green-500">{tasks.filter(t => t.status === 'completed').length} Completadas</span>
+                   <span className="text-red-500">{tasks.filter(t => t.status === 'failed').length} Fallidas</span>
+                   <span className="text-gray-400">{tasks.filter(t => t.status === 'pending').length} Pendientes</span>
                 </div>
             </div>
           </div>

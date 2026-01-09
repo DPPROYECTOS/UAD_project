@@ -1,7 +1,7 @@
 
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
-import { WhiteboardItem, Project, ProjectStatus, ProjectTask, ContentType, Folder, Document, LinkItem, AuditItem, WhiteboardItemOld, WhiteboardState, SavedWhiteboard, Connector, TextStyle, ThemePreferences, User, Content, UserPermissions, PasswordItem, Comment, CommentWithAuthor, IshikawaDiagramData, AppModule, PublishedProcedure, PublishedFolder, PasswordCategory } from '../types';
+import { WhiteboardItem, Project, ProjectStatus, ProjectTask, ContentType, Folder, Document, LinkItem, AuditItem, WhiteboardItemOld, WhiteboardState, SavedWhiteboard, Connector, TextStyle, ThemePreferences, User, Content, UserPermissions, PasswordItem, Comment, CommentWithAuthor, IshikawaDiagramData, AppModule, PublishedProcedure, PublishedFolder, PasswordCategory, TaskStatus } from '../types';
 
 // --- MAIN DATABASE (High Hierarchy - Auth & Main App) ---
 const supabaseUrl = 'https://hourctostlvdsshmgorf.supabase.co';
@@ -237,11 +237,11 @@ export const getTasks = async (): Promise<ProjectTask[]> => {
                     id: item.id, 
                     title: item.title || 'Sin Título', 
                     projectId: taskData.projectId, 
-                    completed: !!taskData.completed, 
+                    status: (item.task_status as TaskStatus) || (taskData.completed ? 'completed' : 'pending'), 
                     startDate: taskData.startDate || '', 
                     duration: taskData.duration || 1, 
                     parentId: taskData.parentId || null,
-                    assignedTo: item.assigned_to || '' // Cargar de columna dedicada
+                    assignedTo: item.assigned_to || ''
                 });
             }
         } catch (e) {}
@@ -256,10 +256,11 @@ export const addTask = async (task: Omit<ProjectTask, 'id'>): Promise<ProjectTas
         user_id: session.user.id, 
         title: task.title, 
         type: ContentType.TASK, 
-        assigned_to: task.assignedTo || null, // Guardar en columna dedicada
+        assigned_to: task.assignedTo || null,
+        task_status: task.status, // Guardar en columna dedicada
         data: JSON.stringify({ 
             projectId: task.projectId, 
-            completed: task.completed, 
+            completed: task.status === 'completed', 
             startDate: task.startDate, 
             duration: task.duration, 
             parentId: task.parentId 
@@ -271,7 +272,7 @@ export const addTask = async (task: Omit<ProjectTask, 'id'>): Promise<ProjectTas
         id: data.id, 
         title: data.title, 
         projectId: taskData.projectId, 
-        completed: taskData.completed, 
+        status: data.task_status as TaskStatus, 
         startDate: taskData.startDate, 
         duration: taskData.duration, 
         parentId: taskData.parentId,
@@ -282,10 +283,11 @@ export const addTask = async (task: Omit<ProjectTask, 'id'>): Promise<ProjectTas
 export const updateTask = async (task: ProjectTask): Promise<ProjectTask> => {
     const { data, error } = await supabase.from('content').update({
         title: task.title, 
-        assigned_to: task.assignedTo || null, // Actualizar columna dedicada
+        assigned_to: task.assignedTo || null,
+        task_status: task.status, // Actualizar columna dedicada
         data: JSON.stringify({ 
             projectId: task.projectId, 
-            completed: task.completed, 
+            completed: task.status === 'completed', 
             startDate: task.startDate, 
             duration: task.duration, 
             parentId: task.parentId 
@@ -297,7 +299,7 @@ export const updateTask = async (task: ProjectTask): Promise<ProjectTask> => {
         id: data.id, 
         title: data.title, 
         projectId: taskData.projectId, 
-        completed: taskData.completed, 
+        status: data.task_status as TaskStatus, 
         startDate: taskData.startDate, 
         duration: taskData.duration, 
         parentId: taskData.parentId,
@@ -567,7 +569,7 @@ export const updateAudit = async (audit: AuditItem): Promise<AuditItem> => {
 };
 
 export const deleteAudit = async (auditId: string): Promise<void> => {
-    const { error } = await supabase.from('audits').delete().eq('id', auditId);
+    const { error } = await supabase.from('links').delete().eq('id', auditId);
     if (error) throw error;
 };
 

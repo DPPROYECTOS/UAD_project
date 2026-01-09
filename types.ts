@@ -89,6 +89,8 @@ export enum ProjectStatus {
   COMPLETO = 'Completo',
 }
 
+export type TaskStatus = 'pending' | 'completed' | 'failed';
+
 export interface Project {
   id: string;
   name: string;
@@ -105,7 +107,7 @@ export interface ProjectTask {
   id: string;
   projectId: string;
   title: string;
-  completed: boolean;
+  status: TaskStatus; // Actualizado de completed: boolean
   startDate: string; // YYYY-MM-DD
   duration: number; // in days
   parentId: string | null;

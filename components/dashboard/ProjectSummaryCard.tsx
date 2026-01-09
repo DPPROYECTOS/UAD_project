@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Project, ProjectTask } from '../../types';
 
@@ -9,8 +10,9 @@ interface ProjectSummaryCardProps {
 
 const ProjectSummaryCard: React.FC<ProjectSummaryCardProps> = ({ project, tasks, onSelectProject }) => {
   const projectTasks = tasks.filter(t => t.projectId === project.id);
-  const completedTasks = projectTasks.filter(t => t.completed).length;
   const totalTasks = projectTasks.length;
+  // Solo contamos las tareas en estado 'completed' para el porcentaje de avance
+  const completedTasks = projectTasks.filter(t => t.status === 'completed').length;
   const progress = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
   return (

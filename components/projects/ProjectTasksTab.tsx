@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Project, ProjectTask } from '../../types';
+import { Project, ProjectTask, TaskStatus } from '../../types';
 import { PlusIcon, TrashIcon, PencilAltIcon, CheckCircleIcon, XCircleIcon, UserCircleIcon } from '../Icons';
 
 interface ProjectTasksTabProps {
@@ -12,6 +12,18 @@ interface ProjectTasksTabProps {
   onDeleteTask: (id: string) => void;
   isEditor: boolean;
 }
+
+// Icono dinámico según el estado
+const TaskStatusIcon: React.FC<{ status: TaskStatus; className?: string }> = ({ status, className }) => {
+    switch (status) {
+        case 'completed':
+            return <CheckCircleIcon className={`${className} text-green-500`} />;
+        case 'failed':
+            return <XCircleIcon className={`${className} text-red-500`} />;
+        default:
+            return <div className={`${className} rounded-full border-2 border-gray-400 dark:border-gray-500`} />;
+    }
+};
 
 // A single task item component
 const TaskItem: React.FC<{
@@ -67,6 +79,12 @@ const TaskItem: React.FC<{
             setIsAddingSubtask(false);
         }
     };
+
+    const getTaskTextStyle = () => {
+        if (task.status === 'completed') return 'line-through text-gray-500';
+        if (task.status === 'failed') return 'line-through text-red-500/70';
+        return 'text-light-text dark:text-dark-text';
+    };
     
     return (
         <div className="py-2">
@@ -105,11 +123,15 @@ const TaskItem: React.FC<{
                     </div>
                 ) : (
                     <div style={{ paddingLeft: `${task.level * 20}px` }} className="flex-grow flex items-center">
-                        <button onClick={() => isEditor && onToggleTask(task.id)} className={`mr-3 flex-shrink-0 ${isEditor ? 'cursor-pointer' : 'cursor-default'}`}>
-                            {task.completed ? <CheckCircleIcon className="h-6 w-6 text-green-500" /> : <div className="h-6 w-6 rounded-full border-2 border-gray-400 dark:border-gray-500 group-hover:border-brand-primary" />}
+                        <button 
+                            onClick={() => isEditor && onToggleTask(task.id)} 
+                            className={`mr-3 flex-shrink-0 transition-transform active:scale-90 ${isEditor ? 'cursor-pointer' : 'cursor-default'}`}
+                            title="Alternar estado: Pendiente -> Completado -> Fallido"
+                        >
+                            <TaskStatusIcon status={task.status} className="h-6 w-6" />
                         </button>
                         <div className="flex-grow">
-                            <span className={`text-sm font-medium ${task.completed ? 'line-through text-gray-500' : ''}`}>{task.title}</span>
+                            <span className={`text-sm font-medium transition-all ${getTaskTextStyle()}`}>{task.title}</span>
                             <div className="flex items-center gap-3 mt-0.5">
                                 <div className="text-[10px] text-light-text-secondary dark:text-dark-text-secondary flex items-center gap-1">
                                     <span className="opacity-70">Inicio:</span> {new Date(task.startDate + 'T00:00:00').toLocaleDateString('es-ES', { timeZone: 'UTC' })}
@@ -119,6 +141,9 @@ const TaskItem: React.FC<{
                                     <div className="text-[10px] text-brand-primary font-bold uppercase flex items-center gap-1">
                                         <UserCircleIcon className="h-3 w-3" /> {task.assignedTo}
                                     </div>
+                                )}
+                                {task.status === 'failed' && (
+                                    <span className="text-[10px] font-black text-red-500 uppercase tracking-tighter">[NO COMPLETADO]</span>
                                 )}
                             </div>
                         </div>

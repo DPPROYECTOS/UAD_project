@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Project, ProjectTask } from '../../types';
 import { ClipboardListIcon } from '../Icons';
@@ -247,10 +248,12 @@ const GanttChart: React.FC<GanttChartProps> = ({ project, tasks }) => {
                         segments.push({ startDate: segmentStartDate, calendarDuration });
                     }
 
+                    const isDone = task.status !== 'pending';
+
                     return (
                         <React.Fragment key={task.id}>
                             {/* Sticky Task Name Cell */}
-                            <div className={`sticky left-0 z-20 p-2 truncate border-t border-l border-light-border dark:border-dark-border flex items-center ${rowBgClass} ${task.completed ? 'line-through text-light-text-secondary dark:text-dark-text-secondary' : ''}`}
+                            <div className={`sticky left-0 z-20 p-2 truncate border-t border-l border-light-border dark:border-dark-border flex items-center ${rowBgClass} ${isDone ? 'line-through text-light-text-secondary dark:text-dark-text-secondary' : ''}`}
                                  style={{ gridRow: rowIndex + 2, height: `${ROW_HEIGHT}px`, paddingLeft: `${10 + task.level * 20}px` }}>
                                 <span className={`h-3 w-3 rounded-full ${dot} mr-3 flex-shrink-0`}></span>
                                 {task.title}
@@ -273,8 +276,8 @@ const GanttChart: React.FC<GanttChartProps> = ({ project, tasks }) => {
                                 const barStartColumn = offsetDays + 2;
 
                                 return (
-                                    <div key={segIndex} className={`flex items-center h-8 my-auto rounded text-white px-2 overflow-hidden z-10 ${bar} ${task.completed ? 'opacity-60' : ''}`}
-                                         title={`${task.title} - Duración: ${task.duration} día(s) hábil(es)`}
+                                    <div key={segIndex} className={`flex items-center h-8 my-auto rounded text-white px-2 overflow-hidden z-10 ${bar} ${isDone ? 'opacity-40' : ''} ${task.status === 'failed' ? 'border-2 border-red-500' : ''}`}
+                                         title={`${task.title} - Estado: ${task.status}`}
                                          style={{ 
                                              gridRow: rowIndex + 2, 
                                              gridColumn: `${barStartColumn} / span ${segment.calendarDuration}`,
@@ -282,7 +285,7 @@ const GanttChart: React.FC<GanttChartProps> = ({ project, tasks }) => {
                                              marginRight: '4px',
                                           }}>
                                         {/* Only show text in the first segment to avoid repetition */}
-                                        {segIndex === 0 && <span className="truncate text-xs font-medium">{task.completed ? 'Completado' : task.title}</span>}
+                                        {segIndex === 0 && <span className="truncate text-xs font-medium">{task.status === 'completed' ? 'Hecho' : task.status === 'failed' ? 'Fallido' : task.title}</span>}
                                     </div>
                                 );
                             })}
