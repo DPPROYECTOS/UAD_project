@@ -1,8 +1,11 @@
-import React, { useEffect, useState } from 'react';
+
+import React, { useEffect, useState, useRef } from 'react';
 import { XIcon, InformationCircleIcon, DocumentDownloadIcon } from './Icons';
 import Spinner from './Spinner';
 import { User } from '../types';
 import CommentThread from './comments/CommentThread';
+// Capturamos el módulo completo para mayor flexibilidad en el acceso a las funciones
+import * as docx from 'docx-preview';
 
 interface FileViewerModalProps {
   document: {
@@ -17,12 +20,21 @@ interface FileViewerModalProps {
 
 const FileViewerModal: React.FC<FileViewerModalProps> = ({ document, user, onClose }) => {
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const wordContainerRef = useRef<HTMLDivElement>(null);
+
+  // Identificar si es un reporte generado que no existe en DB para ocultar comentarios
+  const isTempReport = document.id === 'temp-report';
 
   const officeMimeTypes = [
     'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
   ];
+  
+  const isDocx = document.mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || 
+                 document.name.toLowerCase().endsWith('.docx');
+  
   const isOfficeDoc = officeMimeTypes.includes(document.mimeType);
 
   const visioMimeTypes = [
@@ -36,11 +48,60 @@ const FileViewerModal: React.FC<FileViewerModalProps> = ({ document, user, onClo
   const isPdf = document.mimeType === 'application/pdf';
   const isImage = document.mimeType.startsWith('image/') && !isVisio;
   
-  const canPreview = isPdf || isImage || isOfficeDoc;
-
   useEffect(() => {
-    setIsLoading(canPreview);
-  }, [document.url, canPreview]);
+    const renderLocalWord = async () => {
+      if (isDocx && wordContainerRef.current) {
+        try {
+          setIsLoading(true);
+          setError(null);
+          
+          // Obtener el blob del documento
+          const response = await fetch(document.url);
+          if (!response.ok) throw new Error("No se pudo descargar el documento para previsualización.");
+          const blob = await response.blob();
+          
+          if (wordContainerRef.current) {
+            wordContainerRef.current.innerHTML = '';
+            
+            // Verificamos múltiples rutas de acceso comunes en los builds de CDN ESM
+            const renderer = (docx as any).renderAsync || 
+                             (docx as any).default?.renderAsync || 
+                             (window as any).docx?.renderAsync;
+            
+            if (renderer) {
+                await renderer(blob, wordContainerRef.current, undefined, {
+                    className: "docx",
+                    inWrapper: true,
+                    ignoreWidth: false,
+                    ignoreHeight: false,
+                    ignoreFonts: false,
+                    breakPages: true,
+                    ignoreLastRenderedPageBreak: false,
+                    experimental: false,
+                    trimXmlDeclaration: true,
+                    useBase64URL: false,
+                    useAlternateNames: true,
+                });
+            } else {
+                throw new Error("El motor de renderizado de Word no está disponible en este momento.");
+            }
+          }
+        } catch (err) {
+          console.error("Docx Preview Error:", err);
+          setError(err instanceof Error ? err.message : "No se pudo renderizar el archivo Word localmente.");
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    if (isDocx) {
+        renderLocalWord();
+    } else {
+        // Para otros formatos, el loading depende de la carga del iframe o la imagen
+        setIsLoading(isImage || isPdf || (isOfficeDoc && !document.url.startsWith('blob:')));
+    }
+  }, [document.url, isDocx]);
 
   const renderViewer = () => {
     if (isImage) {
@@ -56,11 +117,28 @@ const FileViewerModal: React.FC<FileViewerModalProps> = ({ document, user, onClo
         </div>
       );
     }
+
+    if (isDocx) {
+      return (
+        <div className="w-full h-full overflow-auto bg-gray-100 dark:bg-dark-bg/20">
+            {error ? (
+                <div className="flex flex-col items-center justify-center h-full p-4 text-center">
+                    <InformationCircleIcon className="h-12 w-12 text-red-500 mb-2" />
+                    <p className="text-sm font-medium text-red-600 dark:text-red-400">{error}</p>
+                    <p className="text-xs mt-1 text-light-text-secondary dark:text-dark-text-secondary">Esto suele ocurrir con archivos locales muy grandes o corruptos.</p>
+                    <a href={document.url} download={document.name} className="mt-4 px-4 py-2 bg-brand-primary text-white rounded-md text-sm font-bold shadow-sm hover:bg-brand-secondary transition-colors">Descargar para ver en Word</a>
+                </div>
+            ) : (
+                <div ref={wordContainerRef} className="mx-auto max-w-4xl" />
+            )}
+        </div>
+      );
+    }
     
     let viewerSrc = '';
     if (isPdf) {
-      viewerSrc = `https://docs.google.com/gview?url=${encodeURIComponent(document.url)}&embedded=true`;
-    } else if (isOfficeDoc) {
+      viewerSrc = document.url.startsWith('blob:') ? document.url : `https://docs.google.com/gview?url=${encodeURIComponent(document.url)}&embedded=true`;
+    } else if (isOfficeDoc && !document.url.startsWith('blob:')) {
       viewerSrc = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(document.url)}`;
     }
 
@@ -71,24 +149,23 @@ const FileViewerModal: React.FC<FileViewerModalProps> = ({ document, user, onClo
           className={`w-full h-full border-0 transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'}`}
           title={document.name}
           onLoad={() => setIsLoading(false)}
-          sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
         />
       );
     }
 
-    if (isVisio) {
+    if (isVisio || (isOfficeDoc && document.url.startsWith('blob:'))) {
        return (
           <div className="flex flex-col items-center justify-center h-full text-center text-light-text-secondary dark:text-dark-text-secondary bg-light-bg dark:bg-dark-bg/50 rounded-b-lg p-4">
             <InformationCircleIcon className="h-12 w-12 text-blue-400" />
-            <h3 className="mt-4 text-lg font-medium text-light-text dark:text-dark-text">Previsualización de Visio no Soportada</h3>
-            <p className="mt-1 text-sm max-w-md">Los visores web no pueden mostrar archivos de Microsoft Visio (.vsd, .vsdx) directamente. Por favor, descarga el archivo para abrirlo con la aplicación de Visio.</p>
+            <h3 className="mt-4 text-lg font-medium text-light-text dark:text-dark-text">Previsualización no disponible</h3>
+            <p className="mt-1 text-sm max-w-md">Por seguridad y privacidad, este tipo de archivo local no puede enviarse a visores en la nube. Por favor, descárgalo para verlo.</p>
             <a
               href={document.url}
               download={document.name}
               className="mt-6 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-brand-primary hover:bg-brand-secondary focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary"
             >
               <DocumentDownloadIcon className="h-5 w-5 mr-2" />
-              Descargar Archivo Visio
+              Descargar Archivo
             </a>
           </div>
        );
@@ -134,16 +211,19 @@ const FileViewerModal: React.FC<FileViewerModalProps> = ({ document, user, onClo
         <div className="flex-1 flex overflow-hidden">
           <main className="flex-1 relative">
             {isLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-light-card dark:bg-dark-card">
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-light-card dark:bg-dark-card">
                 <Spinner />
-                <span className="ml-2">Cargando previsualización...</span>
+                <span className="ml-2">Procesando documento...</span>
               </div>
             )}
             {renderViewer()}
           </main>
-          <aside className="w-96 flex-shrink-0 border-l border-light-border dark:border-dark-border flex flex-col">
-            <CommentThread documentId={document.id} user={user} />
-          </aside>
+          {/* Solo mostrar comentarios si no es un reporte temporal */}
+          {!isTempReport && (
+            <aside className="w-96 flex-shrink-0 border-l border-light-border dark:border-dark-border flex flex-col">
+              <CommentThread documentId={document.id} user={user} />
+            </aside>
+          )}
         </div>
       </div>
     </div>

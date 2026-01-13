@@ -32,8 +32,8 @@ export interface UserPermissions {
     notificaciones: boolean;
     contraseñas: boolean;
     apps: boolean;
-    nexus: boolean;
-    bitacora: boolean; // NEW: Permission for Voice Log
+    codex: boolean; // RENAMED FROM NEXUS
+    bitacora: boolean; 
   };
   proyectos: {
     canCreate: boolean;
@@ -72,7 +72,7 @@ export interface UserPermissions {
   apps: {
     canView: boolean;
   };
-  nexus: {
+  nexus: { // Keeping the logic group but renaming label in UI
     canView: boolean;
   };
   gemini: {
@@ -101,6 +101,9 @@ export interface Project {
   endDate: string; // YYYY-MM-DD
   team: string[];
   leader: string;
+  ishikawaEnabled: boolean; // NUEVO: Control de visibilidad de pestaña
+  executiveSummary?: string; // NUEVO: Resumen para reporte
+  finalConclusions?: string; // NUEVO: Conclusiones para reporte
 }
 
 export interface ProjectTask {
@@ -112,6 +115,7 @@ export interface ProjectTask {
   duration: number; // in days
   parentId: string | null;
   assignedTo?: string; // Nuevo: Responsables
+  comments?: string; // Nuevo: Notas/Comentarios sobre la tarea
 }
 
 // --- Ishikawa Diagram ---
@@ -155,7 +159,7 @@ export interface Document {
     projectId: string | null;
 }
 
-// --- Nexus Publishing ---
+// --- Codex Publishing (Renamed from Nexus) ---
 export interface PublishedProcedure {
     id: string; // ID in External DB
     title: string;
@@ -192,6 +196,7 @@ export interface LinkItem {
     name: string;
     description: string;
     url: string;
+    tags?: string[];
 }
 
 // --- Passwords ---

@@ -13,7 +13,6 @@ import {
   SparklesIcon,
   MicrophoneIcon
 } from '../components/Icons';
-// Fix: Import UserPermissions from ../types
 import { getAdminData, savePermissionsForUser } from '../services/supabaseService';
 import { UserPermissions } from '../types';
 import Spinner from '../components/Spinner';
@@ -24,7 +23,6 @@ interface AdminUser {
     nickname: string;
 }
 
-// Define permission groups outside to avoid re-creation
 const PERMISSION_GROUPS = [
     {
         id: 'proyectos',
@@ -85,11 +83,11 @@ const PERMISSION_GROUPS = [
         ]
     },
     {
-        id: 'nexus',
-        title: 'NEXUS',
+        id: 'sidebar', // Using sidebar id for codex access toggle
+        title: 'CODEX', // RENAMED FROM NEXUS
         icon: <AcademicCapIcon className="h-5 w-5"/>,
         permissions: [
-            { id: 'canView', label: 'Puede Ver' },
+            { id: 'codex', label: 'Acceso a CODEX' },
         ]
     },
     {
@@ -124,7 +122,6 @@ const PERMISSION_GROUPS = [
             { id: 'canManage', label: 'Puede Gestionar' },
         ]
     },
-    // Adding Bitacora group mapped to sidebar permission for visual management
     {
         id: 'sidebar',
         title: 'Bitácora (Voz)',
@@ -143,7 +140,7 @@ const AdminView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   
   const defaultPermissions: UserPermissions = useMemo(() => ({
-      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, nexus: true, bitacora: true },
+      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, bitacora: true },
       proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
       proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
       documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
@@ -173,15 +170,14 @@ const AdminView: React.FC = () => {
             };
 
             const activeUsers = adminData
-                .filter(u => u.email) // Ensure user has email
+                .filter(u => u.email) 
                 .map(u => ({ id: u.id, email: u.email, nickname: getNickname(u.email) }));
             setUsers(activeUsers);
             
             const populatedPermissions: Record<string, UserPermissions> = {};
             adminData.forEach(user => {
-                // Deep merge defaults with fetched permissions to ensure all keys exist
                 populatedPermissions[user.id] = {
-                    sidebar: { ...defaultPermissions.sidebar, ...(user.permissions?.sidebar || {}) },
+                    sidebar: { ...defaultPermissions.sidebar, ...(user.permissions?.sidebar || {}), codex: user.permissions?.sidebar?.codex ?? user.permissions?.sidebar?.nexus ?? defaultPermissions.sidebar.codex },
                     proyectos: { ...defaultPermissions.proyectos, ...(user.permissions?.proyectos || {}) },
                     proyectos_documentos: { ...defaultPermissions.proyectos_documentos, ...(user.permissions?.proyectos_documentos || {}) },
                     documentos: { ...defaultPermissions.documentos, ...(user.permissions?.documentos || {}) },
@@ -226,7 +222,6 @@ const AdminView: React.FC = () => {
       setIsSaving(true);
       setError(null);
       try {
-          // Save permissions for each user one by one
           for (const user of users) {
               await savePermissionsForUser(user.id, allUserPermissions[user.id]);
           }
@@ -270,9 +265,7 @@ const AdminView: React.FC = () => {
                                         <span title={perm.label}>{perm.label}</span>
                                     </div>
                                     {users.map(user => {
-                                        // Safe access with optional chaining and fallback
                                         const userSection = allUserPermissions[user.id]?.[group.id as keyof UserPermissions];
-                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
                                         const isChecked = (userSection as any)?.[perm.id] ?? false;
 
                                         return (

@@ -11,7 +11,7 @@ import {
     InformationCircleIcon, 
     RefreshIcon,
     TerminalIcon,
-    CogIcon // Added for folder settings
+    CogIcon 
 } from '../components/Icons';
 import { Document as AppDocument, PublishedProcedure, Folder, PublishedFolder } from '../types';
 import { 
@@ -37,40 +37,33 @@ interface NexusViewProps {
     externalFolders: Folder[];
 }
 
-// --- STYLES & ASSETS ---
 const SCANLINE_BG = `url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 20h40' stroke='%23ffffff' stroke-opacity='0.03' fill='none'/%3E%3C/svg%3E")`;
 
 const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, folders, externalFolders }) => {
     // --- STATE MANAGEMENT ---
     
-    // Core Data
     const [activeDb, setActiveDb] = useState<'local' | 'external'>('local');
-    const [currentPath, setCurrentPath] = useState<Folder[]>([]); // Navigation Stack
+    const [currentPath, setCurrentPath] = useState<Folder[]>([]); 
     const [selectedItem, setSelectedItem] = useState<AppDocument | null>(null);
-    const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null); // NEW: Folder Selection
+    const [selectedFolder, setSelectedFolder] = useState<Folder | null>(null); 
     
-    // Async Data
     const [publishedList, setPublishedList] = useState<PublishedProcedure[]>([]);
-    const [publishedFoldersList, setPublishedFoldersList] = useState<PublishedFolder[]>([]); // NEW: Published Folders
+    const [publishedFoldersList, setPublishedFoldersList] = useState<PublishedFolder[]>([]); 
     const [isLoading, setIsLoading] = useState(false);
     const [isProcessing, setIsProcessing] = useState(false);
     
-    // Dynamic Areas Data
     const [areas, setAreas] = useState<string[]>([]);
     const [isLoadingAreas, setIsLoadingAreas] = useState(true);
 
-    // UI State
     const [searchTerm, setSearchTerm] = useState('');
     const [publishForm, setPublishForm] = useState({ code: '', area: '', version: '1.0', status: 'Vigente' });
     const [statusMessage, setStatusMessage] = useState<{ text: string, type: 'success' | 'error' | 'info' } | null>(null);
 
-    // Computed Properties based on Active DB
     const currentThemeColor = activeDb === 'local' ? 'cyan' : 'fuchsia';
     
     const activeDocs = activeDb === 'local' ? documents : externalDocuments;
     const activeFolders = activeDb === 'local' ? folders : externalFolders;
 
-    // --- DATA LOADING ---
     const refreshData = async () => {
         setIsLoading(true);
         try {
@@ -89,7 +82,7 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                 setPublishedFoldersList(extFolders);
             }
         } catch (err) {
-            console.error("Nexus Sync Error:", err);
+            console.error("Codex Sync Error:", err);
         } finally {
             setIsLoading(false);
         }
@@ -99,14 +92,12 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
         refreshData();
     }, [activeDb]);
 
-    // Fetch Departments (Areas) on mount
     useEffect(() => {
         const loadAreas = async () => {
             setIsLoadingAreas(true);
             try {
                 const depNames = await getDepartments();
                 setAreas(depNames);
-                // Set default if form area is empty
                 if (depNames.length > 0 && !publishForm.area) {
                     setPublishForm(prev => ({...prev, area: depNames[0]}));
                 }
@@ -119,10 +110,8 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
         loadAreas();
     }, []);
 
-    // --- NAVIGATION LOGIC ---
     const currentFolderId = currentPath.length > 0 ? currentPath[currentPath.length - 1].id : null;
 
-    // Initialize to 'General' folder if at root and it exists
     useEffect(() => {
         if (currentPath.length === 0 && activeFolders.length > 0) {
             const general = activeFolders.find(f => f.name === 'General');
@@ -151,7 +140,6 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
         setSelectedFolder(null);
     };
 
-    // --- FILTERING ---
     const displayedItems = useMemo(() => {
         let docs = activeDocs;
         let subFolders = activeFolders;
@@ -173,10 +161,9 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
         }
     }, [activeDocs, activeFolders, currentFolderId, searchTerm]);
 
-    // --- SELECTION & INSPECTOR ---
     const handleSelectItem = (doc: AppDocument) => {
         setSelectedItem(doc);
-        setSelectedFolder(null); // Deselect folder
+        setSelectedFolder(null); 
         
         const publishedInfo = publishedList.find(p => p.uad_origin_id === doc.id);
         
@@ -201,7 +188,7 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
     const handleSelectFolder = (e: React.MouseEvent, folder: Folder) => {
         e.stopPropagation();
         setSelectedFolder(folder);
-        setSelectedItem(null); // Deselect file
+        setSelectedItem(null); 
 
         const publishedInfo = publishedFoldersList.find(p => p.origin_folder_id === folder.id);
         
@@ -209,7 +196,6 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
             setPublishForm(prev => ({
                 ...prev,
                 area: publishedInfo.area,
-                // Code, Version, Status not applicable to folders typically, but we keep state clean
             }));
         } else {
              setPublishForm(prev => ({
@@ -220,13 +206,11 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
         setStatusMessage(null);
     };
 
-    // --- ACTIONS ---
     const handlePublish = async () => {
         setIsProcessing(true);
         
         try {
             if (selectedItem) {
-                // Publish Document
                 setStatusMessage({ text: 'ENLAZANDO DOCUMENTO...', type: 'info' });
                 const payload = {
                     title: selectedItem.name,
@@ -243,7 +227,6 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                 else await publishExternalProcedure(payload);
 
             } else if (selectedFolder) {
-                // Publish Folder
                 setStatusMessage({ text: 'ENLAZANDO CARPETA...', type: 'info' });
                 if (activeDb === 'local') await publishLocalFolder(selectedFolder.id, selectedFolder.name, publishForm.area);
                 else await publishExternalFolder(selectedFolder.id, selectedFolder.name, publishForm.area);
@@ -271,15 +254,12 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                     else await unpublishExternalProcedure(pubRecord.id);
                 }
             } else if (selectedFolder) {
-                // Unpublish Folder logic (using origin_folder_id usually matches, service handles ID lookup or passed ID)
-                // The service unpublishLocalFolder takes 'folderId' which corresponds to 'origin_folder_id' in DB query
                 if (activeDb === 'local') await unpublishLocalFolder(selectedFolder.id);
                 else await unpublishExternalFolder(selectedFolder.id);
             }
 
             await refreshData();
             setStatusMessage({ text: 'OBJETIVO DESVINCULADO', type: 'success' });
-            // Reset form
             setPublishForm(prev => ({ ...prev, code: '', version: '1.0', status: 'Vigente' }));
         } catch (err) {
             setStatusMessage({ text: 'FALLÓ LA TERMINACIÓN', type: 'error' });
@@ -294,10 +274,8 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
 
     return (
         <div className="flex flex-col h-[calc(100vh-6rem)] bg-[#050b14] text-slate-300 font-sans overflow-hidden rounded-xl border border-slate-800 shadow-2xl relative">
-            {/* --- GLOBAL SCANLINES OVERLAY --- */}
             <div className="absolute inset-0 pointer-events-none z-0" style={{ backgroundImage: SCANLINE_BG }}></div>
             
-            {/* --- HEADER: CONTROL DECK --- */}
             <header className="relative z-10 flex items-center justify-between p-4 bg-slate-900/80 backdrop-blur-md border-b border-slate-700">
                 <div className="flex items-center gap-4">
                     <div className={`p-2 rounded border border-${currentThemeColor}-500/30 bg-${currentThemeColor}-500/10`}>
@@ -305,13 +283,12 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                     </div>
                     <div>
                         <h1 className="text-xl font-extrabold tracking-wider text-white uppercase flex items-center gap-2">
-                            NEXUS <span className={`text-${currentThemeColor}-400`}>//</span> ENLACE
+                            CODEX <span className={`text-${currentThemeColor}-400`}>//</span> ENLACE
                         </h1>
                         <p className="text-[10px] uppercase tracking-[0.2em] text-slate-500 font-bold">Interfaz de Puente de Datos Seguro</p>
                     </div>
                 </div>
 
-                {/* DB SWITCHER */}
                 <div className="flex items-center bg-black/50 rounded-full p-1 border border-slate-700">
                     <button
                         onClick={() => setActiveDb('local')}
@@ -335,7 +312,6 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                     </button>
                 </div>
 
-                {/* SEARCH */}
                 <div className="relative group">
                     <input 
                         type="text" 
@@ -348,12 +324,9 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                 </div>
             </header>
 
-            {/* --- MAIN CONTENT SPLIT --- */}
             <div className="flex flex-1 relative z-10 overflow-hidden">
                 
-                {/* --- LEFT PANE: DATA EXPLORER --- */}
                 <section className="flex-1 flex flex-col border-r border-slate-800 bg-slate-900/30">
-                    {/* Breadcrumbs */}
                     <div className="flex items-center gap-2 p-3 text-xs font-bold uppercase border-b border-slate-800/50 bg-black/20 text-slate-400 overflow-x-auto">
                         <span 
                             onClick={() => setCurrentPath([])} 
@@ -374,13 +347,11 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                         ))}
                     </div>
 
-                    {/* Grid */}
                     <div className="flex-1 p-4 overflow-y-auto custom-scrollbar">
                         {searchTerm ? (
                             <div className="text-xs font-bold text-slate-500 mb-4 uppercase tracking-wide"> Resultados de Búsqueda :: {displayedItems.files.length} encontrados</div>
                         ) : null}
 
-                        {/* Back Button */}
                         {currentPath.length > 0 && !searchTerm && (
                             <div 
                                 onClick={handleNavigateUp}
@@ -392,7 +363,6 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                         )}
 
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                            {/* Folders */}
                             {displayedItems.folders.map(folder => {
                                 const isPublished = publishedFoldersList.some(p => p.origin_folder_id === folder.id);
                                 const isSelected = selectedFolder?.id === folder.id;
@@ -431,7 +401,6 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                                 </div>
                             )})}
 
-                            {/* Files */}
                             {displayedItems.files.map(doc => {
                                 const isPublished = publishedList.some(p => p.uad_origin_id === doc.id);
                                 const isSelected = selectedItem?.id === doc.id;
@@ -480,13 +449,11 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                     </div>
                 </section>
 
-                {/* --- RIGHT PANE: INSPECTOR MODULE --- */}
                 <aside className="w-96 bg-[#080f1e] border-l border-slate-800 flex flex-col shadow-2xl relative z-20">
                     <div className={`h-1 w-full bg-gradient-to-r from-transparent via-${currentThemeColor}-500 to-transparent opacity-50`}></div>
                     
                     {selectedItem || selectedFolder ? (
                         <div className="flex-1 flex flex-col p-6 animate-fade-in">
-                            {/* Header */}
                             <div className="flex items-start gap-4 mb-6">
                                 <div className={`p-3 rounded bg-${currentThemeColor}-900/20 border border-${currentThemeColor}-500/30`}>
                                     {selectedItem ? <DocumentTextIcon className={`h-8 w-8 text-${currentThemeColor}-400`} /> : <FolderIcon className={`h-8 w-8 text-${currentThemeColor}-400`} />}
@@ -501,7 +468,6 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                                 </div>
                             </div>
 
-                            {/* Status Display */}
                             <div className={`
                                 mb-6 p-4 rounded-lg border-2 border-dashed
                                 ${isCurrentPublished ? `border-${currentThemeColor}-500/50 bg-${currentThemeColor}-500/5` : 'border-slate-700 bg-slate-900/50'}
@@ -540,12 +506,11 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                                 })()}
                             </div>
 
-                            {/* Form Controls */}
                             <div className="space-y-4 mb-8 flex-1">
                                 <label className="block">
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-[10px] font-bold text-slate-400 uppercase block tracking-wide">Área Designada</span>
-                                        {isLoadingAreas && <span className="text-[9px] text-${currentThemeColor}-400 animate-pulse">SINC...</span>}
+                                        {isLoadingAreas && <span className={`text-[9px] text-${currentThemeColor}-400 animate-pulse`}>SINC...</span>}
                                     </div>
                                     <select 
                                         className="w-full bg-[#050b14] border border-slate-700 rounded text-slate-300 text-xs p-2 font-bold uppercase focus:border-white focus:outline-none disabled:opacity-50"
@@ -581,7 +546,6 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                                 )}
                             </div>
 
-                            {/* Status Toast */}
                             {statusMessage && (
                                 <div className={`mb-4 p-3 text-center text-xs font-bold uppercase rounded border ${
                                     statusMessage.type === 'success' ? 'bg-green-900/30 border-green-500 text-green-400' :
@@ -592,7 +556,6 @@ const NexusView: React.FC<NexusViewProps> = ({ documents, externalDocuments, fol
                                 </div>
                             )}
 
-                            {/* Actions */}
                             <div className="mt-auto">
                                 {isCurrentPublished ? (
                                     <button 

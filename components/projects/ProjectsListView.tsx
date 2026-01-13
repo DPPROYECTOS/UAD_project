@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { Project, ProjectStatus, ProjectTask, UserPermissions } from '../../types';
 import { PlusIcon, SearchIcon, FolderOpenIcon } from '../Icons';
@@ -40,7 +41,8 @@ const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, is
     const projectTasks = tasks.filter(t => t.projectId === project.id);
     const totalTasks = projectTasks.length;
     if (totalTasks === 0) return 0;
-    const completedTasks = projectTasks.filter(t => t.completed).length;
+    // Sincronización: Solo contamos tareas con status 'completed'
+    const completedTasks = projectTasks.filter(t => t.status === 'completed').length;
     return Math.round((completedTasks / totalTasks) * 100);
   };
   
@@ -76,57 +78,63 @@ const ProjectsListView: React.FC<ProjectsListViewProps> = ({ projects, tasks, is
                 </tr>
             </thead>
             <tbody className="divide-y divide-light-border dark:divide-dark-border">
-                {filteredProjects.map(project => (
-                    <tr key={project.id} onClick={() => onSelectProject(project)} className="hover:bg-light-bg dark:hover:bg-dark-bg cursor-pointer">
-                        <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium">{project.name}</div>
-                            <div className="text-sm text-light-text-secondary dark:text-dark-text-secondary">{project.leader}</div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap" onClick={e => e.stopPropagation()}>
-                            <StatusSelector 
-                                currentStatus={project.status} 
-                                onUpdate={(newStatus) => onUpdateProjectStatus(project.id, newStatus)} 
-                                isInteractive={userPermissions?.proyectos.canEdit && project.status === ProjectStatus.EN_REVISION}
-                            />
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center">
-                                <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                                    <div className="bg-brand-primary h-2.5 rounded-full" style={{width: `${getProgress(project)}%`}}></div>
+                {filteredProjects.map(project => {
+                    const progress = getProgress(project);
+                    return (
+                        <tr key={project.id} onClick={() => onSelectProject(project)} className="hover:bg-light-bg dark:hover:bg-dark-bg cursor-pointer">
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="text-sm font-medium">{project.name}</div>
+                                <div className="text-sm text-light-text-secondary dark:text-dark-text-secondary">{project.leader}</div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap" onClick={e => e.stopPropagation()}>
+                                <StatusSelector 
+                                    currentStatus={project.status} 
+                                    onUpdate={(newStatus) => onUpdateProjectStatus(project.id, newStatus)} 
+                                    isInteractive={userPermissions?.proyectos.canEdit && project.status === ProjectStatus.EN_REVISION}
+                                />
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                                        <div className="bg-brand-primary h-2.5 rounded-full transition-all duration-500 shadow-[0_0_8px_rgba(74,144,226,0.3)]" style={{width: `${progress}%`}}></div>
+                                    </div>
+                                    <span className="text-sm ml-3 font-bold text-brand-primary min-w-[36px]">{progress}%</span>
                                 </div>
-                                <span className="text-sm ml-3 font-medium">{getProgress(project)}%</span>
-                            </div>
-                        </td>
-                    </tr>
-                ))}
+                            </td>
+                        </tr>
+                    );
+                })}
             </tbody>
          </table>
 
          {/* Mobile Card View */}
          <div className="space-y-4 md:hidden">
-            {filteredProjects.map(project => (
-                <div key={project.id} onClick={() => onSelectProject(project)} className="p-4 rounded-lg border border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg/50">
-                    <div className="flex justify-between items-start">
-                         <div className="font-bold">{project.name}</div>
-                         <div onClick={e => e.stopPropagation()}>
-                             <StatusSelector 
-                                currentStatus={project.status} 
-                                onUpdate={(newStatus) => onUpdateProjectStatus(project.id, newStatus)}
-                                isInteractive={userPermissions?.proyectos.canEdit && project.status === ProjectStatus.EN_REVISION}
-                            />
-                        </div>
-                    </div>
-                    <div className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">{project.leader}</div>
-                    <div className="mt-2">
-                       <div className="flex items-center">
-                            <div className="w-full bg-gray-200 rounded-full h-2.5 dark:bg-gray-700">
-                                <div className="bg-brand-primary h-2.5 rounded-full" style={{width: `${getProgress(project)}%`}}></div>
+            {filteredProjects.map(project => {
+                const progress = getProgress(project);
+                return (
+                    <div key={project.id} onClick={() => onSelectProject(project)} className="p-4 rounded-lg border border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg/50">
+                        <div className="flex justify-between items-start">
+                             <div className="font-bold">{project.name}</div>
+                             <div onClick={e => e.stopPropagation()}>
+                                 <StatusSelector 
+                                    currentStatus={project.status} 
+                                    onUpdate={(newStatus) => onUpdateProjectStatus(project.id, newStatus)}
+                                    isInteractive={userPermissions?.proyectos.canEdit && project.status === ProjectStatus.EN_REVISION}
+                                />
                             </div>
-                            <span className="text-sm ml-3 font-medium">{getProgress(project)}%</span>
+                        </div>
+                        <div className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">{project.leader}</div>
+                        <div className="mt-4">
+                           <div className="flex items-center">
+                                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                                    <div className="bg-brand-primary h-2.5 rounded-full shadow-[0_0_8px_rgba(74,144,226,0.3)]" style={{width: `${progress}%`}}></div>
+                                </div>
+                                <span className="text-sm ml-3 font-bold text-brand-primary min-w-[36px]">{progress}%</span>
+                            </div>
                         </div>
                     </div>
-                </div>
-            ))}
+                );
+            })}
          </div>
        </div>
     );

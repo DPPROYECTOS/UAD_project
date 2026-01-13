@@ -3,7 +3,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { CogIcon, PlusIcon, TrashIcon, RefreshIcon, PowerIcon, CustomLogoIcon, PencilAltIcon, XIcon, SaveIcon } from '../components/Icons';
 import { AppModule } from '../types';
-import { getAppModules, upsertAppModule, deleteAppModule } from '../services/supabaseService';
+import { getAppModules, upsertAppModule, deleteAppModule, supabase } from '../services/supabaseService';
 import Spinner from '../components/Spinner';
 
 // Use the AppModule type from types.ts but alias it locally as Peripheral to minimize refactoring
@@ -40,7 +40,9 @@ const AppsView: React.FC = () => {
     // Initial State
     const [peripherals, setPeripherals] = useState<Peripheral[]>([]);
 
+    // --- REALTIME SUBSCRIPTION ---
     useEffect(() => {
+        // First load
         const fetchModules = async () => {
             try {
                 setIsLoading(true);
@@ -49,7 +51,7 @@ const AppsView: React.FC = () => {
                     setPeripherals(modules);
                 } else {
                     // Fallback seed if DB is empty
-                    setPeripherals([
+                    const seed: Peripheral[] = [
                         { id: 'p1', label: 'AUDITORIAS', subLabel: 'APP', x: 20, y: 20, status: 'active', connectionSide: 'bottom', laneOffset: -40 },
                         { id: 'p2', label: 'MEM_BANK', subLabel: 'STORAGE', x: 50, y: 15, status: 'active', connectionSide: 'bottom', laneOffset: 0 },
                         { id: 'p3', label: 'SEC_GATE', subLabel: 'FIREWALL', x: 80, y: 20, status: 'active', connectionSide: 'bottom', laneOffset: 40 },
@@ -57,8 +59,9 @@ const AppsView: React.FC = () => {
                         { id: 'p5', label: 'CACHE_L1', subLabel: 'FAST ACCESS', x: 80, y: 80, status: 'active', connectionSide: 'top', laneOffset: 40 },
                         { id: 'p6', label: 'BUS_CTRL', subLabel: 'TRANSPORT', x: 50, y: 85, status: 'active', connectionSide: 'top', laneOffset: 0 },
                         { id: 'p7', label: 'GPU_RENDER', subLabel: 'VISUALS', x: 20, y: 80, status: 'standby', connectionSide: 'top', laneOffset: -40 },
-                        { id: 'p8', label: 'NET_LINK', subLabel: 'CONNECTIVITY', x: 15, y: 50, status: 'offline', connectionSide: 'right', laneOffset: 0 },
-                    ]);
+                        { id: 'p8', label: 'MARBETES', subLabel: 'CONNECTIVITY', x: 15, y: 50, status: 'offline', connectionSide: 'right', laneOffset: 0 },
+                    ];
+                    setPeripherals(seed);
                 }
             } catch (error) {
                 console.error("Error fetching modules:", error);
@@ -67,7 +70,57 @@ const AppsView: React.FC = () => {
             }
         };
         fetchModules();
-    }, []);
+
+        // Subscribe to changes in real-time
+        const channel = supabase
+            .channel('app-modules-realtime-v2')
+            .on(
+                'postgres_changes',
+                {
+                    event: '*', // Listen to INSERT, UPDATE, and DELETE
+                    schema: 'public',
+                    table: 'app_modules'
+                },
+                (payload) => {
+                    if (payload.eventType === 'DELETE') {
+                        setPeripherals(prev => prev.filter(p => p.id !== payload.old.id));
+                    } else {
+                        const m = payload.new as any;
+                        const mappedModule: Peripheral = {
+                            id: m.id,
+                            label: m.label,
+                            subLabel: m.sub_label,
+                            url: m.url,
+                            x: Number(m.x),
+                            y: Number(m.y),
+                            status: m.status,
+                            connectionSide: m.connection_side,
+                            laneOffset: Number(m.lane_offset)
+                        };
+
+                        setPeripherals(prev => {
+                            // Check if we are currently dragging THIS module
+                            // Use refs or current state to avoid overwriting user interaction
+                            if (draggingModuleId === mappedModule.id || draggingCircuit?.id === mappedModule.id) {
+                                return prev;
+                            }
+
+                            const exists = prev.some(p => p.id === mappedModule.id);
+                            if (exists) {
+                                return prev.map(p => p.id === mappedModule.id ? mappedModule : p);
+                            } else {
+                                return [...prev, mappedModule];
+                            }
+                        });
+                    }
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, [draggingModuleId, draggingCircuit?.id]);
 
     // Robust resize observer
     useEffect(() => {
@@ -76,7 +129,6 @@ const AppsView: React.FC = () => {
         const updateDimensions = () => {
             if (containerRef.current) {
                 const { clientWidth, clientHeight } = containerRef.current;
-                // Using clientWidth/Height (padding box) to ensure exact pixel matching
                 setDimensions(prev => {
                     if (prev.width === clientWidth && prev.height === clientHeight) return prev;
                     return { width: clientWidth, height: clientHeight };
@@ -109,15 +161,12 @@ const AppsView: React.FC = () => {
         const pX = Number(p.x) || 0;
         const pY = Number(p.y) || 0;
         
-        // Exact visual center of the module
         const mx = (pX / 100) * dimensions.width;
         const my = (pY / 100) * dimensions.height;
 
-        // 1. Determine Relative Position (Quadrant)
         const dx = mx - cx;
         const dy = my - cy;
         
-        // Determine primary axis for connection
         let cpuSide: 'top' | 'right' | 'bottom' | 'left';
         if (Math.abs(dx) >= Math.abs(dy)) {
             cpuSide = dx > 0 ? 'right' : 'left';
@@ -125,12 +174,11 @@ const AppsView: React.FC = () => {
             cpuSide = dy > 0 ? 'bottom' : 'top';
         }
 
-        // Apply lane offset to start point at CPU
         let offset = Number(p.laneOffset) || 0;
         const maxCpuOffset = CPU_HALF - 20; 
         offset = Math.max(-maxCpuOffset, Math.min(maxCpuOffset, offset));
 
-        let sx, sy; // Start X, Start Y
+        let sx, sy; 
         switch(cpuSide) {
             case 'top':    sx = cx + offset; sy = cy - CPU_HALF; break;
             case 'bottom': sx = cx + offset; sy = cy + CPU_HALF; break;
@@ -138,28 +186,20 @@ const AppsView: React.FC = () => {
             case 'right':  sx = cx + CPU_HALF; sy = cy + offset; break;
         }
 
-        // 2. Intelligent Module Side Selection
-        // We ignore p.connectionSide and choose the side facing the CPU to avoid wrapping
         let targetSide: 'top' | 'right' | 'bottom' | 'left';
-        
-        // If module is to the right of CPU, enter from the left side of module
         if (cpuSide === 'right') targetSide = 'left';
-        // If module is to the left of CPU, enter from right side of module
         else if (cpuSide === 'left') targetSide = 'right';
-        // If module is below CPU, enter from top side
         else if (cpuSide === 'bottom') targetSide = 'top';
-        // If module is above CPU, enter from bottom side
         else targetSide = 'bottom';
 
-        // 3. Determine Module Connection Candidates on the Target Side
         const candidates: {x: number, y: number}[] = [];
         const spread = 40; 
 
         if (targetSide === 'top') {
             const anchorY = my - MOD_HALF_H;
-            candidates.push({ x: mx, y: anchorY }); // Center
-            candidates.push({ x: mx - spread, y: anchorY }); // Left
-            candidates.push({ x: mx + spread, y: anchorY }); // Right
+            candidates.push({ x: mx, y: anchorY });
+            candidates.push({ x: mx - spread, y: anchorY });
+            candidates.push({ x: mx + spread, y: anchorY });
         } else if (targetSide === 'bottom') {
             const anchorY = my + MOD_HALF_H;
             candidates.push({ x: mx, y: anchorY });
@@ -167,9 +207,9 @@ const AppsView: React.FC = () => {
             candidates.push({ x: mx + spread, y: anchorY });
         } else if (targetSide === 'left') {
             const anchorX = mx - MOD_HALF_W;
-            candidates.push({ x: anchorX, y: my }); // Center
-            candidates.push({ x: anchorX, y: my - 20 }); // Top
-            candidates.push({ x: anchorX, y: my + 20 }); // Bottom
+            candidates.push({ x: anchorX, y: my });
+            candidates.push({ x: anchorX, y: my - 20 });
+            candidates.push({ x: anchorX, y: my + 20 });
         } else { // right
             const anchorX = mx + MOD_HALF_W;
             candidates.push({ x: anchorX, y: my });
@@ -177,19 +217,15 @@ const AppsView: React.FC = () => {
             candidates.push({ x: anchorX, y: my + 20 });
         }
 
-        // 4. Select Best Candidate
-        // We pick the candidate that aligns best with the CPU exit point (minimizing the "jog")
         let bestT = candidates[0];
         let minDiff = Infinity;
         const isCpuVertical = (cpuSide === 'top' || cpuSide === 'bottom');
 
         candidates.forEach(cand => {
             let diff = 0;
-            // If exiting vertically from CPU, we want to match X as much as possible
             if (isCpuVertical) {
                 diff = Math.abs(cand.x - sx); 
             } else {
-                // If exiting horizontally from CPU, match Y
                 diff = Math.abs(cand.y - sy); 
             }
 
@@ -202,25 +238,18 @@ const AppsView: React.FC = () => {
         const tx = bestT.x;
         const ty = bestT.y;
 
-        // 5. Generate Orthogonal Path
         let path = `M ${sx} ${sy}`;
-        
         const isModVertical = (targetSide === 'top' || targetSide === 'bottom');
 
-        // Logic for "elbow" placement
         if (isCpuVertical && isModVertical) {
-            // Both Vertical (e.g. CPU Top -> Module Bottom)
             const midY = (sy + ty) / 2;
             path += ` L ${sx} ${midY} L ${tx} ${midY} L ${tx} ${ty}`;
         } else if (!isCpuVertical && !isModVertical) {
-            // Both Horizontal (e.g. CPU Right -> Module Left)
             const midX = (sx + tx) / 2;
             path += ` L ${midX} ${sy} L ${midX} ${ty} L ${tx} ${ty}`;
         } else if (isCpuVertical && !isModVertical) {
-            // CPU Vertical, Module Horizontal (L-Shape usually works)
             path += ` L ${sx} ${ty} L ${tx} ${ty}`;
         } else { 
-            // CPU Horizontal, Module Vertical (L-Shape)
             path += ` L ${tx} ${sy} L ${tx} ${ty}`;
         }
 
@@ -260,11 +289,8 @@ const AppsView: React.FC = () => {
     const handleMouseMove = useCallback((e: MouseEvent) => {
         if (draggingModuleId && containerRef.current) {
             const rect = containerRef.current.getBoundingClientRect();
-            // Calculate percentage based on mouse position relative to container
             const x = ((e.clientX - rect.left) / rect.width) * 100;
             const y = ((e.clientY - rect.top) / rect.height) * 100;
-            
-            // Clamp to keep inside (padding 5%)
             const clampedX = Math.max(5, Math.min(95, x));
             const clampedY = Math.max(5, Math.min(95, y));
 
@@ -275,38 +301,34 @@ const AppsView: React.FC = () => {
 
         if (draggingCircuit) {
             const { id, startMouseX, startMouseY, initialOffset } = draggingCircuit;
-            
-            // Calculate delta based on dominant movement axis
             let delta = 0;
             if (Math.abs(e.clientX - startMouseX) > Math.abs(e.clientY - startMouseY)) {
                 delta = e.clientX - startMouseX;
             } else {
                 delta = e.clientY - startMouseY;
             }
-
-            // Offset limits (relative to CPU edge size)
             const LIMIT = 80;
             const newOffset = Math.max(-LIMIT, Math.min(LIMIT, initialOffset + delta));
-
             setPeripherals(prev => prev.map(p => 
                 p.id === id ? { ...p, laneOffset: newOffset } : p
             ));
         }
     }, [draggingModuleId, draggingCircuit]);
 
-    const handleMouseUp = () => {
+    const handleMouseUp = useCallback(() => {
+        // Find the module that was being dragged to persist its position
         if (draggingModuleId) {
             const module = peripherals.find(p => p.id === draggingModuleId);
-            if (module) upsertAppModule(module);
+            if (module) upsertAppModule(module).catch(console.error);
         }
         if (draggingCircuit) {
             const module = peripherals.find(p => p.id === draggingCircuit.id);
-            if (module) upsertAppModule(module);
+            if (module) upsertAppModule(module).catch(console.error);
         }
 
         setDraggingModuleId(null);
         setDraggingCircuit(null);
-    };
+    }, [draggingModuleId, draggingCircuit, peripherals]);
 
     useEffect(() => {
         if (draggingModuleId || draggingCircuit) {
@@ -320,7 +342,7 @@ const AppsView: React.FC = () => {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [draggingModuleId, draggingCircuit, handleMouseMove, peripherals]);
+    }, [draggingModuleId, draggingCircuit, handleMouseMove, handleMouseUp]);
 
     // --- Edit Actions ---
     const handleAddModule = async () => {
@@ -336,31 +358,50 @@ const AppsView: React.FC = () => {
             connectionSide: isLeft ? 'right' : 'left',
             laneOffset: 0
         };
-        setPeripherals([...peripherals, newModule]);
-        await upsertAppModule(newModule);
+        setPeripherals(prev => [...prev, newModule]);
+        try {
+            await upsertAppModule(newModule);
+        } catch (err) {
+            console.error("Failed to add module", err);
+        }
     };
 
     const handleDeleteModule = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
         setPeripherals(prev => prev.filter(p => p.id !== id));
-        await deleteAppModule(id);
+        try {
+            await deleteAppModule(id);
+        } catch (err) {
+            console.error("Failed to delete module", err);
+        }
     };
 
     const handleToggleStatus = async (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
         e.preventDefault();
         
-        let updatedModule: Peripheral | null = null;
-        setPeripherals(prev => prev.map(p => {
-            if (p.id === id) {
-                const nextStatus = p.status === 'active' ? 'offline' : 'active';
-                updatedModule = { ...p, status: nextStatus };
-                return updatedModule;
-            }
-            return p;
-        }));
+        const moduleIndex = peripherals.findIndex(p => p.id === id);
+        if (moduleIndex === -1) return;
+        
+        const p = peripherals[moduleIndex];
+        const nextStatus = p.status === 'active' ? 'offline' : 'active';
+        const updatedModule = { ...p, status: nextStatus as any };
+        
+        // Optimistic local update
+        setPeripherals(prev => {
+            const newArr = [...prev];
+            newArr[moduleIndex] = updatedModule;
+            return newArr;
+        });
 
-        if (updatedModule) await upsertAppModule(updatedModule);
+        // Persist change
+        try {
+            await upsertAppModule(updatedModule);
+        } catch (err) {
+            console.error("Failed to update status", err);
+            // Revert if failed
+            setPeripherals(prev => prev.map(item => item.id === id ? p : item));
+        }
     };
 
     const openEditModal = (e: React.MouseEvent, p: Peripheral) => {
@@ -376,12 +417,19 @@ const AppsView: React.FC = () => {
         e.preventDefault();
         if (currentEditModule) {
             const updatedModule = { ...currentEditModule, label: editLabel, subLabel: editSubLabel, url: editUrl };
+            
+            // Optimistic update
             setPeripherals(prev => prev.map(p => 
                 p.id === updatedModule.id ? updatedModule : p
             ));
-            await upsertAppModule(updatedModule);
-            setEditModalOpen(false);
-            setCurrentEditModule(null);
+
+            try {
+                await upsertAppModule(updatedModule);
+                setEditModalOpen(false);
+                setCurrentEditModule(null);
+            } catch (err) {
+                console.error("Failed to save details", err);
+            }
         }
     };
 
@@ -437,7 +485,6 @@ const AppsView: React.FC = () => {
 
                     return (
                         <g key={`circuit-${p.id}`}>
-                            {/* Hit Area for ease of selection */}
                             <path 
                                 d={path} 
                                 stroke="transparent" 
@@ -460,9 +507,7 @@ const AppsView: React.FC = () => {
                                 strokeLinejoin="round"
                                 filter={isDragging || isHovered ? "url(#glow)" : ""}
                             />
-                            {/* Dot at Start (CPU) */}
                             <circle cx={cx} cy={cy} r={isDragging || isHovered ? 4 : 3} fill="#1e293b" stroke={lineColor} strokeWidth="2" />
-                            {/* Dot at End (Module) */}
                             <circle cx={tx} cy={ty} r={isDragging || isHovered ? 5 : 4} fill="#0f172a" stroke={lineColor} strokeWidth="2" />
                             {p.status === 'active' && !isDragging && (
                                 <circle r="3" fill="#ffffff" filter="url(#glow)">
@@ -478,7 +523,6 @@ const AppsView: React.FC = () => {
             <div 
                 className="absolute z-20 rounded-lg border-2 shadow-[0_0_30px_rgba(55,254,255,0.2)] flex flex-col items-center justify-center overflow-hidden" 
                 style={{ 
-                    // Strict positioning
                     left: `${dimensions.width / 2}px`,
                     top: `${dimensions.height / 2}px`,
                     width: `${CPU_SIZE}px`,
@@ -495,7 +539,6 @@ const AppsView: React.FC = () => {
                         UAD
                     </div>
                 </div>
-                {/* Decorative corners */}
                 <div className="absolute top-0 left-0 w-3 h-3 border-t-2 border-l-2" style={{ borderColor: PRIMARY_COLOR }}></div>
                 <div className="absolute top-0 right-0 w-3 h-3 border-t-2 border-r-2" style={{ borderColor: PRIMARY_COLOR }}></div>
                 <div className="absolute bottom-0 left-0 w-3 h-3 border-b-2 border-l-2" style={{ borderColor: PRIMARY_COLOR }}></div>
@@ -504,7 +547,6 @@ const AppsView: React.FC = () => {
 
             {/* Componentes Periféricos */}
             {peripherals.map((p) => {
-                // Calculate exact pixel position for DIV to match SVG logic
                 const px = (Number(p.x) / 100) * dimensions.width;
                 const py = (Number(p.y) / 100) * dimensions.height;
 
@@ -524,8 +566,8 @@ const AppsView: React.FC = () => {
                         ${isEditing && draggingModuleId === p.id ? 'scale-110' : ''}
                     `}
                     style={{ 
-                        left: `${px}px`, // Use calculated pixels
-                        top: `${py}px`,  // Use calculated pixels
+                        left: `${px}px`,
+                        top: `${py}px`,
                         width: `${MOD_W}px`, 
                         height: `${MOD_H}px`
                     }}

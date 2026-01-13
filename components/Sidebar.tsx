@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon, CheckCircleIcon, XCircleIcon, GameControllerIcon, KeyIcon, ViewGridIcon, AcademicCapIcon, MicrophoneIcon } from './Icons';
 import Spinner from './Spinner';
@@ -62,7 +61,6 @@ const Sidebar: React.FC<SidebarProps> = ({
     user, userPermissions, setIsMasterBypassActive
 }) => {
     const [isCustomizerOpen, setCustomizerOpen] = useState(false);
-    // FIX: Use a more robust type for the timer reference, which resolves the misleading error on setIsMasterBypassActive.
     const longPressTimer = useRef<ReturnType<typeof setTimeout>>();
 
     const handlePasswordLongPressStart = () => {
@@ -78,14 +76,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 
     const defaultCustomColors = {
-        // Interface Colors
         '--color-brand-primary': '#4a90e2',
         '--color-brand-secondary': '#357abd',
         '--color-light-bg': '#f0f2f5',
         '--color-dark-bg': '#1c1c1e',
         '--color-light-card': '#ffffff',
         '--color-dark-card': '#2c2c2e',
-        // Text Colors
         '--color-light-text': '#111827',
         '--color-light-text-secondary': '#6b7280',
         '--color-dark-text': '#c9d1d9',
@@ -115,7 +111,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         setCustomizerOpen(false);
     };
 
-    // --- Recorder Logic ---
     const [isControlsVisible, setIsControlsVisible] = useState(false);
     const [showToast, setShowToast] = useState(false);
 
@@ -124,7 +119,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         setShowToast(true);
         const timer = setTimeout(() => {
             setShowToast(false);
-        }, 4000); // Toast disappears after 4s
+        }, 4000); 
         return () => clearTimeout(timer);
         }
     }, [uploadStatus]);
@@ -137,7 +132,7 @@ const Sidebar: React.FC<SidebarProps> = ({
     
     const handleStopAndSave = () => {
         onStopRecording();
-        setIsControlsVisible(false); // Hide controls after stopping
+        setIsControlsVisible(false); 
     };
 
     const renderToast = () => {
@@ -162,7 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         { name: 'Documentos', icon: <DocumentTextIcon className="h-6 w-6"/>, id: 'documentos' },
         { name: 'Enlaces', icon: <LinkIcon className="h-6 w-6"/>, id: 'enlaces' },
         { name: 'Apps', icon: <ViewGridIcon className="h-6 w-6"/>, id: 'apps' },
-        { name: 'NEXUS', icon: <AcademicCapIcon className="h-6 w-6"/>, id: 'nexus' },
+        { name: 'CODEX', icon: <AcademicCapIcon className="h-6 w-6"/>, id: 'codex' }, // RENAMED FROM NEXUS
         { name: 'Auditorias', icon: <ClipboardListIcon className="h-6 w-6"/>, id: 'auditorias' },
         { name: 'Pizarra', icon: <PencilAltIcon className="h-6 w-6"/>, id: 'pizarra' },
         { name: 'Bitácora', icon: <MicrophoneIcon className="h-6 w-6"/>, id: 'bitacora' },
@@ -173,9 +168,12 @@ const Sidebar: React.FC<SidebarProps> = ({
     const visibleNavItems = useMemo(() => {
         const sidebarPermissions = userPermissions?.sidebar;
         if (!sidebarPermissions) {
-            return navItems; // Fallback to show all if permissions are not loaded
+            return navItems; 
         }
-        return navItems.filter(item => sidebarPermissions[item.id as keyof typeof sidebarPermissions]);
+        return navItems.filter(item => {
+            const permKey = item.id as keyof typeof sidebarPermissions;
+            return sidebarPermissions[permKey];
+        });
     }, [userPermissions, navItems]);
 
 
@@ -252,7 +250,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                             className="w-8 h-8 rounded-full flex items-center justify-center shadow-md transition-colors text-gray-800 bg-white hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-brand-primary dark:focus:ring-offset-dark-card"
                             aria-label="Doble clic para mostrar/ocultar grabadora"
                         >
-                           {/* Empty: indicator removed for discretion */}
                         </button>
                     </div>
                 </div>

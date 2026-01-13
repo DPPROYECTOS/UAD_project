@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { LinkItem } from '../types';
-import { XIcon, LinkIcon } from './Icons';
+import { XIcon, LinkIcon, SparklesIcon } from './Icons';
 
 interface LinkModalProps {
   onClose: () => void;
@@ -12,6 +13,7 @@ const LinkModal: React.FC<LinkModalProps> = ({ onClose, onSave, linkToEdit }) =>
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
   const [description, setDescription] = useState('');
+  const [tagsInput, setTagsInput] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -19,10 +21,12 @@ const LinkModal: React.FC<LinkModalProps> = ({ onClose, onSave, linkToEdit }) =>
       setName(linkToEdit.name);
       setUrl(linkToEdit.url);
       setDescription(linkToEdit.description);
+      setTagsInput(linkToEdit.tags?.join(', ') || '');
     } else {
       setName('');
       setUrl('');
       setDescription('');
+      setTagsInput('');
     }
     setError('');
   }, [linkToEdit]);
@@ -48,10 +52,17 @@ const LinkModal: React.FC<LinkModalProps> = ({ onClose, onSave, linkToEdit }) =>
     }
     setError('');
     
+    // Parse tags from comma separated input
+    const tags = tagsInput
+        .split(',')
+        .map(t => t.trim())
+        .filter(t => t !== '');
+
     const linkData = {
         name: name.trim(),
         url: url.trim(),
         description: description.trim(),
+        tags: tags
     };
 
     if(linkToEdit) {
@@ -124,11 +135,26 @@ const LinkModal: React.FC<LinkModalProps> = ({ onClose, onSave, linkToEdit }) =>
                 id="link-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                rows={3}
+                rows={2}
                 placeholder="Describe brevemente para qué sirve este enlace."
+                className="w-full mt-1 p-2 border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg rounded-md focus:ring-brand-accent focus:border-brand-accent resize-none"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="link-tags" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1 flex items-center gap-1">
+                <SparklesIcon className="h-3 w-3" /> Etiquetas (Separadas por comas)
+              </label>
+              <input
+                id="link-tags"
+                type="text"
+                value={tagsInput}
+                onChange={(e) => setTagsInput(e.target.value)}
+                placeholder="Ej: Tutorial, Almacén, Recursos"
                 className="w-full mt-1 p-2 border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg rounded-md focus:ring-brand-accent focus:border-brand-accent"
               />
             </div>
+
             {error && <p className="text-sm text-red-500">{error}</p>}
           </div>
 

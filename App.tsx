@@ -22,7 +22,7 @@ import NexusView from './views/NexusView';
 import VoiceLogView from './components/VoiceLogView';
 import SecretCodeModal from './components/SecretCodeModal';
 import PasswordsView from './views/PasswordsView';
-import { User, Project, ProjectTask, ProjectStatus, Activity, Folder, Document, LinkItem, AuditItem, RecurrenceRule, ToastNotification, UserPermissions, TaskStatus, ContentType } from './types';
+import { User, Project, ProjectTask, ProjectStatus, Activity, Folder, Document, LinkItem, AuditItem, ToastNotification, UserPermissions, TaskStatus, ContentType } from './types';
 import { 
   signIn, 
   signOut, 
@@ -63,7 +63,6 @@ import {
 } from './services/supabaseService';
 import Spinner from './components/Spinner';
 import { GamePlayer } from './components/GamePlayer';
-import { CheckCircleIcon, XCircleIcon } from './components/Icons';
 import FloatingRecorder from './components/FloatingRecorder';
 import ToastContainer from './components/ToastContainer';
 
@@ -72,7 +71,6 @@ declare const lamejs: any;
 type RecordingStatus = 'idle' | 'recording' | 'paused';
 type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
-// ... convertWebMToMp3 function ...
 const convertWebMToMp3 = async (webmBlob: Blob): Promise<Blob> => {
   const audioContext = new AudioContext();
   const arrayBuffer = await webmBlob.arrayBuffer();
@@ -84,7 +82,7 @@ const convertWebMToMp3 = async (webmBlob: Blob): Promise<Blob> => {
     samples[i] = pcmSamples[i] * 32767;
   }
 
-  const mp3Encoder = new lamejs.Mp3Encoder(1, audioBuffer.sampleRate, 128); 
+  const mp3Encoder = new (window as any).lamejs.Mp3Encoder(1, audioBuffer.sampleRate, 128); 
   const mp3Data = [];
   const sampleBlockSize = 1152;
 
@@ -234,7 +232,6 @@ const App: React.FC = () => {
       setToastNotifications(prev => prev.filter(n => n.id !== id));
   };
 
-  // --- REAL-TIME SUBSCRIPTION FOR TASKS ---
   useEffect(() => {
     if (!user) return;
 
@@ -243,7 +240,7 @@ const App: React.FC = () => {
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to INSERT, UPDATE, and DELETE
+          event: '*', 
           schema: 'public',
           table: 'content',
           filter: `type=eq.${ContentType.TASK}`
@@ -263,7 +260,8 @@ const App: React.FC = () => {
                   startDate: taskData.startDate || '',
                   duration: taskData.duration || 1,
                   parentId: taskData.parentId || null,
-                  assignedTo: item.assigned_to || ''
+                  assignedTo: item.assigned_to || '',
+                  comments: item.task_comments || ''
               };
 
               setTasks(prev => {
@@ -441,7 +439,7 @@ const App: React.FC = () => {
   }, [user]);
   
   useEffect(() => {
-      if ((activeView === 'Documentos' || activeView === 'NEXUS') && !externalDataLoaded) {
+      if ((activeView === 'Documentos' || activeView === 'CODEX') && !externalDataLoaded) {
           const loadExternal = async () => {
               try {
                   let extFolders = await getExternalFolders();
@@ -707,8 +705,7 @@ const App: React.FC = () => {
      }
   };
 
-  // handleAddTask updated to pass assignedTo correctly
-  const handleAddTask = async (projectId: string, taskDetails: { title: string; startDate: string; duration: number; assignedTo: string }, parentId: string | null = null) => {
+  const handleAddTask = async (projectId: string, taskDetails: { title: string; startDate: string; duration: number; assignedTo: string; comments?: string }, parentId: string | null = null) => {
     if (!taskDetails.title.trim()) return;
     const newTaskData: Omit<ProjectTask, 'id'> = {
       projectId,
@@ -717,19 +714,17 @@ const App: React.FC = () => {
       startDate: taskDetails.startDate,
       duration: taskDetails.duration,
       parentId,
-      assignedTo: taskDetails.assignedTo
+      assignedTo: taskDetails.assignedTo,
+      comments: taskDetails.comments || ''
     };
     try {
       const savedTask = await addTask(newTaskData);
-      // Real-time listener will handle the local state update
     } catch (err) { handleDatabaseError(err, 'Failed to add task.'); }
   };
 
-  // handleToggleTask: Ahora rota entre Pending -> Completed -> Failed -> Pending
   const handleToggleTask = async (taskId: string) => {
-    const originalTasks = tasks; const taskToToggle = tasks.find(t => t.id === taskId); if (!taskToToggle) return;
+    const taskToToggle = tasks.find(t => t.id === taskId); if (!taskToToggle) return;
     
-    // Ciclo de estados
     const nextStatus: TaskStatus = {
         'pending': 'completed',
         'completed': 'failed',
@@ -755,7 +750,6 @@ const App: React.FC = () => {
         if (tasksToUpdateInDb.length > 1) await addActivity(`actualizó el estado de ${tasksToUpdateInDb.length - 1} sub-tarea(s)`, `asociada(s) a "${taskToToggle.title}"`, 'low', taskToToggle.projectId);
     } catch (err) { 
         handleDatabaseError(err, 'Failed to update task(s).'); 
-        // No reverting local state here, real-time listener will keep it in sync with DB
     }
   };
 
@@ -768,8 +762,6 @@ const App: React.FC = () => {
     const taskToDelete = tasks.find(t => t.id === taskId); if (!taskToDelete) return;
     try { await deleteTask(taskId); const descendantIds = new Set<string>(); const findDescendants = (parentId: string) => { tasks.forEach(task => { if (task.parentId === parentId) { descendantIds.add(task.id); findDescendants(task.id); } }); }; findDescendants(taskId);
         const idsToDelete = new Set([taskId, ...descendantIds]);
-        // Note: Supabase on DELETE only provides the old ID. We need to handle descendants manually or let the DB handle cascades.
-        // For simplicity, we manually filter here too.
         setTasks(prevTasks => prevTasks.filter(t => !idsToDelete.has(t.id)));
         await addActivity('eliminó la tarea', `"${taskToDelete.title}"`, 'medium', taskToDelete.projectId);
     } catch (err) { handleDatabaseError(err, 'Failed to delete task.'); }
@@ -803,7 +795,7 @@ const App: React.FC = () => {
     try { if ('id' in linkData) { const updatedLink = await updateLink(linkData); setLinks(prev => prev.map(l => l.id === updatedLink.id ? updatedLink : l)); await addActivity('actualizó el enlace', `"${updatedLink.name}"`, 'low'); } else { const savedLink = await addLink(linkData); setLinks(prev => [savedLink, ...prev]); await addActivity('registró un nuevo enlace', `"${savedLink.name}"`, 'low'); }
     } catch (err) { handleDatabaseError(err, 'Failed to save link.'); }
   };
- const handleDeleteLink = (linkId: string) => { const link = links.find(l => l.id === linkId); if (link) setLinkToDelete(link); };
+  const handleDeleteLink = (linkId: string) => { const link = links.find(l => l.id === linkId); if (link) setLinkToDelete(link); };
   const handleConfirmDeleteLink = async () => { if (linkToDelete) { try { await deleteLink(linkToDelete.id); setLinks(prev => prev.filter(l => l.id !== linkToDelete.id)); await addActivity('eliminó el enlace', `"${linkToDelete.name}"`, 'medium'); } catch (err) { handleDatabaseError(err, 'Failed to delete link.'); } finally { setLinkToDelete(null); } } };
   const handleCancelDeleteLink = () => setLinkToDelete(null);
 
@@ -845,7 +837,7 @@ const App: React.FC = () => {
   if (authLoading) { return ( <div className="min-h-screen flex items-center justify-center bg-dark-bg"> <Spinner /> <span className="ml-4 text-lg text-dark-text">Autenticando...</span> </div> ); }
 
   if (!user) { return ( <> <LoginView onLogin={handleLogin} isLoading={isLoading} error={error} /> <FloatingRecorder recordingStatus={recordingStatus} recordingTime={recordingTime} uploadStatus={uploadStatus} uploadMessage={uploadMessage} onStartRecording={startRecording} onTogglePauseResume={togglePauseResume} onStopRecording={stopRecording} /> </> ); }
- const renderActiveView = () => {
+  const renderActiveView = () => {
     const globalErrorDisplay = error ? ( <div className="p-4 mb-4 bg-red-100 border border-red-400 text-red-700 rounded-lg animate-fade-in"> <h3 className="font-bold">Ocurrió un error</h3> <p>{error}</p> <button onClick={() => setError(null)} className="mt-2 text-sm font-semibold underline">Descartar</button> </div> ) : null;
     switch (activeView) {
       case 'Dashboard': return <>{globalErrorDisplay}<DashboardView projects={projects} audits={audits} activities={activities.slice(0, 5)} tasks={tasks} onSelectProject={handleSelectProjectById} /></>;
@@ -855,7 +847,7 @@ const App: React.FC = () => {
       case 'Documentos': return <>{globalErrorDisplay}<DocumentsView projects={projects} folders={folders} documents={documents} externalFolders={externalFolders} externalDocuments={externalDocuments} isLoading={foldersLoading || documentsLoading} onAddFolder={handleAddFolder} onDeleteFolder={handleDeleteFolder} onAddDocument={handleAddDocument} onDeleteDocument={handleDeleteDocument} onAddExternalFolder={handleAddExternalFolder} onDeleteExternalFolder={handleDeleteExternalFolder} onAddExternalDocument={handleAddExternalDocument} onDeleteExternalDocument={handleDeleteExternalDocument} userPermissions={userPermissions} user={user!} /></>;
       case 'Enlaces': return <>{globalErrorDisplay}<LinksView links={links} isLoading={linksLoading} onOpenLinkModal={handleOpenLinkModal} onOpenEditLinkModal={handleOpenEditLinkModal} onDeleteLink={handleDeleteLink} userPermissions={userPermissions} /></>;
       case 'Apps': return <>{globalErrorDisplay}<AppsView /></>;
-      case 'NEXUS': return <>{globalErrorDisplay}<NexusView documents={documents} folders={folders} externalDocuments={externalDocuments} externalFolders={externalFolders} /></>;
+      case 'CODEX': return <>{globalErrorDisplay}<NexusView documents={documents} folders={folders} externalDocuments={externalDocuments} externalFolders={externalFolders} /></>;
       case 'Auditorias': return <>{globalErrorDisplay}<AuditsView audits={audits} onOpenModal={handleOpenAuditModal} userPermissions={userPermissions} /></>;
       case 'Pizarra': return <>{globalErrorDisplay}<WhiteboardView userPermissions={userPermissions} />;</>;
       case 'Bitácora': return <>{globalErrorDisplay}<VoiceLogView /></>;

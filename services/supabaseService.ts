@@ -95,7 +95,7 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
     const superAdmins = ['darienperez695@gmail.com', 'zerklucio@gmail.com'];
     if (user.email && superAdmins.includes(user.email.toLowerCase().trim())) {
         return {
-            sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, nexus: true, bitacora: true },
+            sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, bitacora: true },
             proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
             proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
             documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
@@ -114,7 +114,7 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
     if (error && error.code !== 'PGRST116') throw new Error(`Error fetching permissions: ${error.message}`);
 
     const defaultPermissions: UserPermissions = {
-      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, nexus: true, bitacora: true },
+      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, bitacora: true },
       proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
       proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
       documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
@@ -131,7 +131,7 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
     if (!data || !data.permissions) return defaultPermissions;
     const dbPerms = data.permissions;
     return {
-        sidebar: { ...defaultPermissions.sidebar, ...(dbPerms.sidebar || {}) },
+        sidebar: { ...defaultPermissions.sidebar, ...(dbPerms.sidebar || {}), codex: dbPerms.sidebar?.codex ?? dbPerms.sidebar?.nexus ?? defaultPermissions.sidebar.codex },
         proyectos: { ...defaultPermissions.proyectos, ...(dbPerms.proyectos || {}) },
         proyectos_documentos: { ...defaultPermissions.proyectos_documentos, ...(dbPerms.proyectos_documentos || {}) },
         documentos: { ...defaultPermissions.documentos, ...(dbPerms.documentos || {}) },
@@ -165,14 +165,30 @@ export const getAppModules = async (): Promise<AppModule[]> => {
     const { data, error } = await supabase.from('app_modules').select('*');
     if (error) throw error;
     return data.map((m: any) => ({
-        id: m.id, label: m.label, subLabel: m.sub_label, url: m.url, x: Number(m.x), y: Number(m.y), status: m.status, connectionSide: m.connection_side, laneOffset: Number(m.lane_offset)
+        id: m.id, 
+        label: m.label, 
+        subLabel: m.sub_label, 
+        url: m.url, 
+        x: Number(m.x), 
+        y: Number(m.y), 
+        status: m.status, 
+        connectionSide: m.connection_side, 
+        laneOffset: Number(m.lane_offset)
     }));
 };
 
 export const upsertAppModule = async (module: AppModule) => {
-    // Fix: Access properties from 'module' object using camelCase names as defined in AppModule interface.
     const { error } = await supabase.from('app_modules').upsert({
-        id: module.id, label: module.label, sub_label: module.subLabel, url: module.url, x: module.x, y: module.y, status: module.status, connection_side: module.connectionSide, lane_offset: module.laneOffset, updated_at: new Date().toISOString()
+        id: module.id, 
+        label: module.label, 
+        sub_label: module.subLabel, 
+        url: module.url, 
+        x: module.x, 
+        y: module.y, 
+        status: module.status, 
+        connection_side: module.connectionSide, 
+        lane_offset: module.laneOffset, 
+        updated_at: new Date().toISOString()
     });
     if (error) throw error;
 };
@@ -186,7 +202,7 @@ export const getProjects = async (): Promise<Project[]> => {
     const { data, error } = await supabase.from('projects').select('*').order('created_at', { ascending: false });
     if (error) throw error;
     return data ? data.map(item => ({
-        id: item.id, name: item.name || 'Proyecto Sin Título', description: item.description || '', objective: item.objective || '', status: item.status || ProjectStatus.NUEVO, startDate: item.start_date || new Date().toISOString().split('T')[0], endDate: item.end_date || '', team: item.team || [], leader: item.leader || '',
+        id: item.id, name: item.name || 'Proyecto Sin Título', description: item.description || '', objective: item.objective || '', status: item.status || ProjectStatus.NUEVO, startDate: item.start_date || new Date().toISOString().split('T')[0], endDate: item.end_date || '', team: item.team || [], leader: item.leader || '', ishikawaEnabled: item.ishikawa_enabled ?? true, executiveSummary: item.executive_summary || '', finalConclusions: item.final_conclusions || '',
     })) : [];
 };
 
@@ -194,19 +210,19 @@ export const addProject = async (project: Omit<Project, 'id'>): Promise<Project>
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('User not authenticated.');
     const { data, error } = await supabase.from('projects').insert({
-        user_id: session.user.id, name: project.name, description: project.description, objective: project.objective, status: project.status, start_date: project.startDate, end_date: project.endDate || null, team: project.team, leader: project.leader,
+        user_id: session.user.id, name: project.name, description: project.description, objective: project.objective, status: project.status, start_date: project.startDate, end_date: project.endDate || null, team: project.team, leader: project.leader, ishikawa_enabled: project.ishikawaEnabled, executive_summary: project.executiveSummary, final_conclusions: project.finalConclusions,
     }).select().single();
     if (error) throw error;
-    return { id: data.id, name: data.name, description: data.description, objective: data.objective, status: data.status, startDate: data.start_date, endDate: data.end_date || '', team: data.team, leader: data.leader };
+    return { id: data.id, name: data.name, description: data.description, objective: data.objective, status: data.status, startDate: data.start_date, endDate: data.end_date || '', team: data.team, leader: data.leader, ishikawaEnabled: data.ishikawa_enabled, executiveSummary: data.executive_summary, finalConclusions: data.final_conclusions };
 };
 
 export const updateProject = async (project: Project): Promise<Project | null> => {
     const { id, ...projectData } = project;
-    const { data, error } = await supabase.from('projects').update({
-        name: projectData.name, description: projectData.description, objective: projectData.objective, status: projectData.status, start_date: projectData.startDate, end_date: projectData.endDate || null, team: projectData.team, leader: projectData.leader,
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('projects').update({
+        name: projectData.name, description: projectData.description, objective: projectData.objective, status: projectData.status, start_date: projectData.startDate, end_date: projectData.endDate || null, team: projectData.team, leader: projectData.leader, ishikawa_enabled: projectData.ishikawaEnabled, executive_summary: projectData.executiveSummary, final_conclusions: projectData.finalConclusions,
     }).eq('id', id).select().single();
     if (error) return null;
-    return { id: data.id, name: data.name, description: data.description, objective: data.objective, status: data.status, startDate: data.start_date, endDate: data.end_date || '', team: data.team, leader: data.leader };
+    return { id: data.id, name: data.name, description: data.description, objective: data.objective, status: data.status, startDate: data.start_date, endDate: data.end_date || '', team: data.team, leader: data.leader, ishikawaEnabled: data.ishikawa_enabled, executiveSummary: data.executive_summary, finalConclusions: data.final_conclusions };
 };
 
 export const deleteProject = async (projectId: string) => {
@@ -241,7 +257,8 @@ export const getTasks = async (): Promise<ProjectTask[]> => {
                     startDate: taskData.startDate || '', 
                     duration: taskData.duration || 1, 
                     parentId: taskData.parentId || null,
-                    assignedTo: item.assigned_to || ''
+                    assignedTo: item.assigned_to || '',
+                    comments: item.task_comments || ''
                 });
             }
         } catch (e) {}
@@ -257,7 +274,8 @@ export const addTask = async (task: Omit<ProjectTask, 'id'>): Promise<ProjectTas
         title: task.title, 
         type: ContentType.TASK, 
         assigned_to: task.assignedTo || null,
-        task_status: task.status, // Guardar en columna dedicada
+        task_status: task.status, 
+        task_comments: task.comments || null,
         data: JSON.stringify({ 
             projectId: task.projectId, 
             completed: task.status === 'completed', 
@@ -275,8 +293,9 @@ export const addTask = async (task: Omit<ProjectTask, 'id'>): Promise<ProjectTas
         status: data.task_status as TaskStatus, 
         startDate: taskData.startDate, 
         duration: taskData.duration, 
-        parentId: taskData.parentId,
-        assignedTo: data.assigned_to || ''
+        parentId: data.parentId,
+        assignedTo: data.assigned_to || '',
+        comments: data.task_comments || ''
     };
 };
 
@@ -284,7 +303,8 @@ export const updateTask = async (task: ProjectTask): Promise<ProjectTask> => {
     const { data, error } = await supabase.from('content').update({
         title: task.title, 
         assigned_to: task.assignedTo || null,
-        task_status: task.status, // Actualizar columna dedicada
+        task_status: task.status, 
+        task_comments: task.comments || null,
         data: JSON.stringify({ 
             projectId: task.projectId, 
             completed: task.status === 'completed', 
@@ -303,7 +323,8 @@ export const updateTask = async (task: ProjectTask): Promise<ProjectTask> => {
         startDate: taskData.startDate, 
         duration: taskData.duration, 
         parentId: taskData.parentId,
-        assignedTo: data.assigned_to || ''
+        assignedTo: data.assigned_to || '',
+        comments: data.task_comments || ''
     };
 };
 
@@ -321,7 +342,7 @@ export const getFolders = async (): Promise<Folder[]> => {
 export const addFolder = async (name: string, parentId: string | null): Promise<Folder> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
-    const { data, error } = await supabase.from('folders').insert({ name: name.trim(), user_id: user.id, parent_id: parentId }).select('id, name, parent_id').single();
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('folders').insert({ name: name.trim(), user_id: user.id, parent_id: parentId }).select('id, name, parent_id').single();
     if (error) throw error;
     return { id: data.id, name: data.name, parentId: data.parent_id };
 };
@@ -358,6 +379,59 @@ export const getSignedUrlForDocument = async (storagePath: string, options?: { d
     const { data, error } = await supabase.storage.from('user_files').createSignedUrl(storagePath, 3600, options);
     if (error) throw error;
     return data.signedUrl;
+};
+
+// --- PROJECT ATTACHMENTS (NUEVA LÓGICA JUNCTION TABLE) ---
+
+/**
+ * Obtiene todos los documentos vinculados a un proyecto, incluyendo:
+ * 1. Documentos con project_id directo.
+ * 2. Documentos vinculados a través de la tabla 'project_document_attachments'.
+ */
+export const getProjectFullDocuments = async (projectId: string): Promise<Document[]> => {
+    // 1. Obtener docs directos
+    const { data: directDocs, error: directError } = await supabase.from('documents').select('*').eq('project_id', projectId);
+    if (directError) throw directError;
+
+    // 2. Obtener IDs de la tabla de cruce
+    const { data: attachments, error: attachError } = await supabase.from('project_document_attachments').select('document_id').eq('project_id', projectId);
+    if (attachError) throw attachError;
+
+    if (attachments.length === 0) return directDocs.map(doc => ({ id: doc.id, name: doc.name, folderId: doc.folder_id, createdAt: doc.created_at, size: doc.size, mimeType: doc.mime_type, storagePath: doc.storage_path, projectId: doc.project_id }));
+
+    const attachedIds = attachments.map(a => a.document_id);
+
+    // 3. Obtener los documentos físicos correspondientes a esos IDs
+    const { data: attachedDocs, error: fetchError } = await supabase.from('documents').select('*').in('id', attachedIds);
+    if (fetchError) throw fetchError;
+
+    // Combinar y remover duplicados por si acaso
+    const combined = [...directDocs, ...attachedDocs];
+    const uniqueMap = new Map<string, any>();
+    combined.forEach(d => uniqueMap.set(d.id, d));
+
+    return Array.from(uniqueMap.values()).map(doc => ({ 
+        id: doc.id, name: doc.name, folderId: doc.folder_id, createdAt: doc.created_at, size: doc.size, mimeType: doc.mime_type, storagePath: doc.storage_path, projectId: doc.project_id 
+    }));
+};
+
+/**
+ * Vincula un documento existente con un proyecto.
+ */
+export const attachDocumentToProject = async (projectId: string, documentId: string): Promise<void> => {
+    const { error } = await supabase.from('project_document_attachments').insert({ project_id: projectId, document_id: documentId });
+    if (error) {
+        if (error.code === '23505') return; // Ignorar si ya está vinculado
+        throw error;
+    }
+};
+
+/**
+ * Desvincula un documento de un proyecto (borra de la tabla de cruce).
+ */
+export const detachDocumentFromProject = async (projectId: string, documentId: string): Promise<void> => {
+    const { error } = await supabase.from('project_document_attachments').delete().eq('project_id', projectId).eq('document_id', documentId);
+    if (error) throw error;
 };
 
 // --- EXTERNAL DATABASE FUNCTIONS ---
@@ -397,7 +471,7 @@ export const uploadExternalDocument = async (file: File, folderId: string, proje
 
 export const deleteExternalDocument = async (doc: Document): Promise<void> => {
     await supabaseExternal.storage.from('user_files').remove([doc.storagePath]);
-    const { error } = await supabaseExternal.from('documents').delete().eq('id', doc.id);
+    const { error = { message: 'Unknown error' } as any } = await supabaseExternal.from('documents').delete().eq('id', doc.id);
     if (error) throw error;
 };
 
@@ -407,7 +481,7 @@ export const getSignedUrlForExternalDocument = async (storagePath: string, optio
     return data.signedUrl;
 };
 
-// --- NEXUS PUBLICATION FUNCTIONS (REPLICANDO FUNCIONAMIENTO LOCAL) ---
+// --- CODEX PUBLICATION FUNCTIONS (REPLICANDO FUNCIONAMIENTO LOCAL) ---
 
 export interface PublishPayload {
     title: string;
@@ -517,7 +591,7 @@ export const getDepartments = async (): Promise<string[]> => {
 };
 
 export const getLinks = async (): Promise<LinkItem[]> => {
-    const { data, error } = await supabase.from('links').select('id, name, description, url').order('created_at', { ascending: false });
+    const { data, error } = await supabase.from('links').select('id, name, description, url, tags').order('created_at', { ascending: false });
     if (error) throw error;
     return data || [];
 };
@@ -525,19 +599,19 @@ export const getLinks = async (): Promise<LinkItem[]> => {
 export const addLink = async (link: Omit<LinkItem, 'id'>): Promise<LinkItem> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
-    const { data, error } = await supabase.from('links').insert({ user_id: user.id, ...link }).select().single();
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('links').insert({ user_id: user.id, ...link }).select().single();
     if (error) throw error;
     return data;
 };
 
 export const updateLink = async (link: LinkItem): Promise<LinkItem> => {
-    const { data, error } = await supabase.from('links').update({ name: link.name, description: link.description, url: link.url }).eq('id', link.id).select().single();
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('links').update({ name: link.name, description: link.description, url: link.url, tags: link.tags }).eq('id', link.id).select().single();
     if (error) throw error;
     return data;
 };
 
 export const deleteLink = async (linkId: string): Promise<void> => {
-    const { error } = await supabase.from('links').delete().eq('id', linkId);
+    const { error = { message: 'Unknown error' } as any } = await supabase.from('links').delete().eq('id', linkId);
     if (error) throw error;
 };
 
@@ -552,7 +626,7 @@ export const getAudits = async (): Promise<AuditItem[]> => {
 export const addAudit = async (audit: Omit<AuditItem, 'id'>): Promise<AuditItem> => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
-    const { data, error } = await supabase.from('audits').insert({
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('audits').insert({
         user_id: user.id, title: audit.title, date: audit.date, color: audit.color, recurrence: audit.recurrence, time_of_audit: audit.timeOfAudit || null, audit_type: audit.audit_type, content_text: audit.content_text, content_checklist: audit.content_checklist, note: audit.note,
     }).select().single();
     if (error) throw error;
@@ -561,7 +635,7 @@ export const addAudit = async (audit: Omit<AuditItem, 'id'>): Promise<AuditItem>
 
 export const updateAudit = async (audit: AuditItem): Promise<AuditItem> => {
     const { id, ...auditData } = audit;
-    const { data, error } = await supabase.from('audits').update({
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('audits').update({
         title: auditData.title, date: auditData.date, color: auditData.color, recurrence: auditData.recurrence, time_of_audit: auditData.timeOfAudit || null, audit_type: auditData.audit_type, content_text: auditData.content_text, content_checklist: auditData.content_checklist, note: auditData.note,
     }).eq('id', id).select().single();
     if (error) throw error;
@@ -569,7 +643,7 @@ export const updateAudit = async (audit: AuditItem): Promise<AuditItem> => {
 };
 
 export const deleteAudit = async (auditId: string): Promise<void> => {
-    const { error } = await supabase.from('links').delete().eq('id', auditId);
+    const { error = { message: 'Unknown error' } as any } = await supabase.from('links').delete().eq('id', auditId);
     if (error) throw error;
 };
 
@@ -625,20 +699,20 @@ export const getWhiteboardContent = async (id: string): Promise<SavedWhiteboard 
 
 export const addWhiteboard = async (name: string, content: WhiteboardState): Promise<SavedWhiteboard> => {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
-    const { data, error } = await supabase.from('whiteboards').insert({ name, content, user_id: user.id }).select().single();
+    if (!user) throw new Error("User not authenticated");
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('whiteboards').insert({ name, content, user_id: user.id }).select().single();
     if (error) throw error;
     return data;
 };
 
 export const updateWhiteboard = async (id: string, name: string, content: WhiteboardState): Promise<SavedWhiteboard> => {
-    const { data, error } = await supabase.from('whiteboards').update({ content, name, updated_at: new Date().toISOString() }).eq('id', id).select().single();
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('whiteboards').update({ content, name, updated_at: new Date().toISOString() }).eq('id', id).select().single();
     if (error) throw error;
     return data;
 };
 
 export const deleteWhiteboard = async (id: string): Promise<void> => {
-    const { error } = await supabase.from('whiteboards').delete().eq('id', id);
+    const { error = { message: 'Unknown error' } as any } = await supabase.from('whiteboards').delete().eq('id', id);
     if (error) throw error;
 };
 
@@ -665,7 +739,7 @@ export const getPasswordCategories = async (): Promise<PasswordCategory[]> => {
 
 export const addPasswordCategory = async (name: string): Promise<PasswordCategory> => {
     const targetId = await getVaultOwnerId();
-    const { data, error } = await supabase.from('password_categories').insert({ user_id: targetId, name: name.trim() }).select().single();
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('password_categories').insert({ user_id: targetId, name: name.trim() }).select().single();
     if (error) throw error;
     return data;
 };
@@ -673,33 +747,33 @@ export const addPasswordCategory = async (name: string): Promise<PasswordCategor
 export const deletePasswordCategory = async (categoryName: string): Promise<void> => {
     const targetId = await getVaultOwnerId();
     await supabase.from('passwords').update({ category: 'General' }).eq('user_id', targetId).eq('category', categoryName);
-    const { error } = await supabase.from('password_categories').delete().eq('user_id', targetId).eq('name', categoryName);
+    const { error = { message: 'Unknown error' } as any } = await supabase.from('password_categories').delete().eq('user_id', targetId).eq('name', categoryName);
     if (error) throw error;
 };
 
 export const getPasswords = async (): Promise<PasswordItem[]> => {
     const targetId = await getVaultOwnerId();
-    const { data, error } = await supabase.from('passwords').select('*').eq('user_id', targetId).neq('service', 'MASTER').order('service', { ascending: true });
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('passwords').select('*').eq('user_id', targetId).neq('service', 'MASTER').order('service', { ascending: true });
     if (error) throw error;
     return data || [];
 };
 
 export const addPassword = async (password: Omit<PasswordItem, 'id' | 'user_id'>): Promise<PasswordItem> => {
     const targetId = await getVaultOwnerId();
-    const { data, error } = await supabase.from('passwords').insert({ ...password, user_id: targetId }).select().single();
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('passwords').insert({ ...password, user_id: targetId }).select().single();
     if (error) throw error;
     return data;
 };
 
 export const updatePassword = async (password: Omit<PasswordItem, 'user_id'>): Promise<PasswordItem> => {
     const { id, ...passwordData } = password;
-    const { data, error } = await supabase.from('passwords').update(passwordData).eq('id', id).select().single();
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('passwords').update(passwordData).eq('id', id).select().single();
     if (error) throw error;
     return data;
 };
 
 export const deletePassword = async (passwordId: string): Promise<void> => {
-    const { error } = await supabase.from('passwords').delete().eq('id', passwordId);
+    const { error = { message: 'Unknown error' } as any } = await supabase.from('passwords').delete().eq('id', passwordId);
     if (error) throw error;
 };
 
@@ -720,7 +794,7 @@ export const setMasterPasswordHash = async (hash: string): Promise<void> => {
 export const addContentItem = async (content: Omit<Content, 'id'>): Promise<Content> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) throw new Error('User not authenticated.');
-    const { data, error } = await supabase.from('content').insert({ user_id: session.user.id, title: content.title, type: content.type, data: content.data }).select().single();
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from('content').insert({ user_id: session.user.id, title: content.title, type: content.type, data: content.data }).select().single();
     if (error) throw error;
     return data as Content;
 };
@@ -742,13 +816,13 @@ export const addWhiteboardItem = async (item: Omit<WhiteboardItemOld, 'id' | 'us
 
 export const updateWhiteboardItem = async (item: WhiteboardItemOld): Promise<WhiteboardItemOld> => {
     const { id, ...itemData } = item;
-    const { data, error } = await supabase.from(LIVE_WHITEBOARD_TABLE).update(itemData).eq('id', id).select().single();
+    const { data, error = { message: 'Unknown error' } as any } = await supabase.from(LIVE_WHITEBOARD_TABLE).update(itemData).eq('id', id).select().single();
     if (error) throw error;
     return data;
 };
 
 export const deleteLiveWhiteboardItem = async (id: string): Promise<void> => {
-    const { error } = await supabase.from(LIVE_WHITEBOARD_TABLE).delete().eq('id', id);
+    const { error = { message: 'Unknown error' } as any } = await supabase.from(LIVE_WHITEBOARD_TABLE).delete().eq('id', id);
     if (error) throw error;
 };
 
@@ -762,7 +836,7 @@ export const subscribeToLiveWhiteboardItems = (onInsert: (newItem: WhiteboardIte
 };
 
 export const uploadFile = async (file: File): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabase.auth.getSession();
     if (!user) throw new Error('User not authenticated');
     const filePath = `${user.id}/UPLOADS/${uuidv4()}-${sanitizeFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage.from('user_files').upload(filePath, file);
