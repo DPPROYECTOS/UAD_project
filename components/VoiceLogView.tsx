@@ -1,6 +1,17 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { MicrophoneIcon, XCircleIcon, ClipboardListIcon, TrashIcon, CheckCircleIcon, InformationCircleIcon } from './Icons';
+import { GoogleGenAI } from '@google/genai';
+import { 
+    MicrophoneIcon, 
+    XCircleIcon, 
+    ClipboardListIcon, 
+    TrashIcon, 
+    CheckCircleIcon, 
+    InformationCircleIcon, 
+    SparklesIcon,
+    RefreshIcon
+} from './Icons';
+import Spinner from './Spinner';
 
 // Augment window type for Web Speech API
 declare global {
@@ -17,28 +28,31 @@ const VoiceLogView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(true);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isRefining, setIsRefining] = useState(false);
 
-  // Refs
+  // Refs para control de flujo
   const isListeningRef = useRef(false);
   const recognitionRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-  // Store the committed transcript to avoid dependency loops and duplication
-  const transcriptRef = useRef(''); 
+  
+  // Fuente de verdad: Un Mapa que vincula Índice -> Texto Finalizado
+  // Esto evita el "HOLA HOLA HOLA" porque el índice 1 siempre será el mismo hueco en el mapa
+  const sessionResultsMap = useRef<Map<number, string>>(new Map());
+  const historyTranscript = useRef<string>('');
 
   useEffect(() => {
-    // Check browser support
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
       setIsSupported(false);
-      setError("Tu navegador no soporta la API de reconocimiento de voz nativa (Web Speech API). Intenta usar Google Chrome.");
+      setError("Navegador no compatible con dictado nativo.");
       return;
     }
 
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
 
-    recognition.continuous = true; // Keep listening even if the user pauses
-    recognition.interimResults = true; // Show words as they are being spoken
-    recognition.lang = 'es-ES'; // Set language to Spanish
+    recognition.continuous = true; 
+    recognition.interimResults = true; 
+    recognition.lang = 'es-ES'; 
 
     recognition.onstart = () => {
       setIsListening(true);
@@ -47,54 +61,56 @@ const VoiceLogView: React.FC = () => {
 
     recognition.onresult = (event: any) => {
       let interim = '';
-      let newFinal = '';
-
-      // Iterate through results
+      
+      // Procesamos TODOS los resultados actuales desde el inicio de esta ráfaga
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          newFinal += event.results[i][0].transcript;
+        const result = event.results[i];
+        const text = result[0].transcript;
+        
+        if (result.isFinal) {
+          // Guardamos en el mapa por índice. 
+          // Si el navegador repite el índice i, simplemente se sobrescribe, NO SE SUMA.
+          sessionResultsMap.current.set(i, text.trim());
         } else {
-          interim += event.results[i][0].transcript;
+          interim = text;
         }
       }
 
-      if (newFinal) {
-          // Append to ref source of truth
-          transcriptRef.current += (transcriptRef.current ? ' ' : '') + capitalizeFirstLetter(newFinal.trim());
-          setTranscript(transcriptRef.current);
-      }
+      // Construimos el texto de la sesión actual uniendo las piezas del mapa
+      const sessionFinalText = Array.from(sessionResultsMap.current.values()).join(' ');
+      
+      // El resultado final es el historial acumulado + lo nuevo de esta sesión
+      const fullText = (historyTranscript.current + ' ' + sessionFinalText).trim();
+      
+      setTranscript(fullText);
       setInterimTranscript(interim);
       
-      // Auto-scroll to bottom
       if (scrollRef.current) {
         scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
       }
     };
 
     recognition.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
       if (event.error === 'not-allowed') {
-        setError("Permiso de micrófono denegado.");
+        setError("Acceso al micrófono bloqueado.");
         isListeningRef.current = false;
         setIsListening(false);
-      } else if (event.error === 'no-speech') {
-        // Ignore no-speech errors
-      } else {
-        if (event.error !== 'aborted') {
-             setError(`Error: ${event.error}`);
-        }
       }
     };
 
     recognition.onend = () => {
-      // Logic: If the user intends to be listening (ref is true), but it stopped, restart it.
+      // Al terminar una ráfaga, consolidamos el mapa en el historial y limpiamos
+      if (sessionResultsMap.current.size > 0) {
+          const sessionText = Array.from(sessionResultsMap.current.values()).join(' ');
+          historyTranscript.current = (historyTranscript.current + ' ' + sessionText).trim();
+          sessionResultsMap.current.clear();
+      }
+
       if (isListeningRef.current) {
          try {
              recognition.start();
          } catch (e) {
-             console.warn("Failed to restart recognition immediately", e);
              setIsListening(false);
-             isListeningRef.current = false;
          }
       } else {
          setIsListening(false);
@@ -104,7 +120,6 @@ const VoiceLogView: React.FC = () => {
     recognitionRef.current = recognition;
 
     return () => {
-      // Cleanup on unmount
       isListeningRef.current = false;
       if (recognitionRef.current) {
         recognitionRef.current.stop();
@@ -112,154 +127,151 @@ const VoiceLogView: React.FC = () => {
     };
   }, []);
 
-  const capitalizeFirstLetter = (string: string) => {
-    if (!string) return '';
-    return string.charAt(0).toUpperCase() + string.slice(1);
-  };
-
   const toggleListening = () => {
     if (isListeningRef.current) {
-      // Stop
-      isListeningRef.current = false; // Update ref first to prevent auto-restart in onend
+      isListeningRef.current = false;
       recognitionRef.current?.stop();
-      setIsListening(false);
     } else {
-      // Start
       isListeningRef.current = true;
       try {
         recognitionRef.current?.start();
         setIsListening(true);
-        setError(null);
       } catch (err) {
-        console.warn("Recognition start failed or already started", err);
         isListeningRef.current = false;
-        setIsListening(false);
       }
     }
   };
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(transcript);
-    setCopySuccess(true);
-    setTimeout(() => setCopySuccess(false), 2000);
-  };
+  const handleRefineWithAI = async () => {
+    if (!transcript || isRefining) return;
+    
+    setIsRefining(true);
+    try {
+        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const response = await ai.models.generateContent({
+            model: 'gemini-3-flash-preview',
+            contents: `Eres un editor experto. Toma la siguiente transcripción de voz (que puede tener palabras repetidas, falta de puntuación o errores de audio) y límpiala para que sea un texto profesional, coherente y fluido. NO añadas información que no esté allí, solo corrige y formatea. Texto: "${transcript}"`,
+        });
 
-  const handleClear = () => {
-    if (window.confirm("¿Borrar toda la bitácora actual?")) {
-        // We need to abort to clear the recognition engine's internal buffer
-        const wasListening = isListeningRef.current;
-        isListeningRef.current = false; // Prevent immediate restart loop during abort
-        
-        recognitionRef.current?.abort();
-        
-        transcriptRef.current = '';
-        setTranscript('');
-        setInterimTranscript('');
-
-        // Restart if it was listening
-        if (wasListening) {
-            setTimeout(() => {
-                isListeningRef.current = true;
-                try { recognitionRef.current?.start(); } catch(e) {}
-            }, 100);
+        if (response.text) {
+            const refined = response.text.trim();
+            setTranscript(refined);
+            historyTranscript.current = refined;
+            sessionResultsMap.current.clear();
         }
+    } catch (err) {
+        console.error("AI Refine error", err);
+        setError("No se pudo conectar con el motor de IA para pulir el texto.");
+    } finally {
+        setIsRefining(false);
     }
   };
 
-  if (!isSupported) {
-    return (
-        <div className="flex items-center justify-center h-full text-red-500 bg-light-bg dark:bg-dark-bg p-8 rounded-lg border border-red-500/50">
-            <XCircleIcon className="h-12 w-12 mr-4" />
-            <div>
-                <h2 className="text-xl font-bold">Navegador No Soportado</h2>
-                <p>{error}</p>
-            </div>
-        </div>
-    );
-  }
+  const handleClear = () => {
+    if (window.confirm("¿Vaciar registro?")) {
+        historyTranscript.current = '';
+        sessionResultsMap.current.clear();
+        setTranscript('');
+        setInterimTranscript('');
+    }
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] gap-4">
-      {/* Header / Control Deck */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-light-card dark:bg-dark-card p-6 rounded-lg border border-light-border dark:border-dark-border shadow-md">
         <div>
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-                <span className={`flex h-4 w-4 rounded-full ${isListening ? 'bg-red-500 animate-pulse' : 'bg-gray-400'}`}></span>
+            <h1 className="text-3xl font-bold flex items-center gap-3 text-light-text dark:text-dark-text">
+                <div className={`p-2 rounded-lg ${isListening ? 'bg-red-500 animate-pulse' : 'bg-slate-200 dark:bg-slate-800'}`}>
+                    <MicrophoneIcon className={`h-6 w-6 ${isListening ? 'text-white' : 'text-slate-500'}`} />
+                </div>
                 Bitácora de Voz
             </h1>
-            <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1 font-mono text-sm">
-                SISTEMA DE TRANSCRIPCIÓN NATIVO v1.0
+            <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1 font-mono text-[10px] uppercase tracking-[0.2em]">
+                Engine: Indexed-Buffer STT v3.0
             </p>
         </div>
         
         <div className="flex items-center gap-3 mt-4 sm:mt-0">
+            {transcript && (
+                <button
+                    onClick={handleRefineWithAI}
+                    disabled={isRefining || isListening}
+                    className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-600 to-blue-600 text-white rounded-md text-sm font-bold shadow-lg hover:from-indigo-500 hover:to-blue-500 disabled:opacity-50 transition-all"
+                >
+                    {isRefining ? <RefreshIcon className="h-4 w-4 animate-spin" /> : <SparklesIcon className="h-4 w-4" />}
+                    {isRefining ? 'PROCESANDO...' : 'PULIR CON IA'}
+                </button>
+            )}
             <button
                 onClick={toggleListening}
-                className={`flex items-center gap-2 px-6 py-3 rounded-md font-bold transition-all uppercase tracking-wider ${
+                className={`flex items-center gap-2 px-6 py-2.5 rounded-md font-black transition-all uppercase tracking-widest text-xs border-2 ${
                     isListening 
-                    ? 'bg-red-500/10 text-red-500 border border-red-500 hover:bg-red-500/20 shadow-[0_0_15px_rgba(239,68,68,0.4)]' 
-                    : 'bg-brand-primary text-white hover:bg-brand-secondary shadow-lg'
+                    ? 'bg-red-500/10 border-red-500 text-red-500 shadow-[0_0_15px_rgba(239,68,68,0.3)]' 
+                    : 'bg-brand-primary border-brand-primary text-white hover:bg-brand-secondary'
                 }`}
             >
-                <MicrophoneIcon className={`h-5 w-5 ${isListening ? 'animate-bounce' : ''}`} />
-                {isListening ? 'DETENER GRABACIÓN' : 'INICIAR GRABACIÓN'}
+                {isListening ? 'DETENER' : 'GRABAR'}
             </button>
         </div>
       </div>
 
-      {/* Terminal View */}
-      <div className="flex-1 bg-black rounded-lg border border-gray-800 shadow-inner relative overflow-hidden flex flex-col font-mono">
-        {/* Scanlines Effect */}
-        <div className="absolute inset-0 pointer-events-none z-10 opacity-[0.03]" 
-             style={{ backgroundImage: 'linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06))', backgroundSize: '100% 2px, 3px 100%' }}>
-        </div>
+      <div className="flex-1 bg-[#050b14] rounded-xl border border-slate-800 shadow-2xl relative overflow-hidden flex flex-col font-mono group">
+        <div className="absolute inset-0 pointer-events-none z-10 opacity-[0.03] bg-[radial-gradient(#3b82f6_1px,transparent_1px)] bg-[size:20px_20px]"></div>
         
-        {/* Top Bar Terminal */}
-        <div className="bg-gray-900 px-4 py-2 border-b border-gray-800 flex justify-between items-center text-xs text-gray-500 select-none">
-            <span>TERMINAL_OUTPUT_LOG.txt</span>
-            <span className={isListening ? 'text-green-500' : 'text-gray-600'}>{isListening ? '● RECIBIENDO SEÑAL' : '○ EN ESPERA'}</span>
+        <div className="bg-slate-900/80 backdrop-blur-sm px-4 py-2 border-b border-slate-800 flex justify-between items-center text-[9px] text-slate-500 font-bold tracking-widest z-20">
+            <span className="flex items-center gap-2">
+                <div className={`w-1.5 h-1.5 rounded-full ${isListening ? 'bg-red-500 animate-ping' : 'bg-slate-700'}`}></div>
+                VOICE_STREAM_BUFFER_DATA
+            </span>
+            <span className={isListening ? 'text-green-500' : 'text-slate-600'}>
+                {isListening ? 'RECEPCIÓN ACTIVA' : 'SISTEMA EN ESPERA'}
+            </span>
         </div>
 
-        {/* Content Area */}
-        <div ref={scrollRef} className="flex-1 p-6 overflow-y-auto custom-scrollbar relative z-0">
+        <div ref={scrollRef} className="flex-1 p-8 overflow-y-auto custom-scrollbar relative z-0">
             {transcript || interimTranscript ? (
-                <p className="text-green-400 text-lg leading-relaxed whitespace-pre-wrap">
+                <div className="text-blue-100 text-xl leading-relaxed whitespace-pre-wrap max-w-4xl mx-auto">
                     {transcript}
-                    <span className="text-green-200/70">{interimTranscript}</span>
-                    <span className="inline-block w-2.5 h-5 bg-green-500 ml-1 animate-pulse align-middle"></span>
-                </p>
+                    {interimTranscript && <span className="text-blue-500/50 italic ml-2"> {interimTranscript}...</span>}
+                    <span className="inline-block w-3 h-6 bg-blue-500 ml-2 animate-pulse align-middle"></span>
+                </div>
             ) : (
-                <div className="h-full flex flex-col items-center justify-center text-gray-700">
-                    <MicrophoneIcon className="h-16 w-16 mb-4 opacity-20" />
-                    <p>Inicia la grabación para comenzar a transcribir...</p>
+                <div className="h-full flex flex-col items-center justify-center text-slate-700">
+                    <MicrophoneIcon className="h-20 w-20 mb-4 opacity-5" />
+                    <p className="text-xs font-black uppercase tracking-[0.3em] opacity-20">Esperando señal de audio...</p>
                 </div>
             )}
         </div>
 
-        {/* Bottom Toolbar */}
-        <div className="bg-gray-900 p-3 border-t border-gray-800 flex justify-end gap-3 z-20">
-            <button 
-                onClick={handleCopy} 
-                disabled={!transcript}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-gray-300 rounded hover:bg-gray-700 disabled:opacity-50 text-xs font-bold uppercase transition-colors"
-            >
-                {copySuccess ? <CheckCircleIcon className="h-4 w-4 text-green-500"/> : <ClipboardListIcon className="h-4 w-4"/>}
-                {copySuccess ? 'Copiado' : 'Copiar Texto'}
-            </button>
+        <div className="bg-slate-900/80 backdrop-blur-sm p-4 border-t border-slate-800 flex justify-between items-center z-20">
+            <div className="flex gap-2">
+                <button 
+                    onClick={() => {
+                        navigator.clipboard.writeText(transcript);
+                        setCopySuccess(true);
+                        setTimeout(() => setCopySuccess(false), 2000);
+                    }}
+                    disabled={!transcript}
+                    className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-slate-300 rounded hover:bg-slate-700 disabled:opacity-30 text-[10px] font-black uppercase transition-all border border-slate-700"
+                >
+                    {copySuccess ? <CheckCircleIcon className="h-4 w-4 text-green-500"/> : <ClipboardListIcon className="h-4 w-4"/>}
+                    {copySuccess ? 'COPIADO' : 'COPIAR REGISTRO'}
+                </button>
+            </div>
             <button 
                 onClick={handleClear}
-                className="flex items-center gap-2 px-4 py-2 bg-red-900/20 text-red-400 border border-red-900/50 rounded hover:bg-red-900/40 text-xs font-bold uppercase transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-red-500/50 hover:text-red-500 text-[10px] font-black uppercase transition-colors"
             >
                 <TrashIcon className="h-4 w-4"/>
-                Limpiar
+                PURGAR PANTALLA
             </button>
         </div>
       </div>
       
       {error && (
-          <div className="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-4 py-3 rounded border border-red-200 dark:border-red-800 text-sm flex items-center">
-              <InformationCircleIcon className="h-5 w-5 mr-2" />
-              {error}
+          <div className="bg-red-500/10 text-red-500 px-4 py-3 rounded-lg border border-red-500/20 text-xs font-bold uppercase flex items-center shadow-lg">
+              <InformationCircleIcon className="h-4 w-4 mr-2" />
+              SYSTEM_ALERT: {error}
           </div>
       )}
     </div>
@@ -267,4 +279,3 @@ const VoiceLogView: React.FC = () => {
 };
 
 export default VoiceLogView;
-    

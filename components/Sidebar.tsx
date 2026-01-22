@@ -13,6 +13,7 @@ interface SidebarProps {
     setActiveView: (view: string) => void;
     currentTheme: string;
     onThemeChange: (themeName: string, customColors?: Record<string, string> | null) => void;
+    customThemeColors: Record<string, string> | null;
     onSecretTrigger: () => void;
     onSecretSequenceStep: (step: string) => void;
     onHideGamesTrigger: () => void;
@@ -54,7 +55,7 @@ const NavLink: React.FC<{
 );
 
 const Sidebar: React.FC<SidebarProps> = ({ 
-    isOpen, activeView, setActiveView, currentTheme, onThemeChange, onSecretTrigger,
+    isOpen, activeView, setActiveView, currentTheme, onThemeChange, customThemeColors, onSecretTrigger,
     onSecretSequenceStep, onHideGamesTrigger, isGamesSectionUnlocked,
     recordingStatus, recordingTime, uploadStatus, uploadMessage,
     onStartRecording, onTogglePauseResume, onStopRecording,
@@ -88,6 +89,17 @@ const Sidebar: React.FC<SidebarProps> = ({
         '--color-dark-text-secondary': '#8b949e',
     };
     const [customColors, setCustomColors] = useState(defaultCustomColors);
+
+    // Sync internal customization state with global theme preferences
+    useEffect(() => {
+        if (customThemeColors) {
+            // Si el usuario tiene colores guardados, aplicarlos al panel
+            setCustomColors(prev => ({ ...prev, ...customThemeColors }));
+        } else {
+            // CRÍTICO: Si no hay colores (nuevo usuario o cambio de sesión), resetear al valor por defecto
+            setCustomColors(defaultCustomColors);
+        }
+    }, [customThemeColors, user?.id]); // Escuchar cambios de usuario para limpiar rastro
 
     const interfaceColorKeys = [
         '--color-brand-primary', '--color-brand-secondary', '--color-light-bg', 

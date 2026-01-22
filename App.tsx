@@ -390,13 +390,22 @@ const App: React.FC = () => {
             if (!supabaseUser) return;
             const permissions = await getUserPermissions();
             setUserPermissions(permissions);
+            
+            // RESET THEME STATES BEFORE LOADING NEW ONES TO PREVENT LEAKAGE FROM PREVIOUS USER
             const themePrefs = await getUserThemePreferences();
             if (themePrefs) {
                 setTheme(themePrefs.theme_name);
                 if (themePrefs.theme_name === 'custom' && themePrefs.custom_theme_colors) {
                     setCustomThemeColors(themePrefs.custom_theme_colors as Record<string, string>);
+                } else {
+                    setCustomThemeColors(null);
                 }
+            } else {
+                // If user has no prefs, force defaults
+                setTheme('dark');
+                setCustomThemeColors(null);
             }
+
             let finalAvatarUrl: string | null = null;
             const avatarPath = supabaseUser.user_metadata?.avatar_path;
             if (avatarPath) {
@@ -431,10 +440,13 @@ const App: React.FC = () => {
         };
         Promise.all([fetchData(), fetchApiKey()]).finally(() => { setAuthLoading(false); });
     } else {
+        // FULL RESET ON LOGOUT
         setProjects([]); setTasks([]); setFolders([]); setDocuments([]); setLinks([]); setAudits([]); setActivities([]);
         setReadNotificationIds(new Set()); setSelectedProject(null); setActiveView('Dashboard'); setGeminiApiKey(null);
         setApiKeyError(null); setUserPermissions(null); setIsGamesSectionUnlocked(false); setHideGamesClickCount(0);
         setExternalFolders([]); setExternalDocuments([]); setExternalDataLoaded(false);
+        setTheme('dark');
+        setCustomThemeColors(null);
     }
   }, [user]);
   
@@ -865,7 +877,7 @@ const App: React.FC = () => {
   return (
     <div className="flex h-screen bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text font-sans">
       <ToastContainer notifications={toastNotifications} onDismiss={removeToast} />
-      <Sidebar isOpen={true} activeView={activeView} setActiveView={changeView} currentTheme={theme} onThemeChange={handleThemeChange} onSecretTrigger={handleSecretTrigger} onSecretSequenceStep={handleSecretSequenceStep} onHideGamesTrigger={handleHideGamesTrigger} isGamesSectionUnlocked={isGamesSectionUnlocked} recordingStatus={recordingStatus} recordingTime={recordingTime} uploadStatus={uploadStatus} uploadMessage={uploadMessage} onStartRecording={startRecording} onTogglePauseResume={togglePauseResume} onStopRecording={stopRecording} user={user} userPermissions={userPermissions} setIsMasterBypassActive={setIsMasterBypassActive} />
+      <Sidebar isOpen={true} activeView={activeView} setActiveView={changeView} currentTheme={theme} onThemeChange={handleThemeChange} customThemeColors={customThemeColors} onSecretTrigger={handleSecretTrigger} onSecretSequenceStep={handleSecretSequenceStep} onHideGamesTrigger={handleHideGamesTrigger} isGamesSectionUnlocked={isGamesSectionUnlocked} recordingStatus={recordingStatus} recordingTime={recordingTime} uploadStatus={uploadStatus} uploadMessage={uploadMessage} onStartRecording={startRecording} onTogglePauseResume={togglePauseResume} onStopRecording={stopRecording} user={user} userPermissions={userPermissions} setIsMasterBypassActive={setIsMasterBypassActive} />
       <div className={`flex-1 flex flex-col transition-all duration-300 ml-64 overflow-x-hidden`}>
         <Header user={user!} onUpdateAvatar={handleUpdateAvatar} isAvatarLoading={isAvatarLoading} onLogout={handleLogout} unreadCount={unreadCount} notifications={activities} readNotificationIds={readNotificationIds} onMarkAsRead={markAsRead} onNavigate={changeView} onMarkAllAsRead={markAllAsRead} recordingStatus={recordingStatus} recordingTime={recordingTime} isEditor={true} />
         <main className="flex-1 p-6 lg:p-8 overflow-y-auto"> <div className="animate-fade-in"> {renderActiveView()} </div> </main>

@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Project, ProjectTask, ProjectStatus, Document, Folder, UserPermissions, User } from '../../types';
-import { ArrowLeftIcon, TrashIcon, PencilAltIcon, SparklesIcon, DocumentTextIcon, RefreshIcon, XIcon, DocumentDownloadIcon } from '../Icons';
+import { ArrowLeftIcon, TrashIcon, PencilAltIcon, SparklesIcon, DocumentTextIcon, RefreshIcon, XIcon, DocumentDownloadIcon, PhotographIcon } from '../Icons';
 import ConfirmationModal from './ConfirmationModal';
 import ProjectTasksTab from './ProjectTasksTab';
 import ProjectDocumentsTab from './ProjectDocumentsTab';
@@ -11,6 +11,7 @@ import { generateCorporateReport } from '../../services/reportService';
 import { getIshikawaDiagram, getGeminiApiKey, getProjectFullDocuments, attachDocumentToProject, detachDocumentFromProject } from '../../services/supabaseService';
 import Spinner from '../Spinner';
 import FileViewerModal from '../FileViewerModal';
+import html2canvas from 'html2canvas';
 
 interface ProjectDetailViewProps {
   project: Project;
@@ -41,7 +42,11 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
   const [isIshikawaConfirmOpen, setIsIshikawaConfirmOpen] = useState(false);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [isDownloadingReport, setIsDownloadingReport] = useState(false);
+  const [isCapturingGantt, setIsCapturingGantt] = useState(false);
   
+  // Ref para capturar el gráfico de Gantt
+  const ganttRef = useRef<HTMLDivElement>(null);
+
   // --- Local Documents Sync (For Attachments Support) ---
   const [syncedDocuments, setSyncedDocuments] = useState<Document[]>([]);
   const [isSyncingDocs, setIsSyncingDocs] = useState(false);
@@ -59,7 +64,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
           }
       };
       sync();
-  }, [project.id, documents]); // Re-sync when global documents change (upload/delete)
+  }, [project.id, documents]); 
 
   const handleAttachDocument = async (docId: string) => {
       try {
@@ -72,11 +77,9 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
   };
 
   const handleDetachDocument = async (doc: Document) => {
-      // Si el doc tiene project_id directo, se borra físicamente
       if (doc.projectId === project.id) {
           await onDeleteDocument(doc);
       } else {
-          // Si no, solo se desvincula de la tabla de cruce
           try {
               await detachDocumentFromProject(project.id, doc.id);
               const fullDocs = await getProjectFullDocuments(project.id);
@@ -87,7 +90,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
       }
   };
   
-  // --- Report Preview State ---
   const [previewFile, setPreviewFile] = useState<{ id: string; url: string; name: string; mimeType: string; } | null>(null);
 
   const [isEditing, setIsEditing] = useState(false);
@@ -144,7 +146,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
           const wordBlob = await createReportBlob();
           const url = URL.createObjectURL(wordBlob);
           setPreviewFile({
-              id: 'temp-report', // Usamos este ID para que el visor sepa que es temporal
+              id: 'temp-report',
               url: url,
               name: `REPORTE_${project.name.replace(/\s+/g, '_')}.docx`,
               mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -174,6 +176,50 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
           alert("Error al descargar el reporte corporativo.");
       } finally {
           setIsDownloadingReport(false);
+      }
+  };
+
+  /**
+   * Captura el gráfico de Gantt y lo descarga como PNG con fondo blanco.
+   */
+  const handleDownloadGanttImage = async () => {
+      if (!ganttRef.current || isCapturingGantt) return;
+      
+      setIsCapturingGantt(true);
+      try {
+          // Buscamos el elemento interno real que tiene el grid (GanttChart lo envuelve en un scroll div)
+          const target = ganttRef.current.querySelector('.relative.text-sm') as HTMLElement;
+          if (!target) throw new Error("No se encontró el elemento raíz del gráfico.");
+
+          const canvas = await html2canvas(target, {
+              scale: 2, // Doble escala para alta calidad
+              useCORS: true,
+              backgroundColor: '#ffffff', // Fondo blanco para la descarga
+              logging: false,
+              onclone: (clonedDoc) => {
+                  // Forzamos el modo claro en el documento clonado para asegurar legibilidad
+                  clonedDoc.documentElement.classList.remove('dark');
+                  
+                  // Asegurar que el elemento clonado sea visible y tenga fondo blanco para la captura
+                  const el = clonedDoc.querySelector('.relative.text-sm') as HTMLElement;
+                  if (el) {
+                      el.style.overflow = 'visible';
+                      el.style.backgroundColor = '#ffffff';
+                      el.style.color = '#000000';
+                  }
+              }
+          });
+
+          const dataUrl = canvas.toDataURL('image/png');
+          const link = document.createElement('a');
+          link.download = `GANTT_${project.name.replace(/\s+/g, '_')}.png`;
+          link.href = dataUrl;
+          link.click();
+      } catch (error) {
+          console.error("Gantt Capture Error:", error);
+          alert("No se pudo generar la imagen del gráfico de Gantt.");
+      } finally {
+          setIsCapturingGantt(false);
       }
   };
 
@@ -366,9 +412,19 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
                     />;
       case 'Gantt':
              return (
-               <div className="bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border w-full">
-                 <h3 className="text-xl font-bold p-4 pb-2">Diagrama de Gantt del Proyecto</h3>
-                 <div className="overflow-x-auto p-4 gantt-scrollbar">
+               <div className="bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border w-full flex flex-col overflow-hidden">
+                 <div className="flex justify-between items-center p-4 border-b border-light-border dark:border-dark-border">
+                    <h3 className="text-xl font-bold">Diagrama de Gantt del Proyecto</h3>
+                    <button 
+                        onClick={handleDownloadGanttImage}
+                        disabled={isCapturingGantt || tasks.length === 0}
+                        className="flex items-center text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded bg-amber-500 hover:bg-amber-600 text-white shadow-md disabled:opacity-50 transition-colors"
+                    >
+                        {isCapturingGantt ? <Spinner size="sm" /> : <PhotographIcon className="h-4 w-4 mr-2" />}
+                        DESCARGAR CAPTURA (PNG)
+                    </button>
+                 </div>
+                 <div ref={ganttRef} className="overflow-x-auto p-4 gantt-scrollbar">
                     <GanttChart project={project} tasks={tasks} />
                  </div>
                </div>
@@ -417,7 +473,6 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
         {renderActiveTabContent()}
       </div>
 
-      {/* --- Universal Document Viewer for Word Report Preview --- */}
       {previewFile && (
           <FileViewerModal
               document={previewFile}
