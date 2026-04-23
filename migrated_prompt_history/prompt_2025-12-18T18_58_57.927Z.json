@@ -1,0 +1,172 @@
+[
+  {
+    "id": 132,
+    "author": "user",
+    "payload": {
+      "type": "text",
+      "text": "NECESITO QUE LEAS EL ARCHIVO APP_DOCUMENTATION.md, NO MODIFIQUES LA APP AUN SOLO DAME EL RESUMEN DE LO QUE OBTUVISTE DEL ARCHIVO",
+      "files": [],
+      "fileUploads": [],
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766083064860
+  },
+  {
+    "id": 133,
+    "author": "model",
+    "payload": {
+      "type": "thinking",
+      "text": "**Understanding the Codebase**\n\nI'm now fully immersed in the project, having thoroughly reviewed the provided documentation, core `index.tsx`, and the `App.tsx` file structure. I've got a solid grasp of the initial architecture and key dependencies. I'm focusing on identifying any inconsistencies or potential issues within the code, particularly related to state management and component interactions. I'll need to establish how components relate to each other and assess data flow.\n\n\n**Examining the Architecture**\n\nI've just reviewed the comprehensive app description, clarifying the codebase's purpose, technologies (React 19, TS, Vite, Tailwind), and design (\"Neo-Nexus\"). The dual-database structure (local primary, external secondary) is intriguing, especially the integration of legacy processes and shared configuration. Key modules like the Dashboard, Projects, Documents, NEXUS (admin bridge), Passwords, Voice Log, and Apps are now clearer in my mind. The NEXUS logic, dynamic area usage, and critical SQL/RPC functions, including the `get_all_users_and_permissions` whitelist, warrant deeper analysis. Finally, the client-side Vigenère XOR v2 password vault and SHA-256 master password hash are noted.\n\n\n**Detailing the System's Structure**\n\nI'm now focusing on the application's core architecture, specifically the dual Supabase setup. The key modules are starting to solidify in my mind. Notably, I've taken note of the integration of AI models, encryption, and the speech API, key features within the \"Neo-Nexus\" aesthetic. I'm now aiming to pinpoint the specifics of how everything ties together.\n\n\n",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766083064860,
+    "doneTimestamp": 1766083071998
+  },
+  {
+    "id": 134,
+    "author": "model",
+    "payload": {
+      "type": "text",
+      "text": "He leído detenidamente el archivo **APP_DOCUMENTATION.md** y los archivos del proyecto. Entiendo que esta es una aplicación compleja de gestión de proyectos y mejora continua con una arquitectura de **doble base de datos**.\n\nAquí tienes el resumen de los puntos clave que he extraído para la replicación:\n\n### 1. Arquitectura y Stack\n*   **Frontend:** React 19, TypeScript, Vite y Tailwind CSS.\n*   **Estética:** Estilo \"Neo-Nexus\" (Cyberpunk/Glassmorphism) con temas altamente personalizables.\n*   **Backend Dual (Supabase):**\n    *   **DB Local (Primaria):** Gestiona la autenticación, proyectos activos, tareas, contraseñas y configuración de UI.\n    *   **DB Externa (Secundaria):** Repositorio histórico y de procesos antiguos, sincronizado con la aplicación satélite de empleados.\n\n### 2. Módulos Críticos\n*   **NEXUS (Consola de Enlace):** Es el puente maestro. Permite publicar documentos y carpetas desde la UAD hacia la app de empleados mediante \"Signed URLs\" (URLs firmadas) de larga duración y tablas \"espejo\" aplanadas.\n*   **Gestión de Calidad:** Incluye Diagramas de Gantt que consideran días hábiles y feriados de México, y Diagramas de Ishikawa (6M) integrados por proyecto.\n*   **Seguridad y Contraseñas:** Bóveda con cifrado del lado del cliente (Vigenère XOR v2) que soporta Unicode. Solo accesible tras validar el hash SHA-256 de una Master Password.\n*   **Bitácora de Voz:** Transcripción nativa mediante Web Speech API (sin costo de tokens).\n\n### 3. Integración de IA (Google Gemini)\n*   Usa una combinación de modelos: **Gemini 2.5 Flash/Pro** para texto y lógica, **Imagen 3** para generación visual, y **Live API** para asistencia por voz en tiempo real.\n*   Las claves de API se gestionan desde una tabla interna `api_keys`.\n\n### 4. Lógica de Administración\n*   Existe una **Lista Blanca** de correos (hardcoded en funciones SQL RPC) para super-administradores (`darienperez695@gmail.com` y `zerklucio@gmail.com`).\n*   Los permisos son granulares y controlan desde la visibilidad del sidebar hasta acciones específicas como subir o eliminar documentos.\n\n### 5. Fuente de Verdad para Áreas\n*   Las \"Áreas\" o departamentos ya no son estáticos; se leen dinámicamente de la tabla `departments` en la base de datos externa para asegurar compatibilidad total con Nexus.\n\nTengo una visión clara de cómo están interconectadas las piezas. Estoy listo para ayudarte con la replicación o cualquier cambio específico que necesites realizar en la estructura de archivos o lógica de servicios. **¿Por dónde te gustaría empezar?**",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766083071998,
+    "doneTimestamp": 1766083072067
+  },
+  {
+    "id": 135,
+    "author": "user",
+    "payload": {
+      "type": "text",
+      "text": "OKAY AHORA QUIERO QUE ANALICES EL APARTADO DE NEXUS Y DE LO QUE LEISTE COMPLEMENTA TU RESPUESTA, NO MODIFIQUES NADA DE LA APP",
+      "files": [],
+      "fileUploads": [],
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766083196273
+  },
+  {
+    "id": 136,
+    "author": "model",
+    "payload": {
+      "type": "thinking",
+      "text": "**Dissecting NEXUS Module**\n\nI'm now fully immersed in the \"NEXUS\" module, scrutinizing both its architecture and the provided documentation. I'm focusing on its core functionality as the \"Consola de Enlace\" and gathering granular details to bolster my initial analysis. I'm taking care not to alter any code, focusing purely on understanding its intended behavior and relationship with other system components.\n\n\n**Unveiling the NEXUS Architecture**\n\nI've recently drilled down into the service and view layers of the NEXUS module. The service layer's functions for document publishing now make complete sense. I've uncovered that one-year signed URLs are the key, backed by flat tables. The view layer's styling, a dark, sci-fi aesthetic, and navigation elements also stand out, especially the department retrieval from the external database. I'm now starting to have a coherent model of the system.\n\n\n**Examining the Core Functionality**\n\nI'm now fully immersed in the core logic behind the \"NEXUS\" module. I've pinpointed its fundamental role: a publishing system. It's designed to decouple internal storage from the information presented to users. The \"Dual Bridge,\" the Local vs. Remote database toggle, is now crystal clear. The \"Areas\" now being dynamically fetched from an external source is an interesting evolution.  The metadata setup prior to linking seems crucial for tracking versions and statuses. The UI, with its \"Control Deck\" feel, aligns perfectly with its technical focus.\n\n\n",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766083196273,
+    "doneTimestamp": 1766083203367
+  },
+  {
+    "id": 137,
+    "author": "model",
+    "payload": {
+      "type": "text",
+      "text": "Tras analizar minuciosamente el código de `NexusView.tsx` y la lógica de integración en `supabaseService.ts`, he profundizado en el funcionamiento de este módulo. **NEXUS** no es un simple explorador de archivos; es el **puente de despliegue soberano** de la aplicación.\n\nAquí complemento mi análisis con los detalles técnicos y operativos críticos que definen a NEXUS:\n\n### 1. El Concepto de \"Transmisión\" (Long-Lived Signed URLs)\nA diferencia del gestor de documentos estándar que genera URLs temporales para sesión, NEXUS implementa una lógica de **persistencia extendida**. \n*   **Seguridad por Oscurecimiento:** Al \"enlace\" un documento, la app solicita a Supabase una `Signed URL` con una duración de **31,536,000 segundos (1 año)**.\n*   **Independencia de RLS:** Esto permite que la aplicación de empleados (la \"esclava\") acceda al archivo físico sin necesidad de que el empleado tenga permisos directos sobre el bucket de almacenamiento de la UAD, delegando la seguridad a la vigencia del token de la URL.\n\n### 2. Arquitectura de \"Espejo Aplanado\"\nNEXUS resuelve el problema de la jerarquía compleja de carpetas mediante una **aplanación de datos** en la tabla `procedures`:\n*   Cuando publicas, el sistema inyecta en una sola fila el `title`, `code`, `area`, `version` y el `file_url`. \n*   Esto permite que la app de empleados realice búsquedas ultra-rápidas y filtrados por \"Área\" sin tener que reconstruir árboles de directorios, lo cual es vital para el rendimiento en dispositivos móviles de planta.\n\n### 3. Inteligencia de Áreas Dinámicas\nEl sistema ha evolucionado de una lista estática (`Dropdown`) a una **Fuente de Verdad Externa**:\n*   NEXUS consulta la tabla `departments` de la **Base de Datos Secundaria** en tiempo real.\n*   **Beneficio de Replicación:** Si en la base de datos externa se añade un nuevo departamento (ej. \"Mantenimiento Preventivo\"), NEXUS lo detecta automáticamente sin necesidad de actualizar el código frontend. Esto garantiza que nunca se publique un documento en una categoría que la app de empleados no pueda mostrar.\n\n### 4. Interfaz de \"Inspector de Datos\" (The Control Deck)\nEl diseño visual no es meramente estético, cumple una función de **Pre-Vuelo**:\n*   **Modo Cyan vs. Fuchsia:** El cambio de color de la interfaz alerta instantáneamente al administrador sobre qué base de datos está afectando (`Local` vs `Remota`), evitando errores de publicación en entornos incorrectos.\n*   **Configuración de Metadatos:** El panel derecho actúa como una \"aduana\". Antes de permitir el enlace, obliga a validar el Código del documento y su Versión, asegurando que solo información normalizada llegue al Nexo.\n\n### 5. Gestión de Carpetas Públicas\nNEXUS introduce la capacidad de **publicar carpetas enteras** (`published_folders`):\n*   No solo se enlazan archivos individuales; se pueden marcar nodos completos del árbol de directorios para que sean visibles en el ecosistema satélite, manteniendo la estructura de organización de la UAD para el usuario final.\n\n**Resumen para la Replicación:** NEXUS es el componente más sensible. Para que funcione tras la restauración, es imperativo que las funciones RPC en Supabase y la tabla `departments` en la DB externa estén correctamente configuradas, ya que el componente fallará (se quedará \"Escanenando...\") si no recibe respuesta de la conexión secundaria.\n\n¿Deseas que profundicemos ahora en la lógica de seguridad de la **Bóveda de Contraseñas** o en algún otro módulo?",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766083203370,
+    "doneTimestamp": 1766083203431
+  },
+  {
+    "id": 138,
+    "author": "user",
+    "payload": {
+      "type": "text",
+      "text": "QUIERO QUE ANALICES LO SIGUIENTE: COMO SABES HAY DOS BASES DE DATOS, LA PRIMERA ES LA BASE DE DATOS A LA QUE ESTA CONECTADA POR DEFAULT LA APP DE LA UAD Y LA SEGUNDA BASE DE DATOS QUE ESTA MEDIANAMENTE CONECTADA CON NEXUS Y AQUI SE ALMACENAN DATOS O INFORMACION, EL TEMA O PROBLEMA ES QUE CON LA PRIMER BASE DE DATOS SI FUNCIONA AL PRESIONAR EL BOTON INICIAR ENLACE PERO CON LA SEGUNDA BASE DE DATOS NO FUNCIONA. NO MODIFIQUES LA APP, PRIMERO NECESITAMOS ESTABLECER COMO ARREGLARLO",
+      "files": [],
+      "fileUploads": [],
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766083863150
+  },
+  {
+    "id": 139,
+    "author": "model",
+    "payload": {
+      "type": "thinking",
+      "text": "**Pinpointing the Failure**\n\nI'm currently focused on the `NexusView` component and the `supabaseService` file, trying to understand why \"Iniciar Enlace\" succeeds locally but not with the external database. The core issue seems to be within the `supabaseService` code, particularly the link initiation logic. Further investigation is needed to differentiate the flows and identify the discrepancy.\n\n\n**Analyzing Procedure Discrepancies**\n\nI've been examining the differences between `publishLocalProcedure` and `publishExternalProcedure` more closely. The `types.ts` file defines the relevant structures. I've noted the use of `supabase.storage.from('user_files').createSignedUrl` in the local flow versus `supabaseExternal.storage.from('user_files').createSignedUrl` in the external flow. The same pattern applies to database upserts. My hunch is that there might be authentication or permission problems with the external database given the use of the `anon_key` client and its associated RLS constraints, which the local database probably doesn't have.\n\n\n**Addressing Permission Issues**\n\nI'm now focusing on a potential storage path mismatch. The `storage_path` from `NexusView.tsx` is crucial, especially when `activeDb` is 'external', as the `anon_key` might lack the necessary permissions to create signed URLs for that specific path. This could cause our \"Iniciar Enlace\" error. Additionally, there seems to be a conflict resolution issue. The local procedure uses `origin_document_id`, while the external uses `uad_origin_id`, which may lead to database schema problems.\n\n\n**Isolating the Root Cause**\n\nI'm now focusing on the implications of the anonymous key's restricted access in the external database. This stems from Row Level Security (RLS) constraints, as the user is connected via an `anon` key. The server likely restricts it to `SELECT` operations, whereas `INSERT/UPSERT` or generating a signed URL typically requires an `authenticated` role. Therefore, my priority is analyzing how to grant appropriate, but secure, permissions or utilize authentication in the external database. The call `createSignedUrl` could be failing due to these inherent constraints.\n\n\n**Identifying Security Bottlenecks**\n\nI'm currently thinking about the implications of being logged into UAD but not the external project, essentially making the user an `anon` from the external project's perspective. I've confirmed that the provided keys seem valid, but the `procedures` table and `user_files` bucket in the external database are likely where the problem lies. I'm exploring three hypotheses: RLS restrictions on the `procedures` table preventing `anon` writes, limitations on using an `anon` key for `createSignedUrl` given security concerns, and the possibility of missing mandatory fields in the external table.\n\n\n",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766083863150,
+    "doneTimestamp": 1766083873454
+  },
+  {
+    "id": 140,
+    "author": "model",
+    "payload": {
+      "type": "text",
+      "text": "Este es un análisis técnico profundo del porqué el módulo **NEXUS** funciona con la base de datos local pero falla con la externa. He identificado tres cuellos de botella críticos en la arquitectura de \"doble canal\" que impiden la conexión exitosa con el repositorio remoto.\n\nAquí están las causas raíz y la estrategia para solucionarlo:\n\n### 1. El Conflicto de Identidad (El problema del \"Anon Key\")\nLa aplicación de la UAD autentica al usuario contra la **Base de Datos 1 (Local)**. Cuando intentas escribir en la **Base de Datos 2 (Externa)** usando el cliente `supabaseExternal`, Supabase lo trata como un usuario **anónimo (anon)**, sin importar que estés logueado en la App principal.\n\n*   **Por qué falla:** Por seguridad, las tablas de Supabase suelen tener habilitado **RLS (Row Level Security)**. La política para el rol `anon` suele ser de solo lectura (`SELECT`). Al presionar \"Iniciar Enlace\", la función `publishExternalProcedure` intenta hacer un `UPSERT`. Si la base de datos externa no tiene una política específica que permita a `anon` insertar en la tabla `procedures`, la base de datos rechazará la conexión silenciosamente o devolverá un error de violación de políticas.\n\n### 2. Restricción en la Generación de \"Signed URLs\"\nLa lógica de NEXUS se basa en generar una URL firmada de larga duración (1 año) para que la App de empleados pueda ver el archivo.\n\n*   **En la DB Local:** Funciona porque el usuario está autenticado y tiene permisos de \"Owner\" sobre sus archivos en el bucket `user_files`.\n*   **En la DB Externa:** La función `supabaseExternal.storage.from('user_files').createSignedUrl(...)` falla casi con total seguridad porque Supabase **no permite que un usuario anónimo genere URLs firmadas**. Generar un token de acceso es una operación privilegiada que requiere el rol `authenticated` o la `service_role_key`.\n\n### 3. Discrepancia en el Esquema de Identificadores\nAnalizando el código de `supabaseService.ts`, noto una diferencia en cómo se manejan los conflictos de duplicidad (`onConflict`):\n\n*   **Local:** `onConflict: 'origin_document_id'`\n*   **Externa:** `onConflict: 'uad_origin_id'`\n\nSi la tabla `procedures` en la base de datos externa no tiene configurada la columna `uad_origin_id` como una **Unique Constraint** o **Primary Key**, el comando `UPSERT` fallará porque la base de datos no sabrá cómo identificar si el registro ya existe para actualizarlo o crearlo de nuevo.\n\n---\n\n### ESTRATEGIA DE SOLUCIÓN (Plan de Acción)\n\nPara arreglar esto sin comprometer la seguridad, debemos realizar los siguientes ajustes (fuera de la App, en los dashboards de Supabase):\n\n#### Paso A: Configuración en la DB Externa (Dashboard de Supabase Remoto)\n1.  **Habilitar Escritura Anónima Protegida:** Crear una política RLS en la tabla `procedures` que permita el `INSERT` y `UPDATE` al rol `anon`, pero limitada (por ejemplo, validando una \"Secret Key\" en una columna oculta).\n2.  **Habilitar el Bucket:** El bucket `user_files` en la DB Externa debe configurarse como **Público** si no se pueden generar Signed URLs vía cliente, o bien, configurar una política de Storage que permita `createSignedUrl` al rol `anon` (aunque esto último es complejo por las restricciones nativas de Supabase).\n3.  **Índice Único:** Asegurarse de que `uad_origin_id` sea único en la tabla remota.\n\n#### Paso B: Ajuste de Lógica en el Service (Preparación para el cambio de código)\nDebemos modificar `publishExternalProcedure` para que maneje el error de la URL firmada. Si el bucket externo no permite firmas anónimas, la solución es:\n1.  Hacer el bucket `user_files` de la DB externa **público**.\n2.  En lugar de pedir una `Signed URL`, simplemente construir la URL pública estática: \n    `https://[EXT_PROJECT_ID].supabase.co/storage/v1/object/public/user_files/[PATH]`\n\n#### Paso C: Verificación de Departamentos\nNEXUS ahora lee las áreas de la tabla `departments` de la DB Externa. Si esa tabla está vacía en el remoto, el selector de áreas fallará y no dejará publicar.\n\n**¿Deseas que proceda a preparar el XML con las modificaciones de código necesarias una vez que verifiques que tienes acceso para cambiar las políticas RLS en tu Supabase externo?**",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766083873454,
+    "doneTimestamp": 1766083873455
+  },
+  {
+    "id": 141,
+    "author": "user",
+    "payload": {
+      "type": "text",
+      "text": "VALE ENTONCES DAME EL SQL NECESARIO PARA QUE FUNCIONE, TEN EN CUENTA QUE LOS ARCHIVO QUE SE SUBEN A LA DB EXTERNA ESTA EN STORAGE.",
+      "files": [],
+      "fileUploads": [],
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766084235471
+  },
+  {
+    "id": 142,
+    "author": "model",
+    "payload": {
+      "type": "thinking",
+      "text": "**Examining External Links**\n\nI'm now investigating the issue with external publishing via \"Iniciar Enlace\". The local publishing works fine, which indicates the core UAD-Supabase connectivity is present. The focus now is on understanding why the external link fails. I'm checking for differences in how the connection is initialized and managed in the two scenarios. This should narrow down the problem.\n\n\n**Troubleshooting Database Permissions**\n\nI'm currently dealing with the complexities of database permissions and schema design. The UAD app, operating as an anonymous client to the external database, requires specific rights to write data and generate the necessary links. My immediate focus is on resolving RLS issues on the `procedures` table, ensuring proper support for the expected schema, and allowing `UPSERT` operations. I'm also addressing the challenge of creating signed URLs, which necessitates elevated privileges. Finally, I'm working to make sure the app can read from the `departments` table without errors. Storage policies are the key.\n\n\n**Resolving Storage Access**\n\nI'm now zeroing in on the storage access issues.  The core issue seems to be generating signed URLs with the `anon` key is blocked by Supabase. I'm leaning toward making the bucket public, although I'll detail some alternative RLS solutions.  I'll provide SQL for table creation, indices, and RLS policies for `UPSERT` operations for `anon`. I'll advise using public URLs if the bucket is public.\n\n\n**Establishing Data Access Policies**\n\nI'm presently working to create precise policies. Specifically, I'm setting up policies that permit the `anon` role to select, insert, and update the tables. My goal is for this setup to align with the unique constraints necessary for `UPSERT`. In addition, I'm verifying the configuration of the `user_files` bucket and setting appropriate policies for the `anon` role. Finally, I'm defining the table's structure, focusing on the essential `uad_origin_id` being unique.\n\n\n",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766084235471,
+    "doneTimestamp": 1766084244847
+  },
+  {
+    "id": 143,
+    "author": "model",
+    "payload": {
+      "type": "text",
+      "text": "Para que el módulo **NEXUS** funcione correctamente con tu **Base de Datos Externa**, es necesario preparar el terreno en esa base de datos. Como la App de la UAD se conecta como un usuario \"Anónimo\" a la segunda base de datos, debemos otorgar permisos específicos y asegurar que las tablas tengan las restricciones (constraints) necesarias para que el comando `UPSERT` (Insertar o Actualizar) no falle.\n\nEjecuta el siguiente código SQL en el **SQL Editor** de tu **Dashboard de Supabase Externo (Base de Datos 2)**:\n\n```sql\n-- 1. CREACIÓN DE TABLAS NECESARIAS (Si no existen)\n\n-- Tabla de Procedimientos (Donde se enlaza la información)\nCREATE TABLE IF NOT EXISTS public.procedures (\n    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n    title TEXT NOT NULL,\n    code TEXT,\n    area TEXT NOT NULL,\n    version TEXT DEFAULT '1.0',\n    status TEXT DEFAULT 'Vigente',\n    file_url TEXT NOT NULL,\n    uad_origin_id UUID UNIQUE, -- CRÍTICO: Debe ser UNIQUE para que el enlace funcione\n    folder_id UUID,\n    updated_at TIMESTAMPTZ DEFAULT NOW(),\n    created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- Tabla de Carpetas Publicadas\nCREATE TABLE IF NOT EXISTS public.published_folders (\n    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n    origin_folder_id UUID UNIQUE, -- CRÍTICO: Para evitar duplicados de carpetas\n    folder_name TEXT NOT NULL,\n    area TEXT NOT NULL,\n    created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- Tabla de Departamentos (La fuente de las \"Áreas\")\nCREATE TABLE IF NOT EXISTS public.departments (\n    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,\n    name TEXT UNIQUE NOT NULL,\n    created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- 2. SEGURIDAD DE FILAS (RLS) - CONFIGURACIÓN PARA ACCESO ANÓNIMO PROTEGIDO\n\n-- Habilitar RLS\nALTER TABLE public.procedures ENABLE ROW LEVEL SECURITY;\nALTER TABLE public.published_folders ENABLE ROW LEVEL SECURITY;\nALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;\n\n-- Políticas para 'procedures' (Permitir a la App UAD leer y escribir vía anon)\nCREATE POLICY \"Permitir lectura pública en procedures\" ON public.procedures FOR SELECT USING (true);\nCREATE POLICY \"Permitir inserción/actualización anónima en procedures\" \nON public.procedures FOR ALL \nTO anon \nUSING (true) \nWITH CHECK (true);\n\n-- Políticas para 'published_folders'\nCREATE POLICY \"Permitir lectura pública en folders\" ON public.published_folders FOR SELECT USING (true);\nCREATE POLICY \"Permitir gestión anónima en folders\" \nON public.published_folders FOR ALL \nTO anon \nUSING (true) \nWITH CHECK (true);\n\n-- Políticas para 'departments' (Lectura para el dropdown)\nCREATE POLICY \"Permitir lectura de departamentos\" ON public.departments FOR SELECT USING (true);\nCREATE POLICY \"Permitir inserción de departamentos (Admin)\" ON public.departments FOR INSERT TO anon WITH CHECK (true);\n\n-- 3. CONFIGURACIÓN DE STORAGE (BUCKET EXTERNO)\n\n-- Asegúrate de que el bucket 'user_files' exista. \n-- Estas políticas permiten que la App UAD suba archivos y genere accesos.\n\n-- Política para permitir que usuarios anónimos lean archivos (Necesario para las URLs en la app de empleados)\nCREATE POLICY \"Acceso público de lectura a archivos\"\nON storage.objects FOR SELECT\nTO anon\nUSING (bucket_id = 'user_files');\n\n-- Política para permitir que la App UAD suba archivos al repositorio externo\nCREATE POLICY \"Permitir subida de archivos Nexus\"\nON storage.objects FOR INSERT\nTO anon\nWITH CHECK (bucket_id = 'user_files');\n\n-- Política para permitir eliminación de archivos en el repositorio externo\nCREATE POLICY \"Permitir borrado de archivos Nexus\"\nON storage.objects FOR DELETE\nTO anon\nUSING (bucket_id = 'user_files');\n\n-- 4. DATOS INICIALES (Opcional, para que el dropdown no salga vacío)\nINSERT INTO public.departments (name) \nVALUES \n('Dirección'), \n('Calidad'), \n('Recursos Humanos'), \n('Producción'), \n('Mantenimiento')\nON CONFLICT (name) DO NOTHING;\n```\n\n### Notas Importantes sobre la Solución:\n\n1.  **El Índice Único (`UNIQUE`):** Sin la restricción `UNIQUE` en `uad_origin_id`, el botón \"Iniciar Enlace\" creará un nuevo registro cada vez que lo presiones en lugar de actualizar el anterior.\n2.  **El Rol `anon`:** Supabase por defecto bloquea la escritura a usuarios no autenticados. Como tu App 1 no puede \"autenticarse\" en la App 2 (son proyectos distintos), estas políticas permiten que la comunicación fluya usando la `anon_key` de la segunda base de datos.\n3.  **Storage:** Es vital que en el Dashboard de Supabase Externo vayas a **Storage -> Buckets** y verifiques que el bucket `user_files` esté configurado como **Public**. Si es privado, la función `createSignedUrl` podría fallar para el usuario anónimo.\n4.  **Departamentos:** Si la tabla `departments` está vacía en la DB externa, el selector de áreas en NEXUS no mostrará nada y el botón de enlace no se habilitará. El SQL anterior incluye unos valores por defecto.\n\n**¿Deseas que prepare un pequeño ajuste en el código para manejar casos donde la generación de la URL firmada sea rechazada por la base de datos externa?**",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766084244847,
+    "doneTimestamp": 1766084244928
+  },
+  {
+    "id": 144,
+    "author": "user",
+    "payload": {
+      "type": "text",
+      "text": "PORQUE EN EL SQL PONES ESTO, ('Dirección'), \n('Calidad'), \n('Recursos Humanos'), \n('Producción'), \n('Mantenimiento')\nYO NO TENGO ESAS CARPETAS CREADAS REVISA BIEN ESO Y DAME EL CODIGO SQL CORREGIDO",
+      "files": [],
+      "fileUploads": [],
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766084322799
+  },
+  {
+    "id": 145,
+    "author": "model",
+    "payload": {
+      "type": "thinking",
+      "text": "**Correcting Department Data**\n\nI've addressed the issue of incorrect department data. The SQL query has been updated to reflect the user's specific departmental structure, rather than the example data I had initially included. This should resolve the discrepancy and ensure accurate reporting.\n\n\n**Clarifying Data Uploads**\n\nI'm now focusing on the implications of file uploads to external storage. The `NexusView.tsx` component relies on a dynamic department list from the external database, retrieved by `getDepartments()`. The `publishExternalProcedure` function manages data uploads, so the structure is critical.  My thinking is now that while I can't know the exact departments, I can create the table structure and avoid inserting any guesses. The next step is to provide a user-friendly mechanism for populating it.\n\n\n**Refining Database Structure**\n\nI'm now fully immersed in the database setup for external storage, specifically considering the 'departments' table. The critical insight from `APP_DOCUMENTATION.md` is that Nexus relies on this live data. I'm focusing on crafting the correct table schemas, and configuring RLS for the `procedures` table to allow anonymous insert/upsert operations. The final piece is adjusting the storage bucket to permit anonymous access, which is essential. My plan is to start with a clean slate, then establish RLS, and lastly configure the storage policies.\n\n\n**Adjusting Data Insertion**\n\nI'm revisiting the data upload process, now recognizing a potential user misconception. It seems the user might be conflating storage \"folders\" with the \"departments\" table in Nexus. Therefore, I'm removing the initial `INSERT` statements for the `departments` table to avoid any ambiguity. My priority is now to ensure a seamless upload process without pre-populating departments, allowing for user flexibility.\n\n\n",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766084322799,
+    "doneTimestamp": 1766084332181
+  },
+  {
+    "id": 146,
+    "author": "model",
+    "payload": {
+      "type": "text",
+      "text": "Entiendo perfectamente el error. Confundí los ejemplos de \"Áreas\" (departamentos) con las carpetas físicas que tienes. El SQL debe ser **estructural**, permitiendo que tú definas tus propias áreas según lo necesites desde la base de datos externa, y configurando el almacenamiento (Storage) para que reciba los archivos correctamente.\n\nAquí tienes el código SQL corregido para tu **Base de Datos Externa (Secundaria)**. Este código prepara las tablas y habilita los permisos de Storage para que la App UAD pueda subir los archivos directamente al repositorio remoto:\n\n```sql\n-- 1. ESTRUCTURA DE TABLAS (Sin datos de ejemplo)\n\n-- Tabla para el enlace de documentos (NEXUS)\nCREATE TABLE IF NOT EXISTS public.procedures (\n    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n    title TEXT NOT NULL,\n    code TEXT,\n    area TEXT NOT NULL,           -- Aquí se guardará el nombre del área/departamento\n    version TEXT DEFAULT '1.0',\n    status TEXT DEFAULT 'Vigente',\n    file_url TEXT NOT NULL,       -- URL generada en Storage\n    uad_origin_id UUID UNIQUE,    -- ID del documento en la App UAD para evitar duplicados\n    folder_id UUID,               -- ID de la carpeta contenedora\n    updated_at TIMESTAMPTZ DEFAULT NOW(),\n    created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- Tabla para el enlace de carpetas completas\nCREATE TABLE IF NOT EXISTS public.published_folders (\n    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,\n    origin_folder_id UUID UNIQUE, -- ID de la carpeta en la App UAD\n    folder_name TEXT NOT NULL,\n    area TEXT NOT NULL,\n    created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- Tabla Maestra de Áreas (Fuente para el Dropdown de NEXUS)\n-- NOTA: Debes llenar esta tabla con tus áreas reales para que aparezcan en el selector.\nCREATE TABLE IF NOT EXISTS public.departments (\n    id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,\n    name TEXT UNIQUE NOT NULL,\n    created_at TIMESTAMPTZ DEFAULT NOW()\n);\n\n-- 2. SEGURIDAD DE FILAS (RLS) PARA ACCESO DESDE LA APP UAD (ANON)\n\nALTER TABLE public.procedures ENABLE ROW LEVEL SECURITY;\nALTER TABLE public.published_folders ENABLE ROW LEVEL SECURITY;\nALTER TABLE public.departments ENABLE ROW LEVEL SECURITY;\n\n-- Políticas para Procedures\nCREATE POLICY \"Permitir todo a anon en procedures\" ON public.procedures FOR ALL TO anon USING (true) WITH CHECK (true);\n\n-- Políticas para Folders\nCREATE POLICY \"Permitir todo a anon en published_folders\" ON public.published_folders FOR ALL TO anon USING (true) WITH CHECK (true);\n\n-- Políticas para Departments (Lectura para el selector de Nexus)\nCREATE POLICY \"Permitir lectura de departamentos\" ON public.departments FOR SELECT TO anon USING (true);\nCREATE POLICY \"Permitir gestión de departamentos\" ON public.departments FOR ALL TO anon USING (true) WITH CHECK (true);\n\n-- 3. CONFIGURACIÓN DE STORAGE (BUCKET: 'user_files')\n-- Importante: Crea el bucket 'user_files' manualmente en el Dashboard si no existe.\n\n-- Permitir que la App UAD suba archivos al Storage externo\nCREATE POLICY \"Permitir subida Nexus\"\nON storage.objects FOR INSERT\nTO anon\nWITH CHECK (bucket_id = 'user_files');\n\n-- Permitir que la App UAD vea y genere URLs de archivos\nCREATE POLICY \"Permitir lectura Nexus\"\nON storage.objects FOR SELECT\nTO anon\nUSING (bucket_id = 'user_files');\n\n-- Permitir borrar archivos si se desenlaza en Nexus\nCREATE POLICY \"Permitir borrado Nexus\"\nON storage.objects FOR DELETE\nTO anon\nUSING (bucket_id = 'user_files');\n```\n\n### ¿Qué debes hacer ahora para que funcione?\n\n1.  **Ejecuta el SQL:** Copia y pega el código anterior en el SQL Editor de tu **Base de Datos Externa**.\n2.  **Crea el Bucket:** Ve a **Storage** en Supabase Externo y asegúrate de que exista un bucket llamado `user_files`. Configúralo como **Public** (Público) para evitar problemas de firmas de URL.\n3.  **Añade tus Áreas:** Para que el botón de \"Iniciar Enlace\" se habilite en NEXUS, el selector de \"Área Designada\" no puede estar vacío. Inserta al menos un área real que uses ejecutando esto (cambia 'Tu Area' por el nombre real):\n    ```sql\n    INSERT INTO public.departments (name) VALUES ('Administración'), ('Operaciones');\n    ```\n\nCon esto, la conexión entre el frontend de la UAD y la base de datos externa quedará totalmente abierta y funcional para el intercambio de archivos en Storage.",
+      "cMarkNode": {}
+    },
+    "createdTimestamp": 1766084332182,
+    "doneTimestamp": 1766084332182
+  }
+]

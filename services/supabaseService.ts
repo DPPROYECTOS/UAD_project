@@ -370,8 +370,25 @@ export const uploadDocument = async (file: File, folderId: string, projectId: st
 };
 
 export const deleteDocument = async (doc: Document): Promise<void> => {
-    await supabase.storage.from('user_files').remove([doc.storagePath]);
-    const { error } = await supabase.from('documents').delete().eq('id', doc.id);
+    // 1. Intentar borrar el archivo físico primero usando la API de Storage
+    const { error: storageError } = await supabase.storage.from('user_files').remove([doc.storagePath]);
+    
+    // Nota: A veces el archivo ya no existe en storage pero el registro sí. 
+    // No bloqueamos el borrado del registro si el archivo no se encuentra.
+    if (storageError && storageError.message !== 'Object not found') {
+        console.warn('Error al eliminar archivo físico:', storageError);
+    }
+
+    // 2. Borrar el registro de la base de datos
+    const { error: dbError } = await supabase.from('documents').delete().eq('id', doc.id);
+    if (dbError) {
+        console.error('Error al eliminar registro de base de datos:', dbError);
+        throw dbError;
+    }
+};
+
+export const moveDocument = async (docId: string, newFolderId: string): Promise<void> => {
+    const { error } = await supabase.from('documents').update({ folder_id: newFolderId }).eq('id', docId);
     if (error) throw error;
 };
 
@@ -470,8 +487,17 @@ export const uploadExternalDocument = async (file: File, folderId: string, proje
 };
 
 export const deleteExternalDocument = async (doc: Document): Promise<void> => {
-    await supabaseExternal.storage.from('user_files').remove([doc.storagePath]);
-    const { error = { message: 'Unknown error' } as any } = await supabaseExternal.from('documents').delete().eq('id', doc.id);
+    const { error: storageError } = await supabaseExternal.storage.from('user_files').remove([doc.storagePath]);
+    if (storageError && storageError.message !== 'Object not found') {
+        console.warn('Error al eliminar archivo físico externo:', storageError);
+    }
+
+    const { error: dbError } = await supabaseExternal.from('documents').delete().eq('id', doc.id);
+    if (dbError) throw dbError;
+};
+
+export const moveExternalDocument = async (docId: string, newFolderId: string): Promise<void> => {
+    const { error } = await supabaseExternal.from('documents').update({ folder_id: newFolderId }).eq('id', docId);
     if (error) throw error;
 };
 
@@ -643,7 +669,7 @@ export const updateAudit = async (audit: AuditItem): Promise<AuditItem> => {
 };
 
 export const deleteAudit = async (auditId: string): Promise<void> => {
-    const { error = { message: 'Unknown error' } as any } = await supabase.from('links').delete().eq('id', auditId);
+    const { error } = await supabase.from('audits').delete().eq('id', auditId);
     if (error) throw error;
 };
 
@@ -836,9 +862,9 @@ export const subscribeToLiveWhiteboardItems = (onInsert: (newItem: WhiteboardIte
 };
 
 export const uploadFile = async (file: File): Promise<void> => {
-    const { data: { user } } = await supabase.auth.getSession();
-    if (!user) throw new Error('User not authenticated');
-    const filePath = `${user.id}/UPLOADS/${uuidv4()}-${sanitizeFileName(file.name)}`;
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.user) throw new Error('User not authenticated');
+    const filePath = `${session.user.id}/UPLOADS/${uuidv4()}-${sanitizeFileName(file.name)}`;
     const { error: uploadError } = await supabase.storage.from('user_files').upload(filePath, file);
     if (uploadError) throw uploadError;
 };

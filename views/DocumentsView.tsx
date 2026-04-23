@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
 import { Project, Document, Folder, UserPermissions, User } from '../types';
-import { FolderIcon, DocumentTextIcon, UploadIcon, TrashIcon, CollectionIcon, InformationCircleIcon, PlusIcon, EyeIcon, DocumentDownloadIcon, SearchIcon, GlobeAltIcon, ServerIcon } from '../components/Icons';
+import { FolderIcon, DocumentTextIcon, UploadIcon, TrashIcon, CollectionIcon, InformationCircleIcon, PlusIcon, EyeIcon, DocumentDownloadIcon, SearchIcon, GlobeAltIcon, ServerIcon, ArrowRightIcon, CheckCircleIcon } from '../components/Icons';
 import Spinner from '../components/Spinner';
 import ConfirmationModal from '../components/projects/ConfirmationModal';
 import { getSignedUrlForDocument, getSignedUrlForExternalDocument } from '../services/supabaseService';
@@ -27,10 +27,12 @@ interface DocumentsViewProps {
   onDeleteFolder: (id: string) => Promise<void>;
   onAddDocument: (file: File, folderId: string, projectId: string | null) => Promise<void>;
   onDeleteDocument: (doc: Document) => Promise<void>;
+  onMoveDocument: (docId: string, newFolderId: string) => Promise<void>;
   onAddExternalFolder: (name: string, parentId: string | null) => Promise<Folder>;
   onDeleteExternalFolder: (id: string) => Promise<void>;
   onAddExternalDocument: (file: File, folderId: string, projectId: string | null) => Promise<void>;
   onDeleteExternalDocument: (doc: Document) => Promise<void>;
+  onMoveExternalDocument: (docId: string, newFolderId: string) => Promise<void>;
   userPermissions: UserPermissions | null;
   user: User;
 }
@@ -71,14 +73,15 @@ const buildFolderTree = (folders: Folder[]): Folder[] => {
 
 const DocumentsView: React.FC<DocumentsViewProps> = ({ 
     projects, folders, documents, externalFolders, externalDocuments, isLoading, 
-    onAddFolder, onDeleteFolder, onAddDocument, onDeleteDocument, 
-    onAddExternalFolder, onDeleteExternalFolder, onAddExternalDocument, onDeleteExternalDocument,
+    onAddFolder, onDeleteFolder, onAddDocument, onDeleteDocument, onMoveDocument,
+    onAddExternalFolder, onDeleteExternalFolder, onAddExternalDocument, onDeleteExternalDocument, onMoveExternalDocument,
     userPermissions, user 
 }) => {
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<{current: number, total: number} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [docToDelete, setDocToDelete] = useState<Document | null>(null);
   const [folderToDelete, setFolderToDelete] = useState<Folder | null>(null);
@@ -91,8 +94,9 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
   const [viewerFile, setViewerFile] = useState<{ id: string; url: string; name: string; mimeType: string; } | null>(null);
 
   const [selectedFolderIdExt, setSelectedFolderIdExt] = useState<string>('');
-  const [selectedFileExt, setSelectedFileExt] = useState<File | null>(null);
+  const [selectedFilesExt, setSelectedFilesExt] = useState<File[]>([]);
   const [isUploadingExt, setIsUploadingExt] = useState(false);
+  const [uploadProgressExt, setUploadProgressExt] = useState<{current: number, total: number} | null>(null);
   const [errorExt, setErrorExt] = useState<string | null>(null);
   const [docToDeleteExt, setDocToDeleteExt] = useState<Document | null>(null);
   const [folderToDeleteExt, setFolderToDeleteExt] = useState<Folder | null>(null);
@@ -101,6 +105,9 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
   const [isAddingRootExt, setIsAddingRootExt] = useState(false); // Estabilizador de scroll
   const [expandedFoldersExt, setExpandedFoldersExt] = useState<Set<string>>(new Set());
   const [searchQueryExt, setSearchQueryExt] = useState('');
+
+  const [docToMove, setDocToMove] = useState<{ doc: Document, isExternal: boolean } | null>(null);
+  const [movingToFolderId, setMovingToFolderId] = useState<string>('');
 
   const canUpload = userPermissions?.documentos?.canUpload ?? false;
   const canDownload = userPermissions?.documentos?.canDownload ?? false;
@@ -144,21 +151,50 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
   }, [externalFolders]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) { setSelectedFile(file); setError(null); }
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+        setSelectedFiles(prev => {
+            const newList = [...prev, ...files];
+            return newList.slice(0, 15); // Límite de 15 archivos
+        });
+        setError(null);
+    }
+  };
+
+  const removeFile = (index: number) => {
+    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
+    if (selectedFiles.length <= 1) {
+        const fileInput = document.getElementById('file-upload-input') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+    }
   };
 
   const handleAddDocumentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile || !selectedFolderId) return;
+    if (selectedFiles.length === 0 || !selectedFolderId) return;
     setIsUploading(true);
-    try {
-        await onAddDocument(selectedFile, selectedFolderId, selectedProjectId || null);
-        setSelectedFile(null);
+    setUploadProgress({ current: 0, total: selectedFiles.length });
+    
+    let hasError = false;
+    for (let i = 0; i < selectedFiles.length; i++) {
+        setUploadProgress({ current: i + 1, total: selectedFiles.length });
+        try {
+            await onAddDocument(selectedFiles[i], selectedFolderId, selectedProjectId || null);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : `Error al subir ${selectedFiles[i].name}`);
+            hasError = true;
+            break;
+        }
+    }
+    
+    if (!hasError) {
+        setSelectedFiles([]);
         setSelectedProjectId('');
         const fileInput = document.getElementById('file-upload-input') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
-    } catch (err) { setError(err instanceof Error ? err.message : 'No se pudo subir el archivo.'); } finally { setIsUploading(false); }
+    }
+    setIsUploading(false);
+    setUploadProgress(null);
   };
 
   const handleAddNewFolder = async (e: React.FormEvent, parentId: string | null) => {
@@ -211,20 +247,49 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
   };
 
   const handleFileChangeExt = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) { setSelectedFileExt(file); setErrorExt(null); }
+    const files = Array.from(e.target.files || []);
+    if (files.length > 0) {
+        setSelectedFilesExt(prev => {
+            const newList = [...prev, ...files];
+            return newList.slice(0, 15);
+        });
+        setErrorExt(null);
+    }
+  };
+
+  const removeFileExt = (index: number) => {
+    setSelectedFilesExt(prev => prev.filter((_, i) => i !== index));
+    if (selectedFilesExt.length <= 1) {
+        const fileInput = document.getElementById('file-upload-input-ext') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
+    }
   };
 
   const handleAddDocumentSubmitExt = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFileExt || !selectedFolderIdExt) return;
+    if (selectedFilesExt.length === 0 || !selectedFolderIdExt) return;
     setIsUploadingExt(true);
-    try {
-        await onAddExternalDocument(selectedFileExt, selectedFolderIdExt, null);
-        setSelectedFileExt(null);
+    setUploadProgressExt({ current: 0, total: selectedFilesExt.length });
+    
+    let hasError = false;
+    for (let i = 0; i < selectedFilesExt.length; i++) {
+        setUploadProgressExt({ current: i + 1, total: selectedFilesExt.length });
+        try {
+            await onAddExternalDocument(selectedFilesExt[i], selectedFolderIdExt, null);
+        } catch (err) {
+            setErrorExt(err instanceof Error ? err.message : `Error al subir ${selectedFilesExt[i].name} a externo`);
+            hasError = true;
+            break;
+        }
+    }
+    
+    if (!hasError) {
+        setSelectedFilesExt([]);
         const fileInput = window.document.getElementById('file-upload-input-ext') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
-    } catch (err) { setErrorExt(err instanceof Error ? err.message : 'No se pudo subir el archivo externo.'); } finally { setIsUploadingExt(false); }
+    }
+    setIsUploadingExt(false);
+    setUploadProgressExt(null);
   };
 
   const handleAddNewFolderExt = async (e: React.FormEvent, parentId: string | null) => {
@@ -317,6 +382,23 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
         setErrorExt(err instanceof Error ? err.message : 'No se pudo eliminar la carpeta externa.');
     } finally {
         setFolderToDeleteExt(null);
+    }
+  };
+
+  const handleMoveDocument = async () => {
+    if (!docToMove || !movingToFolderId) return;
+    try {
+        if (docToMove.isExternal) {
+            await onMoveExternalDocument(docToMove.doc.id, movingToFolderId);
+        } else {
+            await onMoveDocument(docToMove.doc.id, movingToFolderId);
+        }
+    } catch (err) {
+        if (docToMove.isExternal) setErrorExt(err instanceof Error ? err.message : 'No se pudo mover el documento.');
+        else setError(err instanceof Error ? err.message : 'No se pudo mover el documento.');
+    } finally {
+        setDocToMove(null);
+        setMovingToFolderId('');
     }
   };
 
@@ -424,8 +506,41 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
                             <div><label htmlFor="project-select" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Asociar a Proyecto (Opcional)</label><select id="project-select" value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card focus:outline-none focus:ring-2 focus:ring-brand-accent"><option value="">General (Sin Proyecto)</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></div>
                             <div><label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Carpeta de Destino</label><p className="w-full px-3 py-2 rounded-lg border border-light-border dark:border-dark-border bg-light-card/50 dark:bg-dark-card/50 truncate" title={currentFolderName}>{currentFolderName}</p></div>
                         </div>
-                        <div><label htmlFor="file-upload-input" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Archivo</label><input id="file-upload-input" type="file" onChange={handleFileChange} className="w-full text-sm text-light-text-secondary dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-accent/20 file:text-brand-primary hover:file:bg-brand-accent/30" /></div>
-                        <div className="flex justify-end"><button type="submit" disabled={isUploading || !selectedFile || !selectedFolderId} className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50">{isUploading ? <><Spinner /> <span className="ml-2">Subiendo...</span></> : <><UploadIcon className="h-5 w-5 mr-2" /> Subir Documento</>}</button></div>
+                        <div>
+                            <label htmlFor="file-upload-input" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Archivo(s)</label>
+                            <input id="file-upload-input" type="file" multiple onChange={handleFileChange} className="w-full text-sm text-light-text-secondary dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-accent/20 file:text-brand-primary hover:file:bg-brand-accent/30" />
+                            
+                            {selectedFiles.length > 0 && (
+                                <div className="mt-3 p-3 bg-light-bg/50 dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border space-y-2">
+                                    <p className="text-xs font-bold text-light-text-secondary dark:text-dark-text-secondary uppercase mb-2">Cola de subida ({selectedFiles.length})</p>
+                                    <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
+                                        {selectedFiles.map((file, idx) => (
+                                            <div key={idx} className="flex items-center justify-between p-1.5 rounded bg-light-card dark:bg-dark-card border border-light-border/50 dark:border-dark-border/50">
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <DocumentTextIcon className="h-4 w-4 text-brand-primary" />
+                                                    <span className="text-xs truncate">{file.name}</span>
+                                                </div>
+                                                {!isUploading && (
+                                                    <button type="button" onClick={() => removeFile(idx)} className="p-1 rounded-full text-red-500 hover:bg-red-500/10"><TrashIcon className="h-4 w-4" /></button>
+                                                )}
+                                                {isUploading && uploadProgress && idx < uploadProgress.current - 1 && <CheckCircleIcon className="h-4 w-4 text-green-500" />}
+                                                {isUploading && uploadProgress && idx === uploadProgress.current - 1 && <Spinner className="h-4 w-4" />}
+                                                {isUploading && uploadProgress && idx >= uploadProgress.current && <div className="w-4 h-4 rounded-full border border-gray-400"></div>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                        <div className="flex justify-end">
+                            <button type="submit" disabled={isUploading || selectedFiles.length === 0 || !selectedFolderId} className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary disabled:bg-brand-primary/50">
+                                {isUploading ? (
+                                    <><Spinner /> <span className="ml-2">Subiendo {uploadProgress?.current} de {uploadProgress?.total}...</span></>
+                                ) : (
+                                    <><UploadIcon className="h-5 w-5 mr-2" /> Subir {selectedFiles.length > 1 ? `${selectedFiles.length} Documentos` : 'Documento'}</>
+                                )}
+                            </button>
+                        </div>
                     </form>}
                     <h2 className="text-xl font-bold mb-3">{isSearching ? `Resultados para "${searchQuery}"` : `Archivos en "${currentFolderName}"`}</h2>
                     {documentsToShow.length > 0 ? <ul className="divide-y divide-light-border dark:divide-dark-border">{documentsToShow.map(doc => (
@@ -434,6 +549,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
                             <div className="flex items-center space-x-1 flex-shrink-0">
                                 <button type="button" onClick={(e) => handleAction(e, doc, 'preview')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-500" title="Previsualizar">{loadingAction === `${doc.id}-preview` ? <Spinner /> : <EyeIcon className="h-5 w-5" />}</button>
                                 {canDownload && <button type="button" onClick={(e) => handleAction(e, doc, 'download')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-green-100 dark:hover:bg-green-900/50 hover:text-green-500" title="Descargar">{loadingAction === `${doc.id}-download` ? <Spinner /> : <DocumentDownloadIcon className="h-5 w-5" />}</button>}
+                                {canUpload && <button type="button" onClick={() => setDocToMove({ doc, isExternal: false })} className="p-2 rounded-full text-light-text-secondary hover:bg-brand-accent/20 hover:text-brand-primary" title="Mover a otra carpeta"><ArrowRightIcon className="h-5 w-5" /></button>}
                                 {canDelete && <button type="button" onClick={() => setDocToDelete(doc)} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}><TrashIcon className="h-5 w-5" /></button>}
                             </div>
                         </li>
@@ -473,17 +589,56 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
                         {errorExt && <div className="bg-red-500/10 border border-red-500/30 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg flex items-center text-sm" role="alert"><InformationCircleIcon className="h-5 w-5 mr-3 flex-shrink-0" /><span>{errorExt}</span><button type="button" onClick={() => setErrorExt(null)} className="ml-auto text-lg font-bold">&times;</button></div>}
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div><label className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Carpeta de Destino (Ext)</label><p className="w-full px-3 py-2 rounded-lg border border-purple-500/30 bg-light-card/50 dark:bg-dark-card/50 truncate text-purple-300" title={currentFolderNameExt}>{currentFolderNameExt}</p></div>
-                            <div><label htmlFor="file-upload-input-ext" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Archivo</label><input id="file-upload-input-ext" type="file" onChange={handleFileChangeExt} className="w-full text-sm text-light-text-secondary dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-500/20 file:text-purple-400 hover:file:bg-purple-500/30" /></div>
+                            <div>
+                                <label htmlFor="file-upload-input-ext" className="block text-sm font-medium text-light-text-secondary dark:text-dark-text-secondary mb-1">Archivo(s)</label>
+                                <input id="file-upload-input-ext" type="file" multiple onChange={handleFileChangeExt} className="w-full text-sm text-light-text-secondary dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-purple-500/20 file:text-purple-400 hover:file:bg-purple-500/30" />
+                            </div>
                         </div>
-                        <div className="flex justify-end"><button type="submit" disabled={isUploadingExt || !selectedFileExt || !selectedFolderIdExt} className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50">{isUploadingExt ? <><Spinner /> <span className="ml-2">Subiendo...</span></> : <><UploadIcon className="h-5 w-5 mr-2" /> Subir a Externo</>}</button></div>
+                        {selectedFilesExt.length > 0 && (
+                            <div className="mt-3 p-3 bg-purple-500/5 rounded-lg border border-purple-500/20 space-y-2">
+                                <p className="text-xs font-bold text-purple-400 uppercase mb-2">Cola externa ({selectedFilesExt.length})</p>
+                                <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
+                                    {selectedFilesExt.map((file, idx) => (
+                                        <div key={idx} className="flex items-center justify-between p-1.5 rounded bg-light-card/40 dark:bg-dark-card/40 border border-purple-500/10">
+                                            <div className="flex items-center gap-2 min-w-0">
+                                                <DocumentTextIcon className="h-4 w-4 text-purple-400" />
+                                                <span className="text-xs truncate">{file.name}</span>
+                                            </div>
+                                            {!isUploadingExt && (
+                                                <button type="button" onClick={() => removeFileExt(idx)} className="p-1 rounded-full text-red-500 hover:bg-red-500/10"><TrashIcon className="h-4 w-4" /></button>
+                                            )}
+                                            {isUploadingExt && uploadProgressExt && idx < uploadProgressExt.current - 1 && <CheckCircleIcon className="h-4 w-4 text-green-500" />}
+                                            {isUploadingExt && uploadProgressExt && idx === uploadProgressExt.current - 1 && <Spinner className="h-4 w-4" />}
+                                            {isUploadingExt && uploadProgressExt && idx >= uploadProgressExt.current && <div className="w-4 h-4 rounded-full border border-gray-400"></div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                        <div className="flex justify-end">
+                            <button type="submit" disabled={isUploadingExt || selectedFilesExt.length === 0 || !selectedFolderIdExt} className="flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700 disabled:bg-purple-600/50">
+                                {isUploadingExt ? (
+                                    <><Spinner /> <span className="ml-2">Subiendo {uploadProgressExt?.current} de {uploadProgressExt?.total}...</span></>
+                                ) : (
+                                    <><UploadIcon className="h-5 w-5 mr-2" /> Subir a Externo {selectedFilesExt.length > 1 ? `(${selectedFilesExt.length})` : ''}</>
+                                )}
+                            </button>
+                        </div>
                     </form>}
                     <h2 className="text-xl font-bold mb-3 text-gray-700 dark:text-gray-300">{searchQueryExt.trim() !== '' ? `Resultados (Externo): "${searchQueryExt}"` : `Archivos en "${currentFolderNameExt}"`}</h2>
                     {documentsToShowExt.length > 0 ? <ul className="divide-y divide-purple-500/20">{documentsToShowExt.map(doc => (
                         <li key={doc.id} className="py-3 flex items-center justify-between">
-                            <div className="flex items-center min-w-0"><DocumentTextIcon className="h-6 w-6 text-purple-400 flex-shrink-0" /><div className="ml-3 min-w-0"><p className="text-sm font-medium truncate text-gray-700 dark:text-gray-300">{doc.name}</p><p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">{formatBytes(doc.size)} - {new Date(doc.createdAt).toLocaleDateString()}</p></div></div>
+                            <div className="flex items-center min-w-0">
+                                <DocumentTextIcon className="h-6 w-6 text-purple-400 flex-shrink-0" />
+                                <div className="ml-3 min-w-0">
+                                    <p className="text-sm font-medium truncate text-gray-700 dark:text-gray-300">{doc.name}</p>
+                                    <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">{formatBytes(doc.size)} - {new Date(doc.createdAt).toLocaleDateString()}</p>
+                                </div>
+                            </div>
                             <div className="flex items-center space-x-1 flex-shrink-0">
                                 <button type="button" onClick={(e) => handleActionExt(e, doc, 'preview')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-purple-100 dark:hover:bg-purple-900/30 hover:text-purple-500" title="Previsualizar Externo">{loadingAction === `${doc.id}-preview-ext` ? <Spinner /> : <EyeIcon className="h-5 w-5" />}</button>
                                 {canDownload && <button type="button" onClick={(e) => handleActionExt(e, doc, 'download')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-green-100 dark:hover:bg-green-900/50 hover:text-green-500" title="Descargar Externo">{loadingAction === `${doc.id}-download-ext` ? <Spinner /> : <DocumentDownloadIcon className="h-5 w-5" />}</button>}
+                                {canUpload && <button type="button" onClick={() => setDocToMove({ doc, isExternal: true })} className="p-2 rounded-full text-light-text-secondary hover:bg-purple-500/20 hover:text-purple-400" title="Mover a otra carpeta externa"><ArrowRightIcon className="h-5 w-5" /></button>}
                                 {canDelete && <button type="button" onClick={() => setDocToDeleteExt(doc)} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}><TrashIcon className="h-5 w-5" /></button>}
                             </div>
                         </li>
@@ -496,6 +651,36 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
       <ConfirmationModal isOpen={!!folderToDelete} onClose={() => setFolderToDelete(null)} onConfirm={handleDeleteFolder} title="Eliminar Carpeta y su Contenido" message={`¿Estás seguro de que quieres eliminar la carpeta "${folderToDelete?.name}"? Todos los documentos y sub-carpetas que contiene serán eliminados de forma permanente. Esta acción no se puede deshacer.`} />
       <ConfirmationModal isOpen={!!docToDeleteExt} onClose={() => setDocToDeleteExt(null)} onConfirm={handleDeleteDocumentExt} title="Eliminar Documento Externo" message={`¿Estás seguro de que quieres eliminar "${docToDeleteExt?.name}" del repositorio externo? Esta acción es permanente.`} />
       <ConfirmationModal isOpen={!!folderToDeleteExt} onClose={() => setFolderToDeleteExt(null)} onConfirm={handleDeleteFolderExt} title="Eliminar Carpeta Externa" message={`¿Estás seguro de que quieres eliminar la carpeta externa "${folderToDeleteExt?.name}"? Se perderán todos sus documentos.`} />
+      
+      {/* ---------------- MODAL MOVER DOCUMENTO ---------------- */}
+      <ConfirmationModal 
+        isOpen={!!docToMove} 
+        onClose={() => { setDocToMove(null); setMovingToFolderId(''); }} 
+        onConfirm={handleMoveDocument} 
+        confirmText="Confirmar Movimiento"
+        variant="primary"
+        title="Mover Documento" 
+        message={
+            <div className="space-y-4">
+                <p>Selecciona la carpeta de destino para el documento <span className="font-bold">"{docToMove?.doc.name}"</span>:</p>
+                <div className="max-h-60 overflow-y-auto border border-light-border dark:border-dark-border rounded-lg p-2 bg-light-bg dark:bg-dark-bg">
+                    {(docToMove?.isExternal ? externalFolders : folders).map(f => (
+                        <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setMovingToFolderId(f.id)}
+                            className={`w-full text-left p-2 rounded flex items-center gap-2 hover:bg-light-card dark:hover:bg-dark-card transition-colors ${movingToFolderId === f.id ? 'bg-brand-accent/20 text-brand-primary border border-brand-accent/50' : ''}`}
+                        >
+                            <FolderIcon className="h-4 w-4" />
+                            <span className="text-sm">{f.name}</span>
+                        </button>
+                    ))}
+                </div>
+                {!movingToFolderId && <p className="text-xs text-red-500 italic">* Debes seleccionar una carpeta de destino.</p>}
+            </div>
+        } 
+      />
+
       {viewerFile && <FileViewerModal document={viewerFile} user={user} onClose={() => setViewerFile(null)} />}
     </div>
   );

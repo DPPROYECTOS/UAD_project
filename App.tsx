@@ -59,7 +59,9 @@ import {
   addExternalFolder,
   deleteExternalFolder,
   uploadExternalDocument,
-  deleteExternalDocument
+  deleteExternalDocument,
+  moveDocument,
+  moveExternalDocument
 } from './services/supabaseService';
 import Spinner from './components/Spinner';
 import { GamePlayer } from './components/GamePlayer';
@@ -176,6 +178,7 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState('Dashboard');
+  const [isSidebarOpen, setSidebarOpen] = useState(true);
   const [userPermissions, setUserPermissions] = useState<UserPermissions | null>(null);
   const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
   const [isApiKeyLoading, setIsApiKeyLoading] = useState<boolean>(true);
@@ -611,6 +614,14 @@ const App: React.FC = () => {
       try { await deleteExternalDocument(doc); setExternalDocuments(prev => prev.filter(d => d.id !== doc.id));
       } catch (err) { addToast("Error", "No se pudo eliminar el documento externo.", "error"); throw err; }
   };
+  
+  const handleMoveExternalDocument = async (docId: string, newFolderId: string): Promise<void> => {
+    try {
+        await moveExternalDocument(docId, newFolderId);
+        setExternalDocuments(prev => prev.map(d => d.id === docId ? { ...d, folderId: newFolderId } : d));
+        addToast("Éxito", "Documento externo movido correctamente.", "success");
+    } catch (err) { handleDatabaseError(err, 'No se pudo mover el documento externo.'); throw err; }
+  };
 
   const handleDatabaseError = (err: unknown, defaultMessage: string) => {
     let message = defaultMessage;
@@ -625,6 +636,8 @@ const App: React.FC = () => {
           await upsertUserThemePreferences(user.id, newTheme, customColors);
       } catch (err) { handleDatabaseError(err, 'Failed to save theme preferences.'); }
   };
+
+  const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
 
   const handleUpload = async () => {
     if (audioChunksRef.current.length === 0) return;
@@ -789,6 +802,19 @@ const App: React.FC = () => {
     } catch (err) { handleDatabaseError(err, 'Failed to delete document.'); throw err; }
   };
 
+  const handleMoveDocument = async (docId: string, newFolderId: string): Promise<void> => {
+    try {
+        await moveDocument(docId, newFolderId);
+        setDocuments(prev => prev.map(d => d.id === docId ? { ...d, folderId: newFolderId } : d));
+        const docName = documents.find(d => d.id === docId)?.name || 'documento';
+        await addActivity('movió el documento', `"${docName}"`, 'low');
+        addToast("Éxito", "Documento movido correctamente.", "success");
+    } catch (err) {
+        handleDatabaseError(err, 'No se pudo mover el documento.');
+        throw err;
+    }
+  };
+
   const handleAddFolder = async (folderName: string, parentId: string | null): Promise<Folder> => {
     try { const newFolder = await addFolder(folderName, parentId); setFolders(prev => [...prev, newFolder]); await addActivity('creó la carpeta', `"${newFolder.name}"`, 'low'); return newFolder;
     } catch (err) { handleDatabaseError(err, 'Failed to add folder.'); throw err; }
@@ -856,7 +882,7 @@ const App: React.FC = () => {
       case 'Proyectos':
         if (selectedProject) { return <>{globalErrorDisplay}<ProjectDetailView project={selectedProject} tasks={tasks.filter(t => t.projectId === selectedProject.id)} documents={documents} folders={folders} onBackToList={handleBackToList} onDeleteProject={handleDeleteProject} onSaveProject={handleSaveProject} onAddTask={handleAddTask} onToggleTask={handleToggleTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onAddDocument={handleAddDocument} onDeleteDocument={handleDeleteDocument} userPermissions={userPermissions} user={user!} /></>; }
         return <>{globalErrorDisplay}<ProjectsListView projects={projects} tasks={tasks} isLoading={(projectsLoading || tasksLoading) && projects.length === 0} onSelectProject={handleSelectProject} onSaveProject={handleSaveProject} onUpdateProjectStatus={handleUpdateProjectStatus} onError={handleDatabaseError} geminiApiKey={geminiApiKey} userPermissions={userPermissions} /></>;
-      case 'Documentos': return <>{globalErrorDisplay}<DocumentsView projects={projects} folders={folders} documents={documents} externalFolders={externalFolders} externalDocuments={externalDocuments} isLoading={foldersLoading || documentsLoading} onAddFolder={handleAddFolder} onDeleteFolder={handleDeleteFolder} onAddDocument={handleAddDocument} onDeleteDocument={handleDeleteDocument} onAddExternalFolder={handleAddExternalFolder} onDeleteExternalFolder={handleDeleteExternalFolder} onAddExternalDocument={handleAddExternalDocument} onDeleteExternalDocument={handleDeleteExternalDocument} userPermissions={userPermissions} user={user!} /></>;
+      case 'Documentos': return <>{globalErrorDisplay}<DocumentsView projects={projects} folders={folders} documents={documents} externalFolders={externalFolders} externalDocuments={externalDocuments} isLoading={foldersLoading || documentsLoading} onAddFolder={handleAddFolder} onDeleteFolder={handleDeleteFolder} onAddDocument={handleAddDocument} onDeleteDocument={handleDeleteDocument} onMoveDocument={handleMoveDocument} onAddExternalFolder={handleAddExternalFolder} onDeleteExternalFolder={handleDeleteExternalFolder} onAddExternalDocument={handleAddExternalDocument} onDeleteExternalDocument={handleDeleteExternalDocument} onMoveExternalDocument={handleMoveExternalDocument} userPermissions={userPermissions} user={user!} /></>;
       case 'Enlaces': return <>{globalErrorDisplay}<LinksView links={links} isLoading={linksLoading} onOpenLinkModal={handleOpenLinkModal} onOpenEditLinkModal={handleOpenEditLinkModal} onDeleteLink={handleDeleteLink} userPermissions={userPermissions} /></>;
       case 'Apps': return <>{globalErrorDisplay}<AppsView /></>;
       case 'CODEX': return <>{globalErrorDisplay}<NexusView documents={documents} folders={folders} externalDocuments={externalDocuments} externalFolders={externalFolders} /></>;
@@ -875,12 +901,34 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text font-sans">
+    <div className="flex h-screen bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text font-sans overflow-hidden">
       <ToastContainer notifications={toastNotifications} onDismiss={removeToast} />
-      <Sidebar isOpen={true} activeView={activeView} setActiveView={changeView} currentTheme={theme} onThemeChange={handleThemeChange} customThemeColors={customThemeColors} onSecretTrigger={handleSecretTrigger} onSecretSequenceStep={handleSecretSequenceStep} onHideGamesTrigger={handleHideGamesTrigger} isGamesSectionUnlocked={isGamesSectionUnlocked} recordingStatus={recordingStatus} recordingTime={recordingTime} uploadStatus={uploadStatus} uploadMessage={uploadMessage} onStartRecording={startRecording} onTogglePauseResume={togglePauseResume} onStopRecording={stopRecording} user={user} userPermissions={userPermissions} setIsMasterBypassActive={setIsMasterBypassActive} />
-      <div className={`flex-1 flex flex-col transition-all duration-300 ml-64 overflow-x-hidden`}>
+      <Sidebar 
+          isOpen={isSidebarOpen} 
+          onToggle={toggleSidebar}
+          activeView={activeView} 
+          setActiveView={changeView} 
+          currentTheme={theme} 
+          onThemeChange={handleThemeChange} 
+          customThemeColors={customThemeColors} 
+          onSecretTrigger={handleSecretTrigger} 
+          onSecretSequenceStep={handleSecretSequenceStep} 
+          onHideGamesTrigger={handleHideGamesTrigger} 
+          isGamesSectionUnlocked={isGamesSectionUnlocked} 
+          recordingStatus={recordingStatus} 
+          recordingTime={recordingTime} 
+          uploadStatus={uploadStatus} 
+          uploadMessage={uploadMessage} 
+          onStartRecording={startRecording} 
+          onTogglePauseResume={togglePauseResume} 
+          onStopRecording={stopRecording} 
+          user={user} 
+          userPermissions={userPermissions} 
+          setIsMasterBypassActive={setIsMasterBypassActive} 
+      />
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'} overflow-x-hidden`}>
         <Header user={user!} onUpdateAvatar={handleUpdateAvatar} isAvatarLoading={isAvatarLoading} onLogout={handleLogout} unreadCount={unreadCount} notifications={activities} readNotificationIds={readNotificationIds} onMarkAsRead={markAsRead} onNavigate={changeView} onMarkAllAsRead={markAllAsRead} recordingStatus={recordingStatus} recordingTime={recordingTime} isEditor={true} />
-        <main className="flex-1 p-6 lg:p-8 overflow-y-auto"> <div className="animate-fade-in"> {renderActiveView()} </div> </main>
+        <main className="flex-1 p-4 lg:p-6 overflow-y-auto w-full max-w-full"> <div className="animate-fade-in max-w-[1600px] mx-auto"> {renderActiveView()} </div> </main>
       </div>
       {isCodeModalVisible && ( <SecretCodeModal onClose={() => { setIsCodeModalVisible(false); setSecretSequence([]); }} onSubmit={handleCodeSubmit} /> )}
       {isLinkModalOpen && ( <LinkModal onClose={handleCloseLinkModal} onSave={handleSaveLink} linkToEdit={linkToEdit} /> )}

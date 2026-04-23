@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon, CheckCircleIcon, XCircleIcon, GameControllerIcon, KeyIcon, ViewGridIcon, AcademicCapIcon, MicrophoneIcon } from './Icons';
+import { ChartPieIcon, ClipboardListIcon, CogIcon, DocumentTextIcon, FolderOpenIcon, HomeIcon, LinkIcon, PencilAltIcon, SparklesIcon, UsersIcon, BellIcon, CustomLogoIcon, SunIcon, MoonIcon, ColorSwatchIcon, CheckCircleIcon, XCircleIcon, GameControllerIcon, KeyIcon, ViewGridIcon, AcademicCapIcon, MicrophoneIcon, ChevronRightIcon } from './Icons';
 import Spinner from './Spinner';
 import { User, UserPermissions } from '../types';
 
@@ -9,6 +9,7 @@ type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
 
 interface SidebarProps {
     isOpen: boolean;
+    onToggle: () => void;
     activeView: string;
     setActiveView: (view: string) => void;
     currentTheme: string;
@@ -55,7 +56,7 @@ const NavLink: React.FC<{
 );
 
 const Sidebar: React.FC<SidebarProps> = ({ 
-    isOpen, activeView, setActiveView, currentTheme, onThemeChange, customThemeColors, onSecretTrigger,
+    isOpen, onToggle, activeView, setActiveView, currentTheme, onThemeChange, customThemeColors, onSecretTrigger,
     onSecretSequenceStep, onHideGamesTrigger, isGamesSectionUnlocked,
     recordingStatus, recordingTime, uploadStatus, uploadMessage,
     onStartRecording, onTogglePauseResume, onStopRecording,
@@ -193,6 +194,13 @@ const Sidebar: React.FC<SidebarProps> = ({
         <>
             <aside className={`fixed top-0 left-0 h-full bg-brand-primary shadow-lg z-30 transition-all duration-300 flex flex-col ${isOpen ? 'w-64' : 'w-20'}`}>
                 <div className={`relative flex items-center h-16 border-b border-[var(--color-brand-secondary)]/50 flex-shrink-0 ${isOpen ? 'px-4 justify-start' : 'justify-center'}`}>
+                    <button 
+                        onClick={onToggle}
+                        className="absolute -right-3 top-20 bg-brand-primary text-white p-1 rounded-full border border-[var(--color-brand-secondary)] shadow-md hover:bg-brand-secondary z-50 transition-transform duration-300"
+                        style={{ transform: `translateX(${isOpen ? '0' : '0'}px)` }}
+                    >
+                        {isOpen ? <XCircleIcon className="w-4 h-4" /> : <ChevronRightIcon className="w-4 h-4" />}
+                    </button>
                     <div className={`flex items-center transition-all duration-300`}>
                         <div onClick={onSecretTrigger} className="cursor-default" aria-hidden="true">
                             <CustomLogoIcon className="h-8 w-8 text-white" />

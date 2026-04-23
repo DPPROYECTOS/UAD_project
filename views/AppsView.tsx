@@ -20,6 +20,7 @@ interface CircuitDragState {
 const AppsView: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [dimensions, setDimensions] = useState({ width: 1200, height: 800 }); 
+    const scaleFactor = Math.min(Math.max(dimensions.width / 1400, 0.6), 1.1);
     const [isEditing, setIsEditing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     
@@ -146,10 +147,10 @@ const AppsView: React.FC = () => {
     }, []);
 
     // CONSTANTS
-    const CPU_SIZE = 176; 
+    const CPU_SIZE = 176 * scaleFactor; 
     const CPU_HALF = CPU_SIZE / 2;
-    const MOD_W = 160; 
-    const MOD_H = 80;
+    const MOD_W = 160 * scaleFactor; 
+    const MOD_H = 80 * scaleFactor;
     const MOD_HALF_W = MOD_W / 2;
     const MOD_HALF_H = MOD_H / 2;
 
@@ -193,7 +194,7 @@ const AppsView: React.FC = () => {
         else targetSide = 'bottom';
 
         const candidates: {x: number, y: number}[] = [];
-        const spread = 40; 
+        const spread = 40 * scaleFactor; 
 
         if (targetSide === 'top') {
             const anchorY = my - MOD_HALF_H;
@@ -208,13 +209,13 @@ const AppsView: React.FC = () => {
         } else if (targetSide === 'left') {
             const anchorX = mx - MOD_HALF_W;
             candidates.push({ x: anchorX, y: my });
-            candidates.push({ x: anchorX, y: my - 20 });
-            candidates.push({ x: anchorX, y: my + 20 });
+            candidates.push({ x: anchorX, y: my - (20 * scaleFactor) });
+            candidates.push({ x: anchorX, y: my + (20 * scaleFactor) });
         } else { // right
             const anchorX = mx + MOD_HALF_W;
             candidates.push({ x: anchorX, y: my });
-            candidates.push({ x: anchorX, y: my - 20 });
-            candidates.push({ x: anchorX, y: my + 20 });
+            candidates.push({ x: anchorX, y: my - (20 * scaleFactor) });
+            candidates.push({ x: anchorX, y: my + (20 * scaleFactor) });
         }
 
         let bestT = candidates[0];
@@ -534,8 +535,8 @@ const AppsView: React.FC = () => {
                 <div className="absolute inset-0 opacity-20" style={{backgroundImage: 'linear-gradient(#37feff 1px, transparent 1px), linear-gradient(90deg, #37feff 1px, transparent 1px)', backgroundSize: '20px 20px'}}></div>
                 <div className="absolute inset-0 blur-3xl opacity-20 animate-pulse pointer-events-none" style={{ backgroundColor: PRIMARY_COLOR }}></div>
                 <div className="relative z-10 flex flex-col items-center">
-                    <CustomLogoIcon className="w-20 h-20 drop-shadow-[0_0_15px_rgba(55,254,255,0.6)]" style={{ color: PRIMARY_COLOR }} />
-                    <div className="mt-2 font-mono text-2xl font-bold tracking-[0.2em] drop-shadow-[0_0_5px_rgba(55,254,255,0.8)]" style={{ color: PRIMARY_COLOR }}>
+                    <CustomLogoIcon className="h-12 w-12 sm:w-16 sm:h-16 lg:w-20 lg:h-20 drop-shadow-[0_0_15px_rgba(55,254,255,0.6)]" style={{ color: PRIMARY_COLOR, transform: `scale(${scaleFactor})` }} />
+                    <div className="mt-2 font-mono text-base sm:text-lg lg:text-2xl font-bold tracking-[0.2em] drop-shadow-[0_0_5px_rgba(55,254,255,0.8)]" style={{ color: PRIMARY_COLOR, transform: `scale(${scaleFactor})` }}>
                         UAD
                     </div>
                 </div>
@@ -628,8 +629,8 @@ const AppsView: React.FC = () => {
                         </div>
 
                         <div className="pl-2">
-                            <h4 className="text-slate-200 font-bold font-mono text-sm truncate">{p.label}</h4>
-                            <p className="text-slate-500 text-[10px] uppercase truncate">{p.subLabel}</p>
+                            <h4 className="text-slate-200 font-bold font-mono text-[10px] sm:text-xs lg:text-sm truncate">{p.label}</h4>
+                            <p className="text-slate-500 text-[8px] sm:text-[9px] lg:text-[10px] uppercase truncate">{p.subLabel}</p>
                         </div>
 
                         {!isEditing && p.status === 'active' && (

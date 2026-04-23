@@ -39,6 +39,29 @@ const VoiceLogView: React.FC = () => {
   // Esto evita el "HOLA HOLA HOLA" porque el índice 1 siempre será el mismo hueco en el mapa
   const sessionResultsMap = useRef<Map<number, string>>(new Map());
   const historyTranscript = useRef<string>('');
+  const lastProcessedIndex = useRef<number>(-1);
+
+  // Función de limpieza de eco y repeticiones (Smart Merge)
+  const mergeTranscripts = (stable: string, incoming: string) => {
+    if (!stable) return incoming.trim();
+    if (!incoming) return stable.trim();
+
+    const stableLast = stable.trim().split(/\s+/).slice(-6); // Tomamos las últimas 6 palabras
+    const incomingFirst = incoming.trim().split(/\s+/);
+
+    let overlap = 0;
+    // Buscamos coincidencia máxima entre el final de uno y el inicio del otro
+    for (let i = 1; i <= Math.min(stableLast.length, incomingFirst.length); i++) {
+      const tail = stableLast.slice(-i).join(' ').toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"");
+      const head = incomingFirst.slice(0, i).join(' ').toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()]/g,"");
+      if (tail === head) {
+        overlap = i;
+      }
+    }
+
+    const cleanedIncoming = incomingFirst.slice(overlap).join(' ');
+    return (stable.trim() + ' ' + cleanedIncoming).trim();
+  };
 
   useEffect(() => {
     if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
@@ -62,25 +85,21 @@ const VoiceLogView: React.FC = () => {
     recognition.onresult = (event: any) => {
       let interim = '';
       
-      // Procesamos TODOS los resultados actuales desde el inicio de esta ráfaga
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         const result = event.results[i];
         const text = result[0].transcript;
         
         if (result.isFinal) {
-          // Guardamos en el mapa por índice. 
-          // Si el navegador repite el índice i, simplemente se sobrescribe, NO SE SUMA.
           sessionResultsMap.current.set(i, text.trim());
         } else {
           interim = text;
         }
       }
 
-      // Construimos el texto de la sesión actual uniendo las piezas del mapa
       const sessionFinalText = Array.from(sessionResultsMap.current.values()).join(' ');
       
-      // El resultado final es el historial acumulado + lo nuevo de esta sesión
-      const fullText = (historyTranscript.current + ' ' + sessionFinalText).trim();
+      // Aplicamos el Smart Merge para evitar duplicados entre sesiones
+      const fullText = mergeTranscripts(historyTranscript.current, sessionFinalText);
       
       setTranscript(fullText);
       setInterimTranscript(interim);
@@ -91,6 +110,8 @@ const VoiceLogView: React.FC = () => {
     };
 
     recognition.onerror = (event: any) => {
+      // Ignorar errores menores para mantener la conexión
+      if (event.error === 'no-speech') return;
       if (event.error === 'not-allowed') {
         setError("Acceso al micrófono bloqueado.");
         isListeningRef.current = false;
@@ -99,10 +120,9 @@ const VoiceLogView: React.FC = () => {
     };
 
     recognition.onend = () => {
-      // Al terminar una ráfaga, consolidamos el mapa en el historial y limpiamos
       if (sessionResultsMap.current.size > 0) {
           const sessionText = Array.from(sessionResultsMap.current.values()).join(' ');
-          historyTranscript.current = (historyTranscript.current + ' ' + sessionText).trim();
+          historyTranscript.current = mergeTranscripts(historyTranscript.current, sessionText);
           sessionResultsMap.current.clear();
       }
 
@@ -147,14 +167,22 @@ const VoiceLogView: React.FC = () => {
     
     setIsRefining(true);
     try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+        
+        const prompt = `Eres un editor experto de bitácoras profesionales. 
+        Toma la siguiente transcripción de voz que presenta tartamudeos, repeticiones de palabras por eco de audio y falta de coherencia estructural.
+        Límpiala para que sea un informe profesional, fluido y sin redundancias. 
+        Mantén el significado original intacto, solo elimina el ruido y mejora la puntuación.
+        Transcripción: "${transcript}"`;
+
         const response = await ai.models.generateContent({
-            model: 'gemini-3-flash-preview',
-            contents: `Eres un editor experto. Toma la siguiente transcripción de voz (que puede tener palabras repetidas, falta de puntuación o errores de audio) y límpiala para que sea un texto profesional, coherente y fluido. NO añadas información que no esté allí, solo corrige y formatea. Texto: "${transcript}"`,
+            model: 'gemini-1.5-flash',
+            contents: prompt,
         });
 
-        if (response.text) {
-            const refined = response.text.trim();
+        const refined = response.text?.trim();
+
+        if (refined) {
             setTranscript(refined);
             historyTranscript.current = refined;
             sessionResultsMap.current.clear();
