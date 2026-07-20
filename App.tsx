@@ -369,6 +369,56 @@ const App: React.FC = () => {
     if (!user) return;
 
     let isSubscribed = true;
+
+    // 1. Setup Realtime Broadcast channel for instant logout across all active tabs/devices
+    const channel = supabase.channel('session-revocations');
+    
+    channel.on('broadcast', { event: 'revoke' }, async ({ payload }) => {
+      console.log("Realtime session revocation event received:", payload);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        let sid = '';
+        const parts = (session.access_token || '').split('.');
+        if (parts.length === 3) {
+          try {
+            let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) {
+              base64 += '=';
+            }
+            const jwtPayload = JSON.parse(atob(base64));
+            sid = jwtPayload.sid || '';
+          } catch (e) {
+            console.error("Error decoding JWT in broadcast listener:", e);
+          }
+        }
+
+        const matchesSession = payload.type === 'session' && payload.targetId === sid;
+        const matchesUser = payload.type === 'user' && payload.targetId === user.id;
+        const matchesAll = payload.type === 'all';
+
+        if ((matchesSession || matchesUser || matchesAll) && isSubscribed) {
+          console.warn("La sesión activa fue revocada por el administrador via Realtime.");
+          addToast("Sesión Revocada", "Tu sesión ha sido cerrada por el administrador.", "error");
+          await signOut();
+          setUser(null);
+          setTimeout(() => {
+            window.location.reload();
+          }, 100);
+        }
+      } catch (err) {
+        console.error("Error processing revocation broadcast:", err);
+      }
+    });
+
+    channel.subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        console.log("Suscrito con éxito al canal de tiempo real para revocación de sesiones.");
+      }
+    });
+
+    // 2. Fallback polling check (runs every 30 seconds)
     const checkActiveSession = async () => {
       try {
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
@@ -412,6 +462,9 @@ const App: React.FC = () => {
           addToast("Sesión Revocada", "Tu sesión ha sido cerrada por el administrador.", "error");
           await signOut();
           setUser(null);
+          setTimeout(() => {
+            window.location.reload();
+          }, 100);
         }
       } catch (err) {
         // Handle network and other exceptions gracefully
@@ -424,12 +477,12 @@ const App: React.FC = () => {
       }
     };
 
-    // Check immediately and then every 30 seconds to be gentle on Supabase rate limits
     checkActiveSession();
     const interval = setInterval(checkActiveSession, 30000);
 
     return () => {
       isSubscribed = false;
+      supabase.removeChannel(channel);
       clearInterval(interval);
     };
   }, [user?.id]);

@@ -26,7 +26,8 @@ import {
   adminRevokeAllSessions,
   adminGetActiveSessions,
   adminRevokeSession,
-  ActiveSession
+  ActiveSession,
+  adminBroadcastSessionRevocation
 } from '../services/supabaseService';
 import { UserPermissions } from '../types';
 import Spinner from '../components/Spinner';
@@ -371,6 +372,11 @@ const AdminView: React.FC = () => {
 
       try {
           await adminRevokeUserSessions(sessionUserId);
+          try {
+              await adminBroadcastSessionRevocation('user', sessionUserId);
+          } catch (broadcastErr) {
+              console.warn("Realtime broadcast failed, fallback polling will handle it:", broadcastErr);
+          }
           setSessionRevokeSuccess(`Sesión de ${selectedUser.nickname} (${selectedUser.email}) cerrada en todos los dispositivos.`);
           setConfirmRevokeUser(false);
           setSessionUserId('');
@@ -394,6 +400,11 @@ const AdminView: React.FC = () => {
 
       try {
           await adminRevokeSession(sessionId);
+          try {
+              await adminBroadcastSessionRevocation('session', sessionId);
+          } catch (broadcastErr) {
+              console.warn("Realtime broadcast failed, fallback polling will handle it:", broadcastErr);
+          }
           setSessionRevokeSuccess("Sesión específica revocada con éxito.");
           await fetchSessions();
       } catch (err) {
@@ -421,6 +432,11 @@ const AdminView: React.FC = () => {
 
       try {
           await adminRevokeAllSessions();
+          try {
+              await adminBroadcastSessionRevocation('all', '');
+          } catch (broadcastErr) {
+              console.warn("Realtime broadcast failed, fallback polling will handle it:", broadcastErr);
+          }
           setSessionRevokeSuccess("Todas las sesiones activas de todos los usuarios han sido cerradas globalmente.");
           setConfirmRevokeAll(false);
           await fetchSessions();

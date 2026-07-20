@@ -961,4 +961,29 @@ export const adminRevokeAllSessions = async (): Promise<void> => {
     if (error) throw error;
 };
 
+export const adminBroadcastSessionRevocation = async (type: 'all' | 'user' | 'session', targetId: string): Promise<void> => {
+    const channel = supabase.channel('session-revocations');
+    return new Promise<void>((resolve) => {
+        channel.subscribe((status) => {
+            if (status === 'SUBSCRIBED') {
+                channel.send({
+                    type: 'broadcast',
+                    event: 'revoke',
+                    payload: { type, targetId }
+                }).then(() => {
+                    setTimeout(() => {
+                        supabase.removeChannel(channel);
+                        resolve();
+                    }, 500);
+                }).catch(() => {
+                    supabase.removeChannel(channel);
+                    resolve(); // resolve anyway so we don't block
+                });
+            } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                resolve();
+            }
+        });
+    });
+};
+
 
