@@ -98,11 +98,22 @@ const PERMISSION_GROUPS = [
         ]
     },
     {
-        id: 'sidebar', // Using sidebar id for codex access toggle
-        title: 'CODEX', // RENAMED FROM NEXUS
-        icon: <AcademicCapIcon className="h-5 w-5"/>,
+        id: 'sidebar',
+        title: 'Visibilidad de Secciones (Barra Lateral)',
+        icon: <ViewGridIcon className="h-5 w-5"/>,
         permissions: [
-            { id: 'codex', label: 'Acceso a CODEX' },
+            { id: 'dashboard', label: 'Ver Dashboard' },
+            { id: 'proyectos', label: 'Ver Proyectos' },
+            { id: 'documentos', label: 'Ver Documentos' },
+            { id: 'enlaces', label: 'Ver Enlaces' },
+            { id: 'apps', label: 'Ver Apps' },
+            { id: 'codex', label: 'Ver CODEX' },
+            { id: 'calendario', label: 'Ver Calendario' },
+            { id: 'auditorias', label: 'Ver Auditorías' },
+            { id: 'pizarra', label: 'Ver Pizarra' },
+            { id: 'notificaciones', label: 'Ver Notificaciones' },
+            { id: 'contraseñas', label: 'Ver Contraseñas' },
+            { id: 'administrador', label: 'Ver Administrador' },
         ]
     },
     {
@@ -139,9 +150,14 @@ const PERMISSION_GROUPS = [
     }
 ];
 
-const AdminView: React.FC = () => {
+interface AdminViewProps {
+    onAddToast?: (title: string, message: string, type?: 'info' | 'warning' | 'error' | 'success') => void;
+}
+
+const AdminView: React.FC<AdminViewProps> = ({ onAddToast }) => {
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [allUserPermissions, setAllUserPermissions] = useState<Record<string, UserPermissions>>({});
+  const [showPermSqlInstructions, setShowPermSqlInstructions] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -169,9 +185,10 @@ const AdminView: React.FC = () => {
   const [activeSessions, setActiveSessions] = useState<ActiveSession[]>([]);
   const [isLoadingSessions, setIsLoadingSessions] = useState<boolean>(false);
   const [activeSessionsError, setActiveSessionsError] = useState<string | null>(null);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   
   const defaultPermissions: UserPermissions = useMemo(() => ({
-      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true },
+      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, calendario: true, administrador: true },
       proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
       proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
       documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
@@ -262,6 +279,29 @@ const AdminView: React.FC = () => {
   useEffect(() => {
       if (currentUserEmail?.trim().toLowerCase() === 'darienperez695@gmail.com') {
           fetchSessions();
+
+          // Get the current session ID (sid)
+          const getCurrentSid = async () => {
+              try {
+                  const { data: { session } } = await supabase.auth.getSession();
+                  if (session) {
+                      const parts = (session.access_token || '').split('.');
+                      if (parts.length === 3) {
+                          let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+                          while (base64.length % 4) {
+                              base64 += '=';
+                          }
+                          const payload = JSON.parse(atob(base64));
+                          if (payload.sid) {
+                              setCurrentSessionId(payload.sid);
+                          }
+                      }
+                  }
+              } catch (e) {
+                  console.warn("Could not parse current session ID:", e);
+              }
+          };
+          getCurrentSid();
       }
   }, [currentUserEmail]);
 
@@ -286,10 +326,20 @@ const AdminView: React.FC = () => {
       setError(null);
       try {
           for (const user of users) {
-              await savePermissionsForUser(user.id, allUserPermissions[user.id]);
+              const perms = allUserPermissions[user.id] || defaultPermissions;
+              await savePermissionsForUser(user.id, perms);
+          }
+          if (onAddToast) {
+              onAddToast("Cambios Guardados", "Se han guardado correctamente los permisos de todos los usuarios.", "success");
+          } else {
+              alert("Se han guardado correctamente los permisos.");
           }
       } catch (err) {
-          setError(err instanceof Error ? err.message : "No se pudieron guardar los cambios.");
+          const errMsg = err instanceof Error ? err.message : "No se pudieron guardar los cambios.";
+          setError(errMsg);
+          if (onAddToast) {
+              onAddToast("Error al Guardar", "No se pudieron guardar los cambios: " + errMsg, "error");
+          }
       } finally {
           setIsSaving(false);
       }
@@ -463,7 +513,15 @@ const AdminView: React.FC = () => {
         Gestiona los permisos de los usuarios para cada módulo de la aplicación.
       </p>
       
-      {error && <div className="mt-4 p-4 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-lg">{error}</div>}
+      {error && (
+        <div className="mt-4 p-4 bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 rounded-lg space-y-2">
+          <p className="font-semibold">{error}</p>
+          <p className="text-xs opacity-90 leading-relaxed font-sans">
+            💡 <strong>Sugerencia de Solución:</strong> Este error ocurre porque Supabase bloquea por defecto la edición directa de la configuración de otros usuarios por seguridad (RLS). 
+            Para solucionarlo, debes crear una función RPC una sola vez en Supabase. Haz clic en el botón <strong>"Ver Instrucciones SQL de Permisos"</strong> al final de la página, copia el código SQL y ejecútalo en el SQL Editor de tu consola de Supabase.
+          </p>
+        </div>
+      )}
 
       <div className="mt-6 bg-light-card dark:bg-dark-card rounded-lg border border-light-border dark:border-dark-border">
             <div className="overflow-x-auto p-6">
@@ -506,7 +564,14 @@ const AdminView: React.FC = () => {
                 </div>
             </div>
         
-        <div className="p-4 border-t border-light-border dark:border-dark-border flex justify-end">
+        <div className="p-4 border-t border-light-border dark:border-dark-border flex justify-between items-center flex-wrap gap-4">
+            <button
+                type="button"
+                onClick={() => setShowPermSqlInstructions(!showPermSqlInstructions)}
+                className="px-4 py-2.5 text-xs font-medium border border-light-border dark:border-dark-border rounded-lg hover:bg-light-bg dark:hover:bg-dark-bg text-light-text-secondary dark:text-dark-text-secondary transition-colors"
+            >
+                {showPermSqlInstructions ? "Ocultar SQL de Permisos" : "Ver Instrucciones SQL de Permisos"}
+            </button>
             <button
                 onClick={handleSaveChanges}
                 disabled={isSaving}
@@ -516,6 +581,31 @@ const AdminView: React.FC = () => {
                 <span className={isSaving ? "ml-2" : ""}>{isSaving ? 'Guardando...' : 'Guardar Cambios'}</span>
             </button>
         </div>
+
+        {showPermSqlInstructions && (
+            <div className="p-6 border-t border-light-border dark:border-dark-border bg-light-bg dark:bg-dark-bg/30 text-xs font-mono space-y-2 animate-fade-in">
+                <p className="font-sans font-semibold text-light-text dark:text-dark-text mb-2 text-sm text-yellow-600 dark:text-yellow-400">
+                    ⚠️ ATENCIÓN: Para poder actualizar los permisos de otros usuarios sin restricciones de seguridad de Supabase (RLS), debes ejecutar esta función de base de datos una sola vez en el SQL Editor de tu consola de Supabase:
+                </p>
+                <pre className="p-3 bg-light-card dark:bg-dark-card rounded border border-light-border dark:border-dark-border overflow-x-auto text-[11px] text-light-text dark:text-dark-text select-all">
+{`CREATE OR REPLACE FUNCTION admin_save_user_permissions(target_user_id UUID, new_permissions JSONB)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+  INSERT INTO public.user_ui_settings (user_id, permissions, updated_at)
+  VALUES (target_user_id, new_permissions, now())
+  ON CONFLICT (user_id)
+  DO UPDATE SET permissions = new_permissions, updated_at = now();
+END;
+$$;`}
+                </pre>
+                <p className="font-sans text-light-text-secondary dark:text-dark-text-secondary mt-2">
+                    Esta función usa <code className="bg-light-card dark:bg-dark-card px-1 py-0.5 rounded border border-light-border dark:border-dark-border font-semibold">SECURITY DEFINER</code> para que un administrador pueda actualizar la configuración y permisos de otros miembros del equipo de manera segura.
+                </p>
+            </div>
+        )}
       </div>
 
       {currentUserEmail?.trim().toLowerCase() === 'darienperez695@gmail.com' && (
@@ -888,9 +978,16 @@ $$;`}
                                     };
 
                                     return (
-                                        <tr key={session.session_id} className="hover:bg-light-bg/30 dark:hover:bg-dark-bg/10 transition-colors">
+                                        <tr key={session.session_id} className={`transition-colors ${session.session_id === currentSessionId ? 'bg-emerald-500/5 hover:bg-emerald-500/10 dark:bg-emerald-500/5' : 'hover:bg-light-bg/30 dark:hover:bg-dark-bg/10'}`}>
                                             <td className="p-3">
-                                                <div className="font-bold text-light-text dark:text-dark-text">{userNickname}</div>
+                                                <div className="font-bold text-light-text dark:text-dark-text flex items-center flex-wrap gap-2">
+                                                     {userNickname}
+                                                     {session.session_id === currentSessionId && (
+                                                         <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/15 text-emerald-500 border border-emerald-500/20">
+                                                             Este Dispositivo (Sesión Actual)
+                                                         </span>
+                                                     )}
+                                                 </div>
                                                 <div className="text-[10px] text-light-text-secondary dark:text-dark-text-secondary font-medium">{session.email || "Sin email"}</div>
                                             </td>
                                             <td className="p-3 font-mono text-[11px] text-light-text-secondary dark:text-dark-text-secondary">

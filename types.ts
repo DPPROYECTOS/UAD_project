@@ -34,6 +34,7 @@ export interface UserPermissions {
     apps: boolean;
     codex: boolean; // RENAMED FROM NEXUS
     calendario: boolean;
+    administrador?: boolean;
   };
   proyectos: {
     canCreate: boolean;

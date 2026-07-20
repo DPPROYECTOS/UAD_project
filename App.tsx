@@ -557,6 +557,35 @@ const App: React.FC = () => {
         setDeleteLocks({});
     }
   }, [user]);
+
+  const hasSidebarOptions = useMemo(() => {
+    if (!user) return true;
+    if (!userPermissions) return true; // Keep true during loading to avoid visual flash
+
+    const sidebar = userPermissions.sidebar;
+    if (!sidebar) return true;
+
+    // Check if any standard item is true
+    const keys: (keyof typeof sidebar)[] = [
+      'dashboard', 'proyectos', 'documentos', 'enlaces', 
+      'auditorias', 'pizarra', 'notificaciones', 'contraseñas', 
+      'apps', 'codex', 'calendario'
+    ];
+
+    const hasVisibleStandard = keys.some(key => sidebar[key] === true);
+    if (hasVisibleStandard) return true;
+
+    // Check games section (is it unlocked for this user?)
+    if (isGamesSectionUnlocked) return true;
+
+    // Check administrador section:
+    const isSuperAdmin = ['darienperez695@gmail.com', 'zerklucio@gmail.com'].includes((user.username || '').toLowerCase().trim());
+    if (isSuperAdmin && (sidebar.administrador ?? true)) {
+      return true;
+    }
+
+    return false;
+  }, [user, userPermissions, isGamesSectionUnlocked]);
   
   useEffect(() => {
       if ((activeView === 'Documentos' || activeView === 'CODEX') && !externalDataLoaded) {
@@ -711,6 +740,14 @@ const App: React.FC = () => {
     let message = defaultMessage;
     if (err instanceof Error) { message = err.message; } else if (typeof err === 'object' && err !== null && 'message' in err) { message = String((err as any).message); } else if (typeof err === 'string') { message = err; }
     if (message.includes('Invalid login credentials')) { message = 'Correo o contraseña incorrectos.'; } else if (message.includes('Network request failed')) { message = 'Error de conexión. Verifica tu internet.'; }
+    
+    // Check for transient network/fetch errors to avoid showing a blocking global error block
+    if (message.includes('Failed to fetch') || message.includes('fetch') || message.includes('TypeError: load failed') || message.includes('NetworkError')) {
+      console.warn("Transient connection warning (supressed global error):", message);
+      addToast("Problema de Conexión", "No se pudieron cargar o guardar algunos datos de forma temporal debido a la conexión de red.", "warning");
+      return;
+    }
+    
     setError(message);
   }
 
@@ -939,10 +976,45 @@ const App: React.FC = () => {
       case 'Administrador':
         const allowedAdmins = ['darienperez695@gmail.com', 'zerklucio@gmail.com'];
         if (!user || !allowedAdmins.includes((user.username || '').toLowerCase().trim())) { return <>{globalErrorDisplay}<DashboardView projects={projects} audits={audits} activities={activities.slice(0, 5)} tasks={tasks} onSelectProject={handleSelectProjectById} /></>; }
-        return <>{globalErrorDisplay}<AdminView /> </>;
+        return <>{globalErrorDisplay}<AdminView onAddToast={addToast} /> </>;
       default: return <>{globalErrorDisplay}<DashboardView projects={projects} audits={audits} activities={activities.slice(0, 5)} tasks={tasks} onSelectProject={handleSelectProjectById} /></>;
     }
   };
+
+  if (user && !hasSidebarOptions) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-light-bg dark:bg-dark-bg p-4 font-sans text-light-text dark:text-dark-text transition-colors duration-300">
+        <ToastContainer notifications={toastNotifications} onDismiss={removeToast} />
+        <div className="w-full max-w-md p-8 rounded-2xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-2xl text-center flex flex-col items-center animate-fade-in">
+          {/* Elegant Icon Container */}
+          <div className="p-4 bg-red-500/10 dark:bg-red-500/20 text-red-600 dark:text-red-400 rounded-full mb-6 flex items-center justify-center animate-pulse">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+
+          <h2 className="text-2xl font-bold mb-4 tracking-tight text-zinc-900 dark:text-zinc-50">
+            Acceso Inhabilitado
+          </h2>
+          
+          <p className="text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed mb-8">
+            Lo sentimos, ha sido inhabilitada la cuenta, consulta al administrador para más opciones.
+          </p>
+
+          <button
+            onClick={handleLogout}
+            className="w-full px-6 py-3 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-all duration-200 shadow-md hover:shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+          >
+            {/* Logout Icon */}
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            Cerrar Sesión
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-light-bg text-light-text dark:bg-dark-bg dark:text-dark-text font-sans overflow-hidden">

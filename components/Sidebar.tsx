@@ -197,7 +197,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             onClick={() => setActiveView('Juegos')}
                         />
                     )}
-                    {['darienperez695@gmail.com', 'zerklucio@gmail.com'].includes((user.username || '').toLowerCase().trim()) && (
+                    {['darienperez695@gmail.com', 'zerklucio@gmail.com'].includes((user.username || '').toLowerCase().trim()) && (userPermissions?.sidebar?.administrador ?? true) && (
                         <NavLink 
                             key="Administrador"
                             icon={<CogIcon className="h-6 w-6"/>}

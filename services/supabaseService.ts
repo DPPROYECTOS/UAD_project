@@ -73,11 +73,19 @@ export const getGeminiApiKey = async (): Promise<string> => {
 
 // --- User Preferences & Permissions ---
 export const getUserThemePreferences = async (): Promise<ThemePreferences | null> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
-    const { data, error } = await supabase.from('user_preferences').select('*').eq('user_id', user.id).single();
-    if (error && error.code !== 'PGRST116') throw error;
-    return data;
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return null;
+        const { data, error } = await supabase.from('user_preferences').select('*').eq('user_id', user.id).single();
+        if (error && error.code !== 'PGRST116') {
+            console.warn(`Error fetching theme preferences: ${error.message}`);
+            return null;
+        }
+        return data;
+    } catch (err) {
+        console.warn("Resilient fallback: Failed to fetch theme preferences, returning null.", err);
+        return null;
+    }
 };
 
 export const upsertUserThemePreferences = async (userId: string, themeName: string, customColors?: Record<string, string> | null) => {
@@ -89,61 +97,94 @@ export const upsertUserThemePreferences = async (userId: string, themeName: stri
 };
 
 export const getUserPermissions = async (): Promise<UserPermissions | null> => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return null;
 
-    const superAdmins = ['darienperez695@gmail.com', 'zerklucio@gmail.com'];
-    if (user.email && superAdmins.includes(user.email.toLowerCase().trim())) {
+        const superAdmins = ['darienperez695@gmail.com', 'zerklucio@gmail.com'];
+        const isSuperAdmin = user.email && superAdmins.includes(user.email.toLowerCase().trim());
+
+        const defaultPermissions: UserPermissions = {
+          sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, calendario: true, administrador: isSuperAdmin ? true : false },
+          proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
+          proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
+          documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
+          enlaces: { canCreateEdit: true, canDelete: true },
+          auditorias: { canManage: true },
+          pizarra: { canEdit: true },
+          juegos: { canUnlock: isSuperAdmin ? true : false },
+          contraseñas: { canManage: true },
+          apps: { canView: true },
+          nexus: { canView: true },
+          gemini: { canUse: isSuperAdmin ? true : false },
+        };
+
+        let data = null;
+        try {
+            const { data: resData, error } = await supabase.from('user_ui_settings').select('permissions').eq('user_id', user.id).single();
+            if (error) {
+                if (error.code !== 'PGRST116') {
+                    console.warn(`Error fetching user permissions from database: ${error.message}`);
+                }
+            } else {
+                data = resData;
+            }
+        } catch (dbErr) {
+            console.warn("Database error or network failure fetching user permissions, using default fallback permissions:", dbErr);
+        }
+
+        if (!data || !data.permissions) {
+            if (isSuperAdmin) {
+                return {
+                    ...defaultPermissions,
+                    sidebar: { ...defaultPermissions.sidebar, administrador: true },
+                    juegos: { canUnlock: true },
+                    gemini: { canUse: true }
+                };
+            }
+            return defaultPermissions;
+        }
+
+        const dbPerms = data.permissions;
         return {
-            sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, calendario: true },
+            sidebar: { 
+                ...defaultPermissions.sidebar, 
+                ...(dbPerms.sidebar || {}), 
+                codex: dbPerms.sidebar?.codex ?? dbPerms.sidebar?.nexus ?? defaultPermissions.sidebar.codex,
+                // Permitir desactivar el panel si se configura explícitamente en la base de datos
+                administrador: dbPerms.sidebar?.administrador !== undefined 
+                    ? dbPerms.sidebar.administrador 
+                    : (isSuperAdmin ? true : defaultPermissions.sidebar.administrador)
+            },
+            proyectos: { ...defaultPermissions.proyectos, ...(dbPerms.proyectos || {}) },
+            proyectos_documentos: { ...defaultPermissions.proyectos_documentos, ...(dbPerms.proyectos_documentos || {}) },
+            documentos: { ...defaultPermissions.documentos, ...(dbPerms.documentos || {}) },
+            enlaces: { ...defaultPermissions.enlaces, ...(dbPerms.enlaces || {}) },
+            auditorias: { ...defaultPermissions.auditorias, ...(dbPerms.auditorias || {}) },
+            pizarra: { ...defaultPermissions.pizarra, ...(dbPerms.pizarra || {}) },
+            juegos: { ...defaultPermissions.juegos, ...(dbPerms.juegos || {}) },
+            contraseñas: dbPerms.contraseñas ? { ...defaultPermissions.contraseñas, ...dbPerms.contraseñas } : defaultPermissions.contraseñas,
+            apps: dbPerms.apps ? { ...defaultPermissions.apps, ...dbPerms.apps } : defaultPermissions.apps,
+            nexus: dbPerms.nexus ? { ...defaultPermissions.nexus, ...dbPerms.nexus } : defaultPermissions.nexus,
+            gemini: { ...defaultPermissions.gemini, ...(dbPerms.gemini || {}) },
+        };
+    } catch (err) {
+        console.warn("Resilient fallback: Critical error in getUserPermissions, returning fallback permissions.", err);
+        return {
+            sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, calendario: true, administrador: false },
             proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
             proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
             documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
             enlaces: { canCreateEdit: true, canDelete: true },
             auditorias: { canManage: true },
             pizarra: { canEdit: true },
-            juegos: { canUnlock: true },
+            juegos: { canUnlock: false },
             contraseñas: { canManage: true },
             apps: { canView: true },
             nexus: { canView: true },
-            gemini: { canUse: true }
+            gemini: { canUse: false },
         };
     }
-
-    const { data, error } = await supabase.from('user_ui_settings').select('permissions').eq('user_id', user.id).single();
-    if (error && error.code !== 'PGRST116') throw new Error(`Error fetching permissions: ${error.message}`);
-
-    const defaultPermissions: UserPermissions = {
-      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, calendario: true },
-      proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
-      proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
-      documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
-      enlaces: { canCreateEdit: true, canDelete: true },
-      auditorias: { canManage: true },
-      pizarra: { canEdit: true },
-      juegos: { canUnlock: false },
-      contraseñas: { canManage: true },
-      apps: { canView: true },
-      nexus: { canView: true },
-      gemini: { canUse: false },
-    };
-
-    if (!data || !data.permissions) return defaultPermissions;
-    const dbPerms = data.permissions;
-    return {
-        sidebar: { ...defaultPermissions.sidebar, ...(dbPerms.sidebar || {}), codex: dbPerms.sidebar?.codex ?? dbPerms.sidebar?.nexus ?? defaultPermissions.sidebar.codex },
-        proyectos: { ...defaultPermissions.proyectos, ...(dbPerms.proyectos || {}) },
-        proyectos_documentos: { ...defaultPermissions.proyectos_documentos, ...(dbPerms.proyectos_documentos || {}) },
-        documentos: { ...defaultPermissions.documentos, ...(dbPerms.documentos || {}) },
-        enlaces: { ...defaultPermissions.enlaces, ...(dbPerms.enlaces || {}) },
-        auditorias: { ...defaultPermissions.auditorias, ...(dbPerms.auditorias || {}) },
-        pizarra: { ...defaultPermissions.pizarra, ...(dbPerms.pizarra || {}) },
-        juegos: { ...defaultPermissions.juegos, ...(dbPerms.juegos || {}) },
-        contraseñas: dbPerms.contraseñas ? { ...defaultPermissions.contraseñas, ...dbPerms.contraseñas } : defaultPermissions.contraseñas,
-        apps: dbPerms.apps ? { ...defaultPermissions.apps, ...dbPerms.apps } : defaultPermissions.apps,
-        nexus: dbPerms.nexus ? { ...defaultPermissions.nexus, ...dbPerms.nexus } : defaultPermissions.nexus,
-        gemini: { ...defaultPermissions.gemini, ...(dbPerms.gemini || {}) },
-    };
 };
 
 export const getAdminData = async (): Promise<any[]> => {
@@ -153,6 +194,23 @@ export const getAdminData = async (): Promise<any[]> => {
 };
 
 export const savePermissionsForUser = async (userId: string, permissions: UserPermissions) => {
+    try {
+        // Intenta guardar usando la función RPC con SECURITY DEFINER (evita errores de políticas RLS)
+        const { error: rpcError } = await supabase.rpc('admin_save_user_permissions', {
+            target_user_id: userId,
+            new_permissions: permissions
+        });
+        if (!rpcError) return;
+        
+        // Si el error es PGRST501 (función no encontrada), procedemos con el fallback
+        if (rpcError.code !== 'PGRST501' && !rpcError.message?.toLowerCase().includes('does not exist')) {
+            throw rpcError;
+        }
+        console.warn("RPC admin_save_user_permissions no existe, usando fallback directo.");
+    } catch (rpcErr) {
+        console.warn("Error o falta de RPC, intentando guardado directo:", rpcErr);
+    }
+
     const { error } = await supabase.from('user_ui_settings').upsert({
         user_id: userId,
         permissions: permissions,
@@ -964,6 +1022,22 @@ export const adminRevokeAllSessions = async (): Promise<void> => {
 export const adminBroadcastSessionRevocation = async (type: 'all' | 'user' | 'session', targetId: string): Promise<void> => {
     const channel = supabase.channel('session-revocations');
     return new Promise<void>((resolve) => {
+        let isDone = false;
+        const cleanup = () => {
+            if (!isDone) {
+                isDone = true;
+                clearTimeout(safetyTimeout);
+                supabase.removeChannel(channel);
+                resolve();
+            }
+        };
+
+        // Safety timeout: Never block for more than 1 second
+        const safetyTimeout = setTimeout(() => {
+            console.warn("Session revocation broadcast timed out. Resolving to avoid blocking UI.");
+            cleanup();
+        }, 1000);
+
         channel.subscribe((status) => {
             if (status === 'SUBSCRIBED') {
                 channel.send({
@@ -971,16 +1045,14 @@ export const adminBroadcastSessionRevocation = async (type: 'all' | 'user' | 'se
                     event: 'revoke',
                     payload: { type, targetId }
                 }).then(() => {
-                    setTimeout(() => {
-                        supabase.removeChannel(channel);
-                        resolve();
-                    }, 500);
-                }).catch(() => {
-                    supabase.removeChannel(channel);
-                    resolve(); // resolve anyway so we don't block
+                    // Short delay to allow the broadcast to send
+                    setTimeout(cleanup, 250);
+                }).catch((err) => {
+                    console.warn("Failed to send revocation broadcast:", err);
+                    cleanup();
                 });
-            } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-                resolve();
+            } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                cleanup();
             }
         });
     });
