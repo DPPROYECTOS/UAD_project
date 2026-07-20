@@ -35,6 +35,7 @@ interface DocumentsViewProps {
   onMoveExternalDocument: (docId: string, newFolderId: string) => Promise<void>;
   userPermissions: UserPermissions | null;
   user: User;
+  deleteLocks?: Record<string, boolean>;
 }
 
 const ChevronRightIcon: React.FC<{ className?: string }> = ({ className }) => (
@@ -75,7 +76,7 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
     projects, folders, documents, externalFolders, externalDocuments, isLoading, 
     onAddFolder, onDeleteFolder, onAddDocument, onDeleteDocument, onMoveDocument,
     onAddExternalFolder, onDeleteExternalFolder, onAddExternalDocument, onDeleteExternalDocument, onMoveExternalDocument,
-    userPermissions, user 
+    userPermissions, user, deleteLocks = {}
 }) => {
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -108,6 +109,9 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
 
   const [docToMove, setDocToMove] = useState<{ doc: Document, isExternal: boolean } | null>(null);
   const [movingToFolderId, setMovingToFolderId] = useState<string>('');
+
+  const isDarien = user?.username?.trim().toLowerCase() === 'darienperez695@gmail.com' || user?.email?.trim().toLowerCase() === 'darienperez695@gmail.com';
+  const isDocumentDeleteLocked = !!deleteLocks?.['documentos'] && !isDarien;
 
   const canUpload = userPermissions?.documentos?.canUpload ?? false;
   const canDownload = userPermissions?.documentos?.canDownload ?? false;
@@ -420,7 +424,22 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
            {canManageFolders && (
             <div className="flex items-center flex-shrink-0">
               <button type="button" onClick={() => setAddingToParentId(folder.id)} className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-light-text-secondary hover:text-brand-primary" title="Añadir sub-carpeta"><PlusIcon className="h-4 w-4" /></button>
-              {folder.name !== 'General' && <button type="button" onClick={() => setFolderToDelete(folder)} className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-light-text-secondary hover:text-red-500" title={`Eliminar ${folder.name}`}><TrashIcon className="h-4 w-4" /></button>}
+              {folder.name !== 'General' && (
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    if (isDocumentDeleteLocked) {
+                      alert("La eliminación de documentos y carpetas está bloqueada por el Administrador Maestro (PHOBOS).");
+                      return;
+                    }
+                    setFolderToDelete(folder);
+                  }} 
+                  className={`p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${isDocumentDeleteLocked ? 'text-gray-400 cursor-not-allowed opacity-50' : 'text-light-text-secondary hover:text-red-500'}`}
+                  title={isDocumentDeleteLocked ? "Eliminación bloqueada por Administrador PHOBOS" : `Eliminar ${folder.name}`}
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
+              )}
             </div>
            )}
         </div>
@@ -452,7 +471,22 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
            {canManageFolders && (
             <div className="flex items-center flex-shrink-0">
               <button type="button" onClick={() => setAddingToParentIdExt(folder.id)} className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-light-text-secondary hover:text-purple-400" title="Añadir sub-carpeta externa"><PlusIcon className="h-4 w-4" /></button>
-              {folder.name !== 'General' && <button type="button" onClick={() => setFolderToDeleteExt(folder)} className="p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-light-text-secondary hover:text-red-500" title={`Eliminar ${folder.name}`}><TrashIcon className="h-4 w-4" /></button>}
+              {folder.name !== 'General' && (
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    if (isDocumentDeleteLocked) {
+                      alert("La eliminación de documentos y carpetas está bloqueada por el Administrador Maestro (PHOBOS).");
+                      return;
+                    }
+                    setFolderToDeleteExt(folder);
+                  }} 
+                  className={`p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity ${isDocumentDeleteLocked ? 'text-gray-400 cursor-not-allowed opacity-50' : 'text-light-text-secondary hover:text-red-500'}`}
+                  title={isDocumentDeleteLocked ? "Eliminación bloqueada por Administrador PHOBOS" : `Eliminar ${folder.name}`}
+                >
+                  <TrashIcon className="h-4 w-4" />
+                </button>
+              )}
             </div>
            )}
         </div>
@@ -511,24 +545,46 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
                             <input id="file-upload-input" type="file" multiple onChange={handleFileChange} className="w-full text-sm text-light-text-secondary dark:text-dark-text-secondary file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-brand-accent/20 file:text-brand-primary hover:file:bg-brand-accent/30" />
                             
                             {selectedFiles.length > 0 && (
-                                <div className="mt-3 p-3 bg-light-bg/50 dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border space-y-2">
-                                    <p className="text-xs font-bold text-light-text-secondary dark:text-dark-text-secondary uppercase mb-2">Cola de subida ({selectedFiles.length})</p>
-                                    <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
-                                        {selectedFiles.map((file, idx) => (
-                                            <div key={idx} className="flex items-center justify-between p-1.5 rounded bg-light-card dark:bg-dark-card border border-light-border/50 dark:border-dark-border/50">
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <DocumentTextIcon className="h-4 w-4 text-brand-primary" />
-                                                    <span className="text-xs truncate">{file.name}</span>
-                                                </div>
-                                                {!isUploading && (
-                                                    <button type="button" onClick={() => removeFile(idx)} className="p-1 rounded-full text-red-500 hover:bg-red-500/10"><TrashIcon className="h-4 w-4" /></button>
-                                                )}
-                                                {isUploading && uploadProgress && idx < uploadProgress.current - 1 && <CheckCircleIcon className="h-4 w-4 text-green-500" />}
-                                                {isUploading && uploadProgress && idx === uploadProgress.current - 1 && <Spinner className="h-4 w-4" />}
-                                                {isUploading && uploadProgress && idx >= uploadProgress.current && <div className="w-4 h-4 rounded-full border border-gray-400"></div>}
-                                            </div>
-                                        ))}
+                                <div className="mt-3 p-3 bg-light-bg/50 dark:bg-dark-bg/50 rounded-lg border border-light-border dark:border-dark-border space-y-2 shadow-inner">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <p className="text-[10px] font-bold text-brand-primary uppercase tracking-widest">Cola de Sincronización ({selectedFiles.length}/15)</p>
+                                        {isUploading && (
+                                            <span className="text-[10px] font-mono text-brand-primary animate-pulse italic">PROCESANDO...</span>
+                                        )}
                                     </div>
+                                    <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                                        {selectedFiles.map((file, idx) => {
+                                            const isDone = isUploading && uploadProgress && idx < uploadProgress.current - 1;
+                                            const isInProgress = isUploading && uploadProgress && idx === uploadProgress.current - 1;
+                                            return (
+                                                <div key={idx} className={`flex items-center justify-between p-2 rounded bg-light-card dark:bg-dark-card border transition-all ${isInProgress ? 'border-brand-primary animate-pulse' : 'border-light-border/50 dark:border-dark-border/50'}`}>
+                                                    <div className="flex items-center gap-2 min-w-0">
+                                                        <DocumentTextIcon className={`h-4 w-4 ${isDone ? 'text-green-500' : 'text-brand-primary'}`} />
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="text-[11px] truncate font-medium">{file.name}</span>
+                                                            <span className="text-[9px] opacity-70">{formatBytes(file.size)}</span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center">
+                                                        {!isUploading ? (
+                                                            <button type="button" onClick={() => removeFile(idx)} className="p-1 rounded-full text-red-500 hover:bg-red-500/10 transition-colors"><TrashIcon className="h-3.5 w-3.5" /></button>
+                                                        ) : (
+                                                            <>
+                                                                {isDone && <CheckCircleIcon className="h-4 w-4 text-green-500" />}
+                                                                {isInProgress && <Spinner className="h-3.5 w-3.5" />}
+                                                                {!isDone && !isInProgress && <div className="w-4 h-4 rounded-full border border-gray-400 opacity-30"></div>}
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    {isUploading && uploadProgress && (
+                                        <div className="mt-2 text-[9px] font-mono text-center text-brand-primary opacity-80 uppercase tracking-tight">
+                                            Progreso Total: {Math.round(((uploadProgress.current - 0.5) / uploadProgress.total) * 100)}%
+                                        </div>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -550,7 +606,27 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
                                 <button type="button" onClick={(e) => handleAction(e, doc, 'preview')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:text-blue-500" title="Previsualizar">{loadingAction === `${doc.id}-preview` ? <Spinner /> : <EyeIcon className="h-5 w-5" />}</button>
                                 {canDownload && <button type="button" onClick={(e) => handleAction(e, doc, 'download')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-green-100 dark:hover:bg-green-900/50 hover:text-green-500" title="Descargar">{loadingAction === `${doc.id}-download` ? <Spinner /> : <DocumentDownloadIcon className="h-5 w-5" />}</button>}
                                 {canUpload && <button type="button" onClick={() => setDocToMove({ doc, isExternal: false })} className="p-2 rounded-full text-light-text-secondary hover:bg-brand-accent/20 hover:text-brand-primary" title="Mover a otra carpeta"><ArrowRightIcon className="h-5 w-5" /></button>}
-                                {canDelete && <button type="button" onClick={() => setDocToDelete(doc)} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}><TrashIcon className="h-5 w-5" /></button>}
+                                {canDelete && (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            if (isDocumentDeleteLocked) {
+                                                alert("La eliminación de documentos y carpetas está bloqueada por el Administrador Maestro (PHOBOS).");
+                                                return;
+                                            }
+                                            setDocToDelete(doc);
+                                        }} 
+                                        disabled={!!loadingAction} 
+                                        className={`p-2 rounded-full transition-colors ${
+                                            isDocumentDeleteLocked 
+                                            ? 'text-gray-400 cursor-not-allowed opacity-50' 
+                                            : 'text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500'
+                                        }`} 
+                                        title={isDocumentDeleteLocked ? "Eliminación bloqueada por Administrador PHOBOS" : `Eliminar ${doc.name}`}
+                                    >
+                                        <TrashIcon className="h-5 w-5" />
+                                    </button>
+                                )}
                             </div>
                         </li>
                     ))}</ul> : <div className="text-center py-10 border-2 border-dashed border-light-border dark:border-dark-border rounded-lg"><CollectionIcon className="mx-auto h-12 w-12 text-gray-400" /><h3 className="mt-2 text-sm font-medium">{isSearching ? 'No se encontraron resultados' : 'Carpeta Vacía'}</h3><p className="mt-1 text-sm text-light-text-secondary dark:text-dark-text-secondary">{isSearching ? 'Intenta con otra búsqueda.' : 'Sube un archivo para verlo aquí.'}</p></div>}
@@ -595,24 +671,46 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
                             </div>
                         </div>
                         {selectedFilesExt.length > 0 && (
-                            <div className="mt-3 p-3 bg-purple-500/5 rounded-lg border border-purple-500/20 space-y-2">
-                                <p className="text-xs font-bold text-purple-400 uppercase mb-2">Cola externa ({selectedFilesExt.length})</p>
-                                <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
-                                    {selectedFilesExt.map((file, idx) => (
-                                        <div key={idx} className="flex items-center justify-between p-1.5 rounded bg-light-card/40 dark:bg-dark-card/40 border border-purple-500/10">
-                                            <div className="flex items-center gap-2 min-w-0">
-                                                <DocumentTextIcon className="h-4 w-4 text-purple-400" />
-                                                <span className="text-xs truncate">{file.name}</span>
-                                            </div>
-                                            {!isUploadingExt && (
-                                                <button type="button" onClick={() => removeFileExt(idx)} className="p-1 rounded-full text-red-500 hover:bg-red-500/10"><TrashIcon className="h-4 w-4" /></button>
-                                            )}
-                                            {isUploadingExt && uploadProgressExt && idx < uploadProgressExt.current - 1 && <CheckCircleIcon className="h-4 w-4 text-green-500" />}
-                                            {isUploadingExt && uploadProgressExt && idx === uploadProgressExt.current - 1 && <Spinner className="h-4 w-4" />}
-                                            {isUploadingExt && uploadProgressExt && idx >= uploadProgressExt.current && <div className="w-4 h-4 rounded-full border border-gray-400"></div>}
-                                        </div>
-                                    ))}
+                            <div className="mt-3 p-3 bg-purple-500/5 rounded-lg border border-purple-500/20 space-y-2 shadow-inner">
+                                <div className="flex justify-between items-center mb-1">
+                                    <p className="text-[10px] font-bold text-purple-400 uppercase tracking-widest">Cola Externa ({selectedFilesExt.length}/15)</p>
+                                    {isUploadingExt && (
+                                        <span className="text-[10px] font-mono text-purple-400 animate-pulse italic">SUBIENDO...</span>
+                                    )}
                                 </div>
+                                <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1 custom-scrollbar">
+                                    {selectedFilesExt.map((file, idx) => {
+                                        const isDone = isUploadingExt && uploadProgressExt && idx < uploadProgressExt.current - 1;
+                                        const isInProgress = isUploadingExt && uploadProgressExt && idx === uploadProgressExt.current - 1;
+                                        return (
+                                            <div key={idx} className={`flex items-center justify-between p-2 rounded bg-light-card/40 dark:bg-dark-card/40 border transition-all ${isInProgress ? 'border-purple-400 animate-pulse' : 'border-purple-500/10'}`}>
+                                                <div className="flex items-center gap-2 min-w-0">
+                                                    <DocumentTextIcon className={`h-4 w-4 ${isDone ? 'text-green-500' : 'text-purple-400'}`} />
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="text-[11px] truncate font-medium">{file.name}</span>
+                                                        <span className="text-[9px] opacity-70">{formatBytes(file.size)}</span>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center">
+                                                    {!isUploadingExt ? (
+                                                        <button type="button" onClick={() => removeFileExt(idx)} className="p-1 rounded-full text-red-500 hover:bg-red-500/10 transition-colors"><TrashIcon className="h-3.5 w-3.5" /></button>
+                                                    ) : (
+                                                        <>
+                                                            {isDone && <CheckCircleIcon className="h-4 w-4 text-green-500" />}
+                                                            {isInProgress && <Spinner className="h-3.5 w-3.5" />}
+                                                            {!isDone && !isInProgress && <div className="w-4 h-4 rounded-full border border-purple-500/20 opacity-30"></div>}
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                {isUploadingExt && uploadProgressExt && (
+                                    <div className="mt-2 text-[9px] font-mono text-center text-purple-400 opacity-80 uppercase tracking-tight">
+                                        Progreso Total: {Math.round(((uploadProgressExt.current - 0.5) / uploadProgressExt.total) * 100)}%
+                                    </div>
+                                )}
                             </div>
                         )}
                         <div className="flex justify-end">
@@ -639,7 +737,27 @@ const DocumentsView: React.FC<DocumentsViewProps> = ({
                                 <button type="button" onClick={(e) => handleActionExt(e, doc, 'preview')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-purple-100 dark:hover:bg-purple-900/30 hover:text-purple-500" title="Previsualizar Externo">{loadingAction === `${doc.id}-preview-ext` ? <Spinner /> : <EyeIcon className="h-5 w-5" />}</button>
                                 {canDownload && <button type="button" onClick={(e) => handleActionExt(e, doc, 'download')} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-green-100 dark:hover:bg-green-900/50 hover:text-green-500" title="Descargar Externo">{loadingAction === `${doc.id}-download-ext` ? <Spinner /> : <DocumentDownloadIcon className="h-5 w-5" />}</button>}
                                 {canUpload && <button type="button" onClick={() => setDocToMove({ doc, isExternal: true })} className="p-2 rounded-full text-light-text-secondary hover:bg-purple-500/20 hover:text-purple-400" title="Mover a otra carpeta externa"><ArrowRightIcon className="h-5 w-5" /></button>}
-                                {canDelete && <button type="button" onClick={() => setDocToDeleteExt(doc)} disabled={!!loadingAction} className="p-2 rounded-full text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500" title={`Eliminar ${doc.name}`}><TrashIcon className="h-5 w-5" /></button>}
+                                {canDelete && (
+                                    <button 
+                                        type="button" 
+                                        onClick={() => {
+                                            if (isDocumentDeleteLocked) {
+                                                alert("La eliminación de documentos y carpetas está bloqueada por el Administrador Maestro (PHOBOS).");
+                                                return;
+                                            }
+                                            setDocToDeleteExt(doc);
+                                        }} 
+                                        disabled={!!loadingAction} 
+                                        className={`p-2 rounded-full transition-colors ${
+                                            isDocumentDeleteLocked 
+                                            ? 'text-gray-400 cursor-not-allowed opacity-50' 
+                                            : 'text-light-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500'
+                                        }`} 
+                                        title={isDocumentDeleteLocked ? "Eliminación bloqueada por Administrador PHOBOS" : `Eliminar ${doc.name}`}
+                                    >
+                                        <TrashIcon className="h-5 w-5" />
+                                    </button>
+                                )}
                             </div>
                         </li>
                     ))}</ul> : <div className="text-center py-10 border-2 border-dashed border-purple-500/30 rounded-lg"><CollectionIcon className="mx-auto h-12 w-12 text-gray-400" /><h3 className="mt-2 text-sm font-medium">Sin documentos</h3><p className="mt-1 text-sm text-light-text-secondary dark:text-dark-text-secondary">{externalFolders.length === 0 ? "Conectando..." : "Esta carpeta está vacía."}</p></div>}

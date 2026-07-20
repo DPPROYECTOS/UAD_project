@@ -55,9 +55,11 @@ const sha256 = async (str: string): Promise<string> => {
 interface PasswordsViewProps {
   userPermissions: UserPermissions | null;
   isMasterBypassActive: boolean;
+  user: any;
+  deleteLocks: Record<string, boolean>;
 }
 
-const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMasterBypassActive }) => {
+const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMasterBypassActive, user: appUser, deleteLocks }) => {
   // ... (Hooks and state remain the same up to filteredPasswords)
   const [masterPassword, setMasterPassword] = useState<string | null>(null);
   const [masterPasswordHash, setMasterPasswordHash] = useState<string | null | 'loading'>('loading');
@@ -80,16 +82,22 @@ const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMaster
   
   const [isBypassUnlock, setIsBypassUnlock] = useState(isMasterBypassActive);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(appUser?.username || appUser?.email || null);
 
   // Grouping State
   const [selectedCategory, setSelectedCategory] = useState<string>('Todas');
 
   const canManage = userPermissions?.contraseñas?.canManage ?? false;
+  const isDarien = currentUserEmail?.trim().toLowerCase() === 'darienperez695@gmail.com';
+  const isDeleteLocked = !!deleteLocks?.['contraseñas'] && !isDarien;
 
   useEffect(() => {
     const checkHash = async () => {
         const { data: { user } } = await supabase.auth.getUser();
-        if (user) setCurrentUserId(user.id);
+        if (user) {
+            setCurrentUserId(user.id);
+            setCurrentUserEmail(user.email || null);
+        }
 
         const hash = await getMasterPasswordHash();
         setMasterPasswordHash(hash);
@@ -180,6 +188,10 @@ const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMaster
   };
 
   const handleCreateMasterPassword = async (password: string) => {
+      if (!isDarien) {
+          setUnlockError('Solo el administrador PHOBOS puede configurar la contraseña maestra.');
+          return;
+      }
       setUnlockError(null);
       const hashedPassword = await sha256(password);
       try {
@@ -194,6 +206,10 @@ const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMaster
   };
 
   const handleSavePassword = async (item: Omit<PasswordItem, 'id'|'user_id'|'password_ct'> & { password_pt: string }) => {
+    if (!isDarien) {
+        setError('No tienes permiso para agregar o editar contraseñas.');
+        return;
+    }
     if (!masterPassword) return;
     const encrypt = cipher(masterPassword);
     const newItem = {
@@ -217,6 +233,10 @@ const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMaster
   };
 
   const handleDelete = async () => {
+    if (!isDarien || isDeleteLocked) {
+        setError('La eliminación de contraseñas está bloqueada o no tienes permisos.');
+        return;
+    }
     if (!passwordToDelete) return;
     try {
         await deletePassword(passwordToDelete.id);
@@ -269,18 +289,27 @@ const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMaster
               <h1 className="text-3xl font-bold">Gestor de Contraseñas</h1>
               <p className="text-sm text-light-text-secondary dark:text-dark-text-secondary mt-1">Bóveda encriptada y organizada.</p>
             </div>
-            <div className="flex gap-2">
-                <button onClick={() => setIsCategoryModalOpen(true)} className="flex items-center px-4 py-2 text-sm font-medium rounded-md border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card hover:bg-light-bg dark:hover:bg-dark-bg transition-colors text-light-text dark:text-dark-text">
-                    <CogIcon className="h-5 w-5 mr-2" />
-                    Gestionar Categorías
-                </button>
-                <button onClick={() => { setEditingPassword(null); setIsModalOpen(true); }} className="flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary">
-                    <PlusIcon className="h-5 w-5 mr-2" />
-                    Añadir Contraseña
-                </button>
-            </div>
+            {isDarien && (
+              <div className="flex gap-2">
+                  <button onClick={() => setIsCategoryModalOpen(true)} className="flex items-center px-4 py-2 text-sm font-medium rounded-md border border-light-border dark:border-dark-border bg-light-card dark:bg-dark-card hover:bg-light-bg dark:hover:bg-dark-bg transition-colors text-light-text dark:text-dark-text">
+                      <CogIcon className="h-5 w-5 mr-2" />
+                      Gestionar Categorías
+                  </button>
+                  <button onClick={() => { setEditingPassword(null); setIsModalOpen(true); }} className="flex items-center px-4 py-2 text-sm font-medium rounded-md text-white bg-brand-primary hover:bg-brand-secondary">
+                      <PlusIcon className="h-5 w-5 mr-2" />
+                      Añadir Contraseña
+                  </button>
+              </div>
+            )}
         </div>
         {error && <p className="text-red-500 mb-4">{error}</p>}
+        
+        {!isDarien && (
+            <div className="p-4 mb-6 bg-blue-500/10 border border-blue-500/30 text-blue-700 dark:text-blue-300 rounded-lg text-sm flex items-center gap-2">
+                <InformationCircleIcon className="h-5 w-5 shrink-0" />
+                <span>Modo de Solo Lectura: Solo el Administrador principal (PHOBOS) tiene privilegios para crear, editar o eliminar contraseñas.</span>
+            </div>
+        )}
         
         {/* Categories Filter Tabs */}
         <div className="flex flex-wrap gap-2 mb-6">
@@ -375,12 +404,16 @@ const PasswordsView: React.FC<PasswordsViewProps> = ({ userPermissions, isMaster
                                                     <button onClick={() => toggleVisibility(p.id)} className="p-1.5 rounded-full text-gray-500 hover:text-brand-primary hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" title={isVisible ? "Ocultar" : "Mostrar"}>
                                                         <EyeIcon className="h-5 w-5"/>
                                                     </button>
-                                                    <button onClick={() => { setEditingPassword(p); setIsModalOpen(true); }} className="p-1.5 rounded-full text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="Editar">
-                                                        <PencilAltIcon className="h-5 w-5"/>
-                                                    </button>
-                                                    <button onClick={() => setPasswordToDelete(p)} className="p-1.5 rounded-full text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Eliminar">
-                                                        <TrashIcon className="h-5 w-5"/>
-                                                    </button>
+                                                    {isDarien && (
+                                                        <>
+                                                            <button onClick={() => { setEditingPassword(p); setIsModalOpen(true); }} className="p-1.5 rounded-full text-gray-500 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors" title="Editar">
+                                                                <PencilAltIcon className="h-5 w-5"/>
+                                                            </button>
+                                                            <button onClick={() => setPasswordToDelete(p)} className="p-1.5 rounded-full text-gray-500 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors" title="Eliminar">
+                                                                <TrashIcon className="h-5 w-5"/>
+                                                            </button>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </td>
                                             </tr>

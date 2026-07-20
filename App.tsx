@@ -19,9 +19,9 @@ import AdminView from './views/AdminView';
 import GamesView from './views/GamesView';
 import AppsView from './views/AppsView';
 import NexusView from './views/NexusView';
-import VoiceLogView from './components/VoiceLogView';
 import SecretCodeModal from './components/SecretCodeModal';
 import PasswordsView from './views/PasswordsView';
+import CalendarView from './views/CalendarView';
 import { User, Project, ProjectTask, ProjectStatus, Activity, Folder, Document, LinkItem, AuditItem, ToastNotification, UserPermissions, TaskStatus, ContentType } from './types';
 import { 
   signIn, 
@@ -61,47 +61,13 @@ import {
   uploadExternalDocument,
   deleteExternalDocument,
   moveDocument,
-  moveExternalDocument
+  moveExternalDocument,
+  getDeleteLocks,
+  checkSessionValid
 } from './services/supabaseService';
 import Spinner from './components/Spinner';
 import { GamePlayer } from './components/GamePlayer';
-import FloatingRecorder from './components/FloatingRecorder';
 import ToastContainer from './components/ToastContainer';
-
-declare const lamejs: any;
-
-type RecordingStatus = 'idle' | 'recording' | 'paused';
-type UploadStatus = 'idle' | 'uploading' | 'success' | 'error';
-
-const convertWebMToMp3 = async (webmBlob: Blob): Promise<Blob> => {
-  const audioContext = new AudioContext();
-  const arrayBuffer = await webmBlob.arrayBuffer();
-  const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-  const pcmSamples = audioBuffer.getChannelData(0);
-
-  const samples = new Int16Array(pcmSamples.length);
-  for (let i = 0; i < pcmSamples.length; i++) {
-    samples[i] = pcmSamples[i] * 32767;
-  }
-
-  const mp3Encoder = new (window as any).lamejs.Mp3Encoder(1, audioBuffer.sampleRate, 128); 
-  const mp3Data = [];
-  const sampleBlockSize = 1152;
-
-  for (let i = 0; i < samples.length; i += sampleBlockSize) {
-    const sampleChunk = samples.subarray(i, i + sampleBlockSize);
-    const mp3buf = mp3Encoder.encodeBuffer(sampleChunk);
-    if (mp3buf.length > 0) {
-      mp3Data.push(mp3buf);
-    }
-  }
-  const mp3buf = mp3Encoder.flush();
-  if (mp3buf.length > 0) {
-    mp3Data.push(mp3buf);
-  }
-
-  return new Blob(mp3Data, { type: 'audio/mpeg' });
-};
 
 const toYMDString = (date: Date) => {
   return date.toISOString().split('T')[0];
@@ -178,8 +144,20 @@ const App: React.FC = () => {
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activeView, setActiveView] = useState('Dashboard');
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isSidebarOpen, setSidebarOpen] = useState(window.innerWidth > 1024);
   const [userPermissions, setUserPermissions] = useState<UserPermissions | null>(null);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setSidebarOpen(false);
+      } else {
+        setSidebarOpen(true);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
   const [geminiApiKey, setGeminiApiKey] = useState<string | null>(null);
   const [isApiKeyLoading, setIsApiKeyLoading] = useState<boolean>(true);
   const [apiKeyError, setApiKeyError] = useState<string | null>(null);
@@ -216,15 +194,18 @@ const App: React.FC = () => {
   const [auditToDelete, setAuditToDelete] = useState<AuditItem | null>(null);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
-  const [recordingStatus, setRecordingStatus] = useState<RecordingStatus>('idle');
-  const [recordingTime, setRecordingTime] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<UploadStatus>('idle');
-  const [uploadMessage, setUploadMessage] = useState('');
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
   const [toastNotifications, setToastNotifications] = useState<ToastNotification[]>([]);
   const [isMasterBypassActive, setIsMasterBypassActive] = useState(false);
+  const [deleteLocks, setDeleteLocks] = useState<Record<string, boolean>>({});
+
+  const fetchDeleteLocksData = async () => {
+    try {
+      const locks = await getDeleteLocks();
+      setDeleteLocks(locks);
+    } catch (e) {
+      console.error("Failed to fetch delete locks:", e);
+    }
+  };
 
   const addToast = (title: string, message: string, type: ToastNotification['type'] = 'warning') => {
       const id = uuidv4();
@@ -383,6 +364,76 @@ const App: React.FC = () => {
     return () => { subscription.unsubscribe(); };
   }, []);
 
+  // Periodic active session validation to enforce revocation immediately on all devices
+  useEffect(() => {
+    if (!user) return;
+
+    let isSubscribed = true;
+    const checkActiveSession = async () => {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) {
+          // If there's an error retrieving the session (like a temporary network failure), do not log out
+          console.warn("Failed to retrieve current session in background check:", sessionError);
+          return;
+        }
+        
+        if (!session) {
+          if (isSubscribed) {
+            setUser(null);
+            setAuthLoading(false);
+          }
+          return;
+        }
+
+        let sid = '';
+        const parts = (session.access_token || '').split('.');
+        if (parts.length === 3) {
+          try {
+            let base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+            while (base64.length % 4) {
+              base64 += '=';
+            }
+            const payload = JSON.parse(atob(base64));
+            sid = payload.sid || '';
+          } catch (e) {
+            console.error("Error decoding session JWT:", e);
+          }
+        }
+
+        if (!sid) {
+          // Si no se encuentra el sid del token, continuamos con la sesión normal para evitar bloqueos
+          return;
+        }
+
+        const isValid = await checkSessionValid(sid);
+        if (!isValid && isSubscribed) {
+          console.warn("La sesión activa fue revocada por el administrador. Cerrando sesión...");
+          addToast("Sesión Revocada", "Tu sesión ha sido cerrada por el administrador.", "error");
+          await signOut();
+          setUser(null);
+        }
+      } catch (err) {
+        // Handle network and other exceptions gracefully
+        const errMsg = err instanceof Error ? err.message : String(err);
+        if (errMsg.includes("Failed to fetch") || errMsg.includes("NetworkError") || errMsg.includes("fetch")) {
+          console.warn("Background session check failed due to network connectivity issues (silent ignore).");
+        } else {
+          console.error("Error during session validation check:", err);
+        }
+      }
+    };
+
+    // Check immediately and then every 30 seconds to be gentle on Supabase rate limits
+    checkActiveSession();
+    const interval = setInterval(checkActiveSession, 30000);
+
+    return () => {
+      isSubscribed = false;
+      clearInterval(interval);
+    };
+  }, [user?.id]);
+
   useEffect(() => {
     if (!user) return; 
     const savedReadIds = localStorage.getItem('readNotificationIds');
@@ -428,7 +479,7 @@ const App: React.FC = () => {
     if (user) {
         const fetchData = async () => {
             try {
-              await Promise.all([ fetchProjects(), fetchTasks(), fetchFolders(), fetchDocuments(), fetchLinks(), fetchAudits() ]);
+              await Promise.all([ fetchProjects(), fetchTasks(), fetchFolders(), fetchDocuments(), fetchLinks(), fetchAudits(), fetchDeleteLocksData() ]);
             } catch (err) { console.error("Failed to fetch primary data", err); }
         };
         const fetchApiKey = async () => {
@@ -450,6 +501,7 @@ const App: React.FC = () => {
         setExternalFolders([]); setExternalDocuments([]); setExternalDataLoaded(false);
         setTheme('dark');
         setCustomThemeColors(null);
+        setDeleteLocks({});
     }
   }, [user]);
   
@@ -550,27 +602,6 @@ const App: React.FC = () => {
     return () => { clearInterval(intervalId); };
   }, [user, audits]);
   
-  useEffect(() => {
-    let interval: ReturnType<typeof setInterval> | null = null;
-    if (recordingStatus === 'recording') { interval = setInterval(() => { setRecordingTime(prevTime => prevTime + 1); }, 1000);
-    } else if (recordingStatus === 'idle' && recordingTime !== 0) { setRecordingTime(0); }
-    return () => { if (interval) clearInterval(interval); };
-  }, [recordingStatus, recordingTime]);
-
-  const stopRecording = () => {
-    if (!mediaRecorderRef.current || recordingStatus === 'idle') return;
-    mediaRecorderRef.current.stop();
-    if (streamRef.current) { streamRef.current.getTracks().forEach(track => track.stop()); streamRef.current = null; }
-    setRecordingStatus('idle');
-  };
-
-  useEffect(() => {
-    if (uploadStatus === 'success' || uploadStatus === 'error') {
-        const timer = setTimeout(() => { setUploadStatus('idle'); setUploadMessage(''); }, 5000);
-        return () => clearTimeout(timer);
-    }
-  }, [uploadStatus]);
-
   const fetchProjects = async () => {
     try { setProjectsLoading(true); const fetchedProjects = await getProjects(); setProjects(fetchedProjects);
     } catch (err) { handleDatabaseError(err, 'Failed to fetch projects.'); } finally { setProjectsLoading(false); }
@@ -638,56 +669,6 @@ const App: React.FC = () => {
   };
 
   const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
-
-  const handleUpload = async () => {
-    if (audioChunksRef.current.length === 0) return;
-    setUploadStatus('uploading'); setUploadMessage('Procesando y subiendo...');
-    const audioBlobWebM = new Blob(audioChunksRef.current, { type: 'audio/webm' });
-    try {
-      const mp3Blob = await convertWebMToMp3(audioBlobWebM);
-      const base64String = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(mp3Blob);
-        reader.onloadend = () => { if (reader.result) { resolve((reader.result as string).split(',')[1]); } else { reject(new Error("Failed to read blob as Base64.")); } };
-        reader.onerror = (error) => reject(error);
-      });
-      const now = new Date();
-      const date = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
-      const time = `${now.getHours().toString().padStart(2, '0')}-${now.getMinutes().toString().padStart(2, '0')}-${now.getSeconds().toString().padStart(2, '0')}`;
-      const uploadUrl = user ? 'https://script.google.com/macros/s/AKfycbzCdJDu6zoxwKVKNUNL_-Fj6rM6dc6C1o_gYIUjLwUULolGD8Y1Paq1VWf1S67XPYu2/exec' : 'https://script.google.com/macros/s/AKfycbvxhlawPZkPIFf7TeAn3I5l38u6y4tee1MEvtaMbsb8V_xcVLofePoc4Dh80pLgxFM/exec';
-      let fileName = '';
-      if (user) { fileName = `GrabacionPMC_${Date.now()}_${date}_${time}.mp3`; } else {
-        let counter = parseInt(localStorage.getItem('genericRecordingCounter') || '0', 10) + 1;
-        localStorage.setItem('genericRecordingCounter', String(counter));
-        fileName = `GrabacionGenerica_${counter}_${date}_${time}.mp3`;
-      }
-      const response = await fetch(uploadUrl, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify({ file: base64String, fileName: fileName, mimeType: 'audio/mpeg' }) });
-      if (!response.ok) throw new Error(`Error de red: ${response.statusText}`);
-      const result = await response.json();
-      if (result.status === 'success') { setUploadStatus('success'); setUploadMessage('Grabación subida correctamente.'); } else { throw new Error(result.error || 'Error desconocido en el servidor.'); }
-    } catch (err) { console.error("Upload failed:", err); setUploadStatus('error'); setUploadMessage(err instanceof Error ? err.message : 'Fallo en la subida.');
-    } finally { audioChunksRef.current = []; }
-  };
-
-  const startRecording = async () => {
-    setUploadStatus('idle'); setUploadMessage('');
-    try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        streamRef.current = stream;
-        const recorder = new MediaRecorder(stream);
-        mediaRecorderRef.current = recorder;
-        audioChunksRef.current = [];
-        recorder.ondataavailable = (event) => audioChunksRef.current.push(event.data);
-        recorder.onstop = handleUpload;
-        recorder.start();
-        setRecordingStatus('recording');
-    } catch (err) { setUploadStatus('error'); setUploadMessage('No se pudo acceder al micrófono.'); }
-  };
-
-  const togglePauseResume = () => {
-    if (!mediaRecorderRef.current) return;
-    if (recordingStatus === 'recording') { mediaRecorderRef.current.pause(); setRecordingStatus('paused'); } else if (recordingStatus === 'paused') { mediaRecorderRef.current.resume(); setRecordingStatus('recording'); }
-  };
 
   const addActivity = async (action: string, target: string, importance: 'high' | 'medium' | 'low', projectId?: string) => {
     if (!user) return;
@@ -848,7 +829,17 @@ const App: React.FC = () => {
     try { const clonePromises = dates.map(date => { const newAuditData: Omit<AuditItem, 'id'> = { ...auditData, date: date, recurrence: { type: 'none' } }; return addAudit(newAuditData); }); await Promise.all(clonePromises); addToast("Éxito", `Se clonó la auditoría en ${dates.length} fecha(s).`, "success"); await fetchAudits();
     } catch (err) { handleDatabaseError(err, 'Failed to clone audit.'); addToast("Error", "No se pudo clonar la auditoría.", "error"); } finally { handleCloseAuditModal(); }
   };
-  const handleDeleteAudit = (auditId: string) => { const audit = audits.find(a => a.id === auditId); if(audit) setAuditToDelete(audit); handleCloseAuditModal(); };
+  const handleDeleteAudit = (auditId: string) => {
+    const isDarien = user?.username?.trim().toLowerCase() === 'darienperez695@gmail.com' || user?.email?.trim().toLowerCase() === 'darienperez695@gmail.com';
+    const isAuditsDeleteLocked = !!deleteLocks?.['auditorias'] && !isDarien;
+    if (isAuditsDeleteLocked) {
+      alert("La eliminación de auditorías está bloqueada por el Administrador Maestro (PHOBOS).");
+      return;
+    }
+    const audit = audits.find(a => a.id === auditId);
+    if(audit) setAuditToDelete(audit);
+    handleCloseAuditModal();
+  };
   const handleConfirmDeleteAudit = async () => { if (auditToDelete) { try { await deleteAudit(auditToDelete.id); setAudits(audits.filter(a => a.id !== auditToDelete.id)); await addActivity('eliminó la auditoría', `"${auditToDelete.title}"`, 'high'); } catch(err) { handleDatabaseError(err, 'Failed to delete audit.'); } finally { setAuditToDelete(null); } } };
 
   const handleSelectProject = (project: Project) => { setSelectedProject(project); };
@@ -874,23 +865,23 @@ const App: React.FC = () => {
   if (activeGame) { const game = games[activeGame]; return <GamePlayer onExit={handleGameExit} gameTitle={game.title} gameUrl={game.url} />; }
   if (authLoading) { return ( <div className="min-h-screen flex items-center justify-center bg-dark-bg"> <Spinner /> <span className="ml-4 text-lg text-dark-text">Autenticando...</span> </div> ); }
 
-  if (!user) { return ( <> <LoginView onLogin={handleLogin} isLoading={isLoading} error={error} /> <FloatingRecorder recordingStatus={recordingStatus} recordingTime={recordingTime} uploadStatus={uploadStatus} uploadMessage={uploadMessage} onStartRecording={startRecording} onTogglePauseResume={togglePauseResume} onStopRecording={stopRecording} /> </> ); }
+  if (!user) { return ( <LoginView onLogin={handleLogin} isLoading={isLoading} error={error} /> ); }
   const renderActiveView = () => {
     const globalErrorDisplay = error ? ( <div className="p-4 mb-4 bg-red-100 border border-red-400 text-red-700 rounded-lg animate-fade-in"> <h3 className="font-bold">Ocurrió un error</h3> <p>{error}</p> <button onClick={() => setError(null)} className="mt-2 text-sm font-semibold underline">Descartar</button> </div> ) : null;
     switch (activeView) {
       case 'Dashboard': return <>{globalErrorDisplay}<DashboardView projects={projects} audits={audits} activities={activities.slice(0, 5)} tasks={tasks} onSelectProject={handleSelectProjectById} /></>;
       case 'Proyectos':
-        if (selectedProject) { return <>{globalErrorDisplay}<ProjectDetailView project={selectedProject} tasks={tasks.filter(t => t.projectId === selectedProject.id)} documents={documents} folders={folders} onBackToList={handleBackToList} onDeleteProject={handleDeleteProject} onSaveProject={handleSaveProject} onAddTask={handleAddTask} onToggleTask={handleToggleTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onAddDocument={handleAddDocument} onDeleteDocument={handleDeleteDocument} userPermissions={userPermissions} user={user!} /></>; }
+        if (selectedProject) { return <>{globalErrorDisplay}<ProjectDetailView project={selectedProject} tasks={tasks.filter(t => t.projectId === selectedProject.id)} documents={documents} folders={folders} onBackToList={handleBackToList} onDeleteProject={handleDeleteProject} onSaveProject={handleSaveProject} onAddTask={handleAddTask} onToggleTask={handleToggleTask} onUpdateTask={handleUpdateTask} onDeleteTask={handleDeleteTask} onAddDocument={handleAddDocument} onDeleteDocument={handleDeleteDocument} userPermissions={userPermissions} user={user!} deleteLocks={deleteLocks} /></>; }
         return <>{globalErrorDisplay}<ProjectsListView projects={projects} tasks={tasks} isLoading={(projectsLoading || tasksLoading) && projects.length === 0} onSelectProject={handleSelectProject} onSaveProject={handleSaveProject} onUpdateProjectStatus={handleUpdateProjectStatus} onError={handleDatabaseError} geminiApiKey={geminiApiKey} userPermissions={userPermissions} /></>;
-      case 'Documentos': return <>{globalErrorDisplay}<DocumentsView projects={projects} folders={folders} documents={documents} externalFolders={externalFolders} externalDocuments={externalDocuments} isLoading={foldersLoading || documentsLoading} onAddFolder={handleAddFolder} onDeleteFolder={handleDeleteFolder} onAddDocument={handleAddDocument} onDeleteDocument={handleDeleteDocument} onMoveDocument={handleMoveDocument} onAddExternalFolder={handleAddExternalFolder} onDeleteExternalFolder={handleDeleteExternalFolder} onAddExternalDocument={handleAddExternalDocument} onDeleteExternalDocument={handleDeleteExternalDocument} onMoveExternalDocument={handleMoveExternalDocument} userPermissions={userPermissions} user={user!} /></>;
-      case 'Enlaces': return <>{globalErrorDisplay}<LinksView links={links} isLoading={linksLoading} onOpenLinkModal={handleOpenLinkModal} onOpenEditLinkModal={handleOpenEditLinkModal} onDeleteLink={handleDeleteLink} userPermissions={userPermissions} /></>;
+      case 'Documentos': return <>{globalErrorDisplay}<DocumentsView projects={projects} folders={folders} documents={documents} externalFolders={externalFolders} externalDocuments={externalDocuments} isLoading={foldersLoading || documentsLoading} onAddFolder={handleAddFolder} onDeleteFolder={handleDeleteFolder} onAddDocument={handleAddDocument} onDeleteDocument={handleDeleteDocument} onMoveDocument={handleMoveDocument} onAddExternalFolder={handleAddExternalFolder} onDeleteExternalFolder={handleDeleteExternalFolder} onAddExternalDocument={handleAddExternalDocument} onDeleteExternalDocument={handleDeleteExternalDocument} onMoveExternalDocument={handleMoveExternalDocument} userPermissions={userPermissions} user={user!} deleteLocks={deleteLocks} /></>;
+      case 'Enlaces': return <>{globalErrorDisplay}<LinksView links={links} isLoading={linksLoading} onOpenLinkModal={handleOpenLinkModal} onOpenEditLinkModal={handleOpenEditLinkModal} onDeleteLink={handleDeleteLink} userPermissions={userPermissions} user={user!} deleteLocks={deleteLocks} /></>;
       case 'Apps': return <>{globalErrorDisplay}<AppsView /></>;
       case 'CODEX': return <>{globalErrorDisplay}<NexusView documents={documents} folders={folders} externalDocuments={externalDocuments} externalFolders={externalFolders} /></>;
-      case 'Auditorias': return <>{globalErrorDisplay}<AuditsView audits={audits} onOpenModal={handleOpenAuditModal} userPermissions={userPermissions} /></>;
-      case 'Pizarra': return <>{globalErrorDisplay}<WhiteboardView userPermissions={userPermissions} />;</>;
-      case 'Bitácora': return <>{globalErrorDisplay}<VoiceLogView /></>;
+      case 'Auditorias': return <>{globalErrorDisplay}<AuditsView audits={audits} onOpenModal={handleOpenAuditModal} userPermissions={userPermissions} user={user!} deleteLocks={deleteLocks} /></>;
+      case 'Calendario': return <>{globalErrorDisplay}<CalendarView /></>;
+      case 'Pizarra': return <>{globalErrorDisplay}<WhiteboardView userPermissions={userPermissions} user={user!} deleteLocks={deleteLocks} /></>;
       case 'Notificaciones': return <>{globalErrorDisplay}<NotificationsView notifications={activities} readNotificationIds={readNotificationIds} onMarkAsRead={markAsRead} onMarkAllAsRead={markAllAsRead} onNavigate={changeView} /></>;
-      case 'Contraseñas': return <>{globalErrorDisplay}<PasswordsView userPermissions={userPermissions} isMasterBypassActive={isMasterBypassActive} /></>;
+      case 'Contraseñas': return <>{globalErrorDisplay}<PasswordsView userPermissions={userPermissions} isMasterBypassActive={isMasterBypassActive} user={user!} deleteLocks={deleteLocks} /></>;
       case 'Juegos': return <>{globalErrorDisplay}<GamesView onEnterGame={handleGameEnter} /></>;
       case 'Administrador':
         const allowedAdmins = ['darienperez695@gmail.com', 'zerklucio@gmail.com'];
@@ -915,20 +906,13 @@ const App: React.FC = () => {
           onSecretSequenceStep={handleSecretSequenceStep} 
           onHideGamesTrigger={handleHideGamesTrigger} 
           isGamesSectionUnlocked={isGamesSectionUnlocked} 
-          recordingStatus={recordingStatus} 
-          recordingTime={recordingTime} 
-          uploadStatus={uploadStatus} 
-          uploadMessage={uploadMessage} 
-          onStartRecording={startRecording} 
-          onTogglePauseResume={togglePauseResume} 
-          onStopRecording={stopRecording} 
           user={user} 
           userPermissions={userPermissions} 
           setIsMasterBypassActive={setIsMasterBypassActive} 
       />
-      <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-20'} overflow-x-hidden`}>
-        <Header user={user!} onUpdateAvatar={handleUpdateAvatar} isAvatarLoading={isAvatarLoading} onLogout={handleLogout} unreadCount={unreadCount} notifications={activities} readNotificationIds={readNotificationIds} onMarkAsRead={markAsRead} onNavigate={changeView} onMarkAllAsRead={markAllAsRead} recordingStatus={recordingStatus} recordingTime={recordingTime} isEditor={true} />
-        <main className="flex-1 p-4 lg:p-6 overflow-y-auto w-full max-w-full"> <div className="animate-fade-in max-w-[1600px] mx-auto"> {renderActiveView()} </div> </main>
+      <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-0 lg:ml-64' : 'ml-0 lg:ml-20'} overflow-x-hidden relative`}>
+        <Header user={user!} onUpdateAvatar={handleUpdateAvatar} isAvatarLoading={isAvatarLoading} onLogout={handleLogout} unreadCount={unreadCount} notifications={activities} readNotificationIds={readNotificationIds} onMarkAsRead={markAsRead} onNavigate={changeView} onMarkAllAsRead={markAllAsRead} isEditor={true} />
+        <main className="flex-1 p-3 md:p-4 lg:p-6 overflow-y-auto w-full max-w-full"> <div className="animate-fade-in max-w-[1600px] mx-auto min-h-full"> {renderActiveView()} </div> </main>
       </div>
       {isCodeModalVisible && ( <SecretCodeModal onClose={() => { setIsCodeModalVisible(false); setSecretSequence([]); }} onSubmit={handleCodeSubmit} /> )}
       {isLinkModalOpen && ( <LinkModal onClose={handleCloseLinkModal} onSave={handleSaveLink} linkToEdit={linkToEdit} /> )}

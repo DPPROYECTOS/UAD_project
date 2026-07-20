@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { LinkItem, UserPermissions } from '../types';
+import { LinkItem, UserPermissions, User } from '../types';
 import { PlusIcon, TrashIcon, ExternalLinkIcon, PencilAltIcon, LinkIcon as PageIcon, SparklesIcon } from '../components/Icons';
 import Spinner from '../components/Spinner';
 
@@ -11,13 +11,18 @@ interface LinksViewProps {
   onOpenEditLinkModal: (link: LinkItem) => void;
   onDeleteLink: (linkId: string) => void;
   userPermissions: UserPermissions | null;
+  user?: User;
+  deleteLocks?: Record<string, boolean>;
 }
 
-const LinksView: React.FC<LinksViewProps> = ({ links, isLoading, onOpenLinkModal, onOpenEditLinkModal, onDeleteLink, userPermissions }) => {
+const LinksView: React.FC<LinksViewProps> = ({ links, isLoading, onOpenLinkModal, onOpenEditLinkModal, onDeleteLink, userPermissions, user, deleteLocks = {} }) => {
   const [selectedTag, setSelectedTag] = useState<string>('Todas');
   
   const canCreateEdit = userPermissions?.enlaces?.canCreateEdit ?? false;
   const canDelete = userPermissions?.enlaces?.canDelete ?? false;
+
+  const isDarien = user?.username?.trim().toLowerCase() === 'darienperez695@gmail.com' || user?.email?.trim().toLowerCase() === 'darienperez695@gmail.com';
+  const isLinkDeleteLocked = !!deleteLocks?.['enlaces'] && !isDarien;
 
   // Extract all unique tags from links
   const allTags = useMemo(() => {
@@ -107,10 +112,19 @@ const LinksView: React.FC<LinksViewProps> = ({ links, isLoading, onOpenLinkModal
                 <button 
                   onClick={(e) => {
                     e.stopPropagation(); 
+                    if (isLinkDeleteLocked) {
+                      alert("La eliminación de enlaces está bloqueada por el Administrador Maestro (PHOBOS).");
+                      return;
+                    }
                     onDeleteLink(link.id);
                   }}
-                  title="Eliminar enlace"
-                  className="p-2 rounded-full text-light-text-secondary dark:text-dark-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500 transition-colors"
+                  title={isLinkDeleteLocked ? "Eliminación bloqueada por Administrador PHOBOS" : "Eliminar enlace"}
+                  disabled={isLinkDeleteLocked}
+                  className={`p-2 rounded-full transition-colors ${
+                    isLinkDeleteLocked 
+                    ? 'text-gray-400 cursor-not-allowed opacity-50' 
+                    : 'text-light-text-secondary dark:text-dark-text-secondary hover:bg-red-100 dark:hover:bg-red-900/50 hover:text-red-500'
+                  }`}
                 >
                   <TrashIcon className="h-5 w-5" />
                 </button>

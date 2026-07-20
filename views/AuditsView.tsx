@@ -1,11 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { AuditItem, UserPermissions } from '../types';
+import { AuditItem, UserPermissions, User } from '../types';
 import { ChevronLeftIcon, ChevronRightIcon, PlusIcon } from '../components/Icons';
 
 interface AuditsViewProps {
   audits: AuditItem[];
   onOpenModal: (date: string, audit: AuditItem | null) => void;
   userPermissions: UserPermissions | null;
+  user?: User;
+  deleteLocks?: Record<string, boolean>;
 }
 
 // --- Holiday Helper Functions ---
@@ -114,7 +116,7 @@ const generateOccurrences = (
 };
 
 
-const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal, userPermissions }) => {
+const AuditsView: React.FC<AuditsViewProps> = ({ audits, onOpenModal, userPermissions, user, deleteLocks = {} }) => {
   const [currentDate, setCurrentDate] = useState(new Date());
 
   const canManage = userPermissions?.auditorias?.canManage ?? false;

@@ -95,7 +95,7 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
     const superAdmins = ['darienperez695@gmail.com', 'zerklucio@gmail.com'];
     if (user.email && superAdmins.includes(user.email.toLowerCase().trim())) {
         return {
-            sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, bitacora: true },
+            sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, calendario: true },
             proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
             proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
             documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
@@ -114,7 +114,7 @@ export const getUserPermissions = async (): Promise<UserPermissions | null> => {
     if (error && error.code !== 'PGRST116') throw new Error(`Error fetching permissions: ${error.message}`);
 
     const defaultPermissions: UserPermissions = {
-      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, bitacora: true },
+      sidebar: { dashboard: true, proyectos: true, documentos: true, enlaces: true, auditorias: true, pizarra: true, notificaciones: true, contraseñas: true, apps: true, codex: true, calendario: true },
       proyectos: { canCreate: true, canEdit: true, canDelete: true, canManageTasks: true },
       proyectos_documentos: { canUpload: true, canView: true, canDownload: true, canDelete: true },
       documentos: { canUpload: true, canDownload: true, canDelete: true, canManageFolders: true },
@@ -803,6 +803,36 @@ export const deletePassword = async (passwordId: string): Promise<void> => {
     if (error) throw error;
 };
 
+// --- Global Delete Locks ---
+export const getDeleteLocks = async (): Promise<Record<string, boolean>> => {
+    try {
+        const { data, error } = await supabase.from('global_delete_locks').select('option_name, is_locked');
+        if (error) {
+            console.warn("Could not fetch delete locks from database, using defaults:", error);
+            return {};
+        }
+        const locks: Record<string, boolean> = {};
+        data?.forEach((row: any) => {
+            locks[row.option_name] = row.is_locked;
+        });
+        return locks;
+    } catch (e) {
+        console.error("Error fetching delete locks:", e);
+        return {};
+    }
+};
+
+export const updateDeleteLock = async (optionName: string, isLocked: boolean): Promise<void> => {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from('global_delete_locks').upsert({
+        option_name: optionName,
+        is_locked: isLocked,
+        updated_at: new Date().toISOString(),
+        updated_by: user?.id || null
+    }, { onConflict: 'option_name' });
+    if (error) throw error;
+};
+
 export const getMasterPasswordHash = async (): Promise<string | null> => {
     const targetId = await getVaultOwnerId();
     const { data, error } = await supabase.from('passwords').select('password_ct').eq('user_id', targetId).eq('service', 'MASTER').single();
@@ -868,3 +898,67 @@ export const uploadFile = async (file: File): Promise<void> => {
     const { error: uploadError } = await supabase.storage.from('user_files').upload(filePath, file);
     if (uploadError) throw uploadError;
 };
+
+// --- Admin password management (Only for PHOBOS/Darien) ---
+export const adminChangeUserPassword = async (userId: string, newPassword: string): Promise<void> => {
+    const { error } = await supabase.rpc('admin_change_user_password', {
+        target_user_id: userId,
+        new_password: newPassword
+    });
+    if (error) throw error;
+};
+
+// --- Admin session management (Only for PHOBOS/Darien) ---
+export interface ActiveSession {
+    session_id: string;
+    user_id: string;
+    email: string;
+    nickname: string;
+    created_at: string;
+    updated_at: string;
+    user_agent: string;
+    ip: string;
+}
+
+export const adminGetActiveSessions = async (): Promise<ActiveSession[]> => {
+    const { data, error } = await supabase.rpc('admin_get_active_sessions');
+    if (error) throw error;
+    return data || [];
+};
+
+export const checkSessionValid = async (sessionId: string): Promise<boolean> => {
+    try {
+        const { data, error } = await supabase.rpc('check_session_valid', {
+            target_session_id: sessionId
+        });
+        if (error) {
+            console.warn("Could not check session validity:", error);
+            return true; // Fallback to avoid logging out if RPC does not exist
+        }
+        return data === true;
+    } catch (err) {
+        console.warn("Network error during session validation check:", err);
+        return true; // Return true on network error so we do not log out the user
+    }
+};
+
+export const adminRevokeUserSessions = async (userId: string): Promise<void> => {
+    const { error } = await supabase.rpc('admin_revoke_user_sessions', {
+        target_user_id: userId
+    });
+    if (error) throw error;
+};
+
+export const adminRevokeSession = async (sessionId: string): Promise<void> => {
+    const { error } = await supabase.rpc('admin_revoke_session', {
+        target_session_id: sessionId
+    });
+    if (error) throw error;
+};
+
+export const adminRevokeAllSessions = async (): Promise<void> => {
+    const { error } = await supabase.rpc('admin_revoke_all_sessions');
+    if (error) throw error;
+};
+
+

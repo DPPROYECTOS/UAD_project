@@ -3,7 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { jsPDF } from 'jspdf';
 import {
   WhiteboardItem, Note, FlowchartShape, Connector, TextStyle, Point,
-  FlowchartShapeType, AnchorPosition, WhiteboardState, TextItem, UserPermissions
+  FlowchartShapeType, AnchorPosition, WhiteboardState, TextItem, UserPermissions, User
 } from '../types';
 import {
     getWhiteboardsForUser,
@@ -48,9 +48,11 @@ const MAX_HISTORY_LENGTH = 20;
 
 interface WhiteboardViewProps {
   userPermissions: UserPermissions | null;
+  user?: User;
+  deleteLocks?: Record<string, boolean>;
 }
 
-const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
+const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions, user, deleteLocks = {} }) => {
   const [items, setItems] = useState<WhiteboardItem[]>([]);
   const [connectors, setConnectors] = useState<Connector[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
@@ -113,6 +115,8 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
 
   // --- PERMISSIONS ---
   const canEdit = userPermissions?.pizarra?.canEdit ?? false;
+  const isDarien = user?.username?.trim().toLowerCase() === 'darienperez695@gmail.com' || user?.email?.trim().toLowerCase() === 'darienperez695@gmail.com';
+  const isWhiteboardDeleteLocked = !!deleteLocks?.['pizarra'] && !isDarien;
   
   const selectedItem = items.find(item => item.id === selectedItemId);
   const selectedConnector = connectors.find(c => c.id === selectedConnectorId);
@@ -1353,6 +1357,10 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
   
   const handleDeleteWhiteboard = async () => {
     if (!boardToDelete || !canEdit) return;
+    if (isWhiteboardDeleteLocked) {
+      alert("La eliminación de pizarras está bloqueada por el Administrador Maestro (PHOBOS).");
+      return;
+    }
     setIsLoading(true);
     try {
         await deleteWhiteboard(boardToDelete.id);
@@ -1729,7 +1737,26 @@ const WhiteboardView: React.FC<WhiteboardViewProps> = ({ userPermissions }) => {
                                         <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">Actualizado: {new Date(board.updated_at).toLocaleString()}</p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {canEdit && <button onClick={() => setBoardToDelete(board)} className="p-2 text-red-500 opacity-0 group-hover:opacity-100"><TrashIcon className="h-4 w-4"/></button>}
+                                        {canEdit && (
+                                            <button 
+                                                onClick={() => {
+                                                    if (isWhiteboardDeleteLocked) {
+                                                        alert("La eliminación de pizarras está bloqueada por el Administrador Maestro (PHOBOS).");
+                                                        return;
+                                                    }
+                                                    setBoardToDelete(board);
+                                                }} 
+                                                disabled={isWhiteboardDeleteLocked}
+                                                className={`p-2 transition-colors ${
+                                                    isWhiteboardDeleteLocked 
+                                                    ? 'text-gray-400 cursor-not-allowed opacity-50' 
+                                                    : 'text-red-500 opacity-0 group-hover:opacity-100'
+                                                }`}
+                                                title={isWhiteboardDeleteLocked ? "Eliminación bloqueada por Administrador PHOBOS" : "Eliminar"}
+                                            >
+                                                <TrashIcon className="h-4 w-4"/>
+                                            </button>
+                                        )}
                                         <button onClick={() => handleLoadWhiteboard(board)} className="px-3 py-1 text-sm rounded-md text-white bg-brand-primary hover:bg-brand-secondary">Abrir</button>
                                     </div>
                                 </li>

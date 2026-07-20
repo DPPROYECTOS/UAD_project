@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 // FIX: Removed non-exported 'LiveSession' type from import.
 import { GoogleGenAI, LiveServerMessage, Modality, Blob as GenAI_Blob } from '@google/genai';
-import { XIcon, MicrophoneIcon, SparklesIcon, UserCircleIcon } from './Icons';
+import { XIcon, SparklesIcon, UserCircleIcon } from './Icons';
 import Spinner from './Spinner';
 
 interface LiveAssistantProps {
@@ -244,7 +244,7 @@ const LiveAssistant: React.FC<LiveAssistantProps> = ({ onClose, geminiApiKey }) 
   const statusInfo = {
     idle: { text: "Iniciando...", icon: <Spinner/> },
     connecting: { text: "Conectando...", icon: <Spinner/> },
-    listening: { text: "Escuchando...", icon: <MicrophoneIcon className="text-green-500 animate-pulse" /> },
+    listening: { text: "Escuchando...", icon: <SparklesIcon className="text-green-500 animate-pulse" /> },
     speaking: { text: "Hablando...", icon: <SparklesIcon className="text-blue-500 animate-pulse" /> },
     error: { text: "Error", icon: <XIcon className="text-red-500"/> },
   };

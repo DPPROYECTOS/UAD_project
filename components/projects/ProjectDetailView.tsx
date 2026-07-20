@@ -29,13 +29,14 @@ interface ProjectDetailViewProps {
   onDeleteDocument: (doc: Document) => Promise<void>;
   userPermissions: UserPermissions | null;
   user: User;
+  deleteLocks?: Record<string, boolean>;
 }
 
 const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
   const { 
       project, tasks, documents, folders, onBackToList, onDeleteProject, 
       onSaveProject, onAddTask, onToggleTask, onUpdateTask, onDeleteTask,
-      onAddDocument, onDeleteDocument, userPermissions, user
+      onAddDocument, onDeleteDocument, userPermissions, user, deleteLocks = {}
   } = props;
   const [activeTab, setActiveTab] = useState('Resumen');
   const [isDeleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -242,6 +243,10 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
   const canDeleteProject = userPermissions?.proyectos?.canDelete ?? false;
   const canManageTasks = userPermissions?.proyectos?.canManageTasks ?? false;
 
+  const isDarien = user?.username?.trim().toLowerCase() === 'darienperez695@gmail.com' || user?.email?.trim().toLowerCase() === 'darienperez695@gmail.com';
+  const isProjectDeleteLocked = !!deleteLocks?.['proyectos'] && !isDarien;
+  const isTaskDeleteLocked = !!deleteLocks?.['tareas'] && !isDarien;
+
   const renderActiveTabContent = () => {
     switch (activeTab) {
       case 'Tareas':
@@ -253,6 +258,7 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
                   onUpdateTask={onUpdateTask}
                   onDeleteTask={onDeleteTask}
                   isEditor={canManageTasks}
+                  isDeleteLocked={isTaskDeleteLocked}
                 />;
       case 'Resumen':
         return (
@@ -448,9 +454,23 @@ const ProjectDetailView: React.FC<ProjectDetailViewProps> = (props) => {
             <p className="text-light-text-secondary dark:text-dark-text-secondary mt-1">{project.description}</p>
         </div>
         {canDeleteProject && (
-            <button onClick={() => setDeleteModalOpen(true)} className="flex items-center px-4 py-2 text-sm font-medium rounded-md text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors">
+            <button 
+                onClick={() => {
+                    if (isProjectDeleteLocked) {
+                        alert("La eliminación de proyectos está bloqueada por el Administrador Maestro (PHOBOS).");
+                        return;
+                    }
+                    setDeleteModalOpen(true);
+                }} 
+                className={`flex items-center px-4 py-2 text-sm font-medium rounded-md transition-colors ${
+                    isProjectDeleteLocked 
+                    ? 'text-gray-400 bg-gray-500/10 cursor-not-allowed opacity-60' 
+                    : 'text-red-600 dark:text-red-400 bg-red-500/10 hover:bg-red-500/20'
+                }`}
+                title={isProjectDeleteLocked ? "Eliminación bloqueada por Administrador PHOBOS" : "Eliminar"}
+            >
                 <TrashIcon className="h-5 w-5 mr-2" />
-                Eliminar
+                {isProjectDeleteLocked ? "Bloqueado" : "Eliminar"}
             </button>
         )}
       </div>

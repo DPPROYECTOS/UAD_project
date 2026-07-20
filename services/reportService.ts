@@ -289,9 +289,10 @@ export const generateCorporateReport = async (data: ReportData, apiKey: string):
                                             alignment: AlignmentType.CENTER,
                                             children: [
                                                 new ImageRun({
-                                                    data: progressChartBase64,
-                                                    transformation: { width: 220, height: 220 }
-                                                })
+                                                    data: Uint8Array.from(atob(progressChartBase64.split(',')[1]), c => c.charCodeAt(0)),
+                                                    transformation: { width: 220, height: 220 },
+                                                    type: 'png'
+                                                } as any)
                                             ]
                                         }),
                                         new Paragraph({ text: "Progreso Real", alignment: AlignmentType.CENTER, spacing: { before: 100 } })
@@ -304,9 +305,10 @@ export const generateCorporateReport = async (data: ReportData, apiKey: string):
                                             alignment: AlignmentType.CENTER,
                                             children: [
                                                 new ImageRun({
-                                                    data: statusChartBase64,
-                                                    transformation: { width: 300, height: 200 }
-                                                })
+                                                    data: Uint8Array.from(atob(statusChartBase64.split(',')[1]), c => c.charCodeAt(0)),
+                                                    transformation: { width: 300, height: 200 },
+                                                    type: 'png'
+                                                } as any)
                                             ]
                                         }),
                                         new Paragraph({ text: "Distribución de Tareas", alignment: AlignmentType.CENTER, spacing: { before: 100 } })
@@ -392,8 +394,8 @@ export const generateCorporateReport = async (data: ReportData, apiKey: string):
                     borders: { top: { style: BorderStyle.NONE }, bottom: { style: BorderStyle.NONE }, left: { style: BorderStyle.NONE }, right: { style: BorderStyle.NONE }, insideHorizontal: { style: BorderStyle.NONE }, insideVertical: { style: BorderStyle.NONE } },
                     rows: [new TableRow({
                         children: [
-                            new TableCell({ children: [new Paragraph({ text: "__________________________", alignment: AlignmentType.CENTER }), new Paragraph({ text: "LÍDER DE PROYECTO", bold: true, alignment: AlignmentType.CENTER })] }),
-                            new TableCell({ children: [new Paragraph({ text: "__________________________", alignment: AlignmentType.CENTER }), new Paragraph({ text: "DIRECCIÓN DE CALIDAD", bold: true, alignment: AlignmentType.CENTER })] }),
+                            new TableCell({ children: [new Paragraph({ text: "__________________________", alignment: AlignmentType.CENTER }), new Paragraph({ children: [new TextRun({ text: "LÍDER DE PROYECTO", bold: true })], alignment: AlignmentType.CENTER })] }),
+                            new TableCell({ children: [new Paragraph({ text: "__________________________", alignment: AlignmentType.CENTER }), new Paragraph({ children: [new TextRun({ text: "DIRECCIÓN DE CALIDAD", bold: true })], alignment: AlignmentType.CENTER })] }),
                         ]
                     })]
                 })

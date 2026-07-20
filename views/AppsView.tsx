@@ -20,7 +20,9 @@ interface CircuitDragState {
 const AppsView: React.FC = () => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [dimensions, setDimensions] = useState({ width: 1200, height: 800 }); 
-    const scaleFactor = Math.min(Math.max(dimensions.width / 1400, 0.6), 1.1);
+    const widthScale = dimensions.width / 1400;
+    const heightScale = dimensions.height / 900;
+    const scaleFactor = Math.min(Math.max(Math.min(widthScale, heightScale), 0.45), 1.1);
     const [isEditing, setIsEditing] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
     

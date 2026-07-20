@@ -11,6 +11,7 @@ interface ProjectTasksTabProps {
   onUpdateTask: (task: ProjectTask) => void;
   onDeleteTask: (id: string) => void;
   isEditor: boolean;
+  isDeleteLocked?: boolean;
 }
 
 // Icono dinámico según el estado
@@ -33,7 +34,8 @@ const TaskItem: React.FC<{
     onUpdateTask: (task: ProjectTask) => void;
     onAddTask: (details: { title: string; startDate: string; duration: number; assignedTo: string; comments?: string }, parentId: string) => void;
     isEditor: boolean;
-}> = ({ task, onToggleTask, onDeleteTask, onUpdateTask, onAddTask, isEditor }) => {
+    isDeleteLocked?: boolean;
+}> = ({ task, onToggleTask, onDeleteTask, onUpdateTask, onAddTask, isEditor, isDeleteLocked = false }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [editedTitle, setEditedTitle] = useState(task.title);
     const [editedStartDate, setEditedStartDate] = useState(task.startDate);
@@ -178,9 +180,15 @@ const TaskItem: React.FC<{
                         <button onClick={() => setIsEditing(true)} className="p-1 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-light-text-secondary" title="Editar tarea">
                             <PencilAltIcon className="h-4 w-4" />
                         </button>
-                        <button onClick={() => onDeleteTask(task.id)} className="p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50 text-red-500" title="Eliminar tarea">
-                            <TrashIcon className="h-4 w-4" />
-                        </button>
+                        {!isDeleteLocked ? (
+                            <button onClick={() => onDeleteTask(task.id)} className="p-1 rounded-full hover:bg-red-100 dark:hover:bg-red-900/50 text-red-500" title="Eliminar tarea">
+                                <TrashIcon className="h-4 w-4" />
+                            </button>
+                        ) : (
+                            <button disabled className="p-1 rounded-full text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50" title="Eliminación bloqueada por Administrador Maestro (PHOBOS)">
+                                <TrashIcon className="h-4 w-4" />
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -233,7 +241,7 @@ const TaskItem: React.FC<{
 };
 
 
-const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAddTask, onToggleTask, onUpdateTask, onDeleteTask, isEditor }) => {
+const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAddTask, onToggleTask, onUpdateTask, onDeleteTask, isEditor, isDeleteLocked = false }) => {
     const [newTaskTitle, setNewTaskTitle] = useState('');
     const [newTaskStartDate, setNewTaskStartDate] = useState(project.startDate);
     const [newTaskDuration, setNewTaskDuration] = useState(1);
@@ -358,6 +366,7 @@ const ProjectTasksTab: React.FC<ProjectTasksTabProps> = ({ project, tasks, onAdd
                             onUpdateTask={onUpdateTask}
                             onAddTask={(details, parentId) => onAddTask({...details, assignedTo: details.assignedTo}, parentId)}
                             isEditor={isEditor}
+                            isDeleteLocked={isDeleteLocked}
                         />
                     ))
                 ) : (

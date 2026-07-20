@@ -15,35 +15,14 @@ interface HeaderProps {
     onMarkAsRead: (id: string) => void;
     onNavigate: (view: string) => void;
     onMarkAllAsRead: () => void;
-    recordingStatus: 'idle' | 'recording' | 'paused';
-    recordingTime: number;
     isEditor: boolean;
 }
-
-const toRoman = (num: number): string => {
-  if (num < 0 || num > 59) return String(num).padStart(2, '0');
-  if (num === 0) return '00';
-  
-  const val = [50, 40, 10, 9, 5, 4, 1];
-  const syb = ["L", "XL", "X", "IX", "V", "IV", "I"];
-  
-  let result = '';
-  let i = 0;
-  while (num > 0) {
-    for (let _ = 0; _ < Math.floor(num / val[i]); _++) {
-      result += syb[i];
-    }
-    num %= val[i];
-    i++;
-  }
-  return result;
-};
 
 const Header: React.FC<HeaderProps> = ({ 
     user, onUpdateAvatar, isAvatarLoading, onLogout, unreadCount,
     notifications, readNotificationIds, onMarkAsRead,
     onNavigate, onMarkAllAsRead,
-    recordingStatus, recordingTime, isEditor
+    isEditor
 }) => {
     const [isProfileOpen, setProfileOpen] = useState(false);
     const [isNotificationsOpen, setNotificationsOpen] = useState(false);
@@ -66,12 +45,6 @@ const Header: React.FC<HeaderProps> = ({
     const handleNavigateToNotifications = () => {
         setNotificationsOpen(false);
         onNavigate('Notificaciones');
-    };
-    
-    const formatTime = (seconds: number) => {
-        const mins = Math.floor(seconds / 60);
-        const secs = seconds % 60;
-        return `${toRoman(mins)}:${toRoman(secs)}`;
     };
 
     const getDisplayName = (username: string): string => {
@@ -140,11 +113,6 @@ const Header: React.FC<HeaderProps> = ({
                         <div className="hidden md:block text-left">
                             <p className="font-semibold text-sm text-light-text dark:text-dark-text">{displayName}</p>
                             <p className="text-xs text-light-text-secondary dark:text-dark-text-secondary">Usuario Activo</p>
-                            {(recordingStatus === 'recording' || recordingStatus === 'paused') && (
-                                <div className={`flex items-center justify-center gap-1 font-mono text-xs mt-0.5 rounded px-1.5 py-0.5 ${recordingStatus === 'recording' ? 'bg-light-text-secondary/10 dark:bg-dark-text-secondary/20 animate-pulse text-light-text-secondary dark:text-dark-text-secondary' : 'text-light-text-secondary/50 dark:text-dark-text-secondary/50'}`}>
-                                    <span>{formatTime(recordingTime)}</span>
-                                </div>
-                            )}
                         </div>
                     </button>
                     {isProfileOpen && (

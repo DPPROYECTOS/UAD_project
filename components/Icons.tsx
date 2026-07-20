@@ -101,6 +101,20 @@ export const ColorSwatchIcon: React.FC<{ className?: string }> = ({ className })
     </Icon>
 );
 
+export const PrinterIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6.72 6.72a.75.75 0 011.06 0L12 10.94l4.22-4.22a.75.75 0 111.06 1.06L13.06 12l4.22 4.22a.75.75 0 11-1.06 1.06L12 13.06l-4.22 4.22a.75.75 0 01-1.06-1.06L10.94 12 6.72 7.78a.75.75 0 010-1.06z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h10.5a.75.75 0 01.75.75v6.75a.75.75 0 01-.75.75H6.75a.75.75 0 01-.75-.75V7.5a.75.75 0 01.75-.75z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M18 7.5v-1.5a2.25 2.25 0 00-2.25-2.25h-7.5A2.25 2.25 0 006 6v1.5m12 9v3a2.25 2.25 0 01-2.25 2.25h-7.5A2.25 2.25 0 016 18v-3" />
+    </Icon>
+);
+
+export const DownloadIcon: React.FC<{ className?: string }> = ({ className }) => (
+    <Icon className={className}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+    </Icon>
+);
+
 export const XIcon: React.FC<{ className?: string }> = ({ className }) => (
     <Icon className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -463,21 +477,9 @@ export const BrainIcon: React.FC<{ className?: string }> = ({ className }) => (
     </Icon>
 );
 
-export const MicrophoneIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <Icon className={className}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 013-3a3 3 0 013 3v8.25a3 3 0 01-3 3z" />
-    </Icon>
-);
-
 export const VideoCameraIcon: React.FC<{ className?: string }> = ({ className }) => (
     <Icon className={className}>
         <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9A2.25 2.25 0 0013.5 5.25h-9A2.25 2.25 0 002.25 7.5v9A2.25 2.25 0 004.5 18.75z" />
-    </Icon>
-);
-
-export const RecordIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <Icon className={className} fill="currentColor">
-        <path fillRule="evenodd" d="M12 2.25c-5.385 0-9.75 4.365-9.75 9.75s4.365 9.75 9.75 9.75 9.75-4.365 9.75-9.75S17.385 2.25 12 2.25z" clipRule="evenodd" />
     </Icon>
 );
 

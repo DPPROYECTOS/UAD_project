@@ -33,7 +33,7 @@ export interface UserPermissions {
     contraseñas: boolean;
     apps: boolean;
     codex: boolean; // RENAMED FROM NEXUS
-    bitacora: boolean; 
+    calendario: boolean;
   };
   proyectos: {
     canCreate: boolean;
